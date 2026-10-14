@@ -2,10 +2,12 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { AppEnv, Env } from './env';
 import { securityHeaders } from './middleware/security';
-import { requireSameOrigin } from './auth/session';
 import { ApiError } from './lib/http';
 import { authRoutes } from './routes/auth';
 import { adminRoutes } from './routes/admin';
+import { contentAdminRoutes } from './routes/content';
+import { mediaAdminRoutes, mediaPublicRoutes } from './routes/media';
+import { requireSameOrigin, requireSession } from './auth/session';
 import { runNightlyBackup } from './jobs/backup';
 import { anonymizeExpiredUsers } from './jobs/anonymize';
 
@@ -27,7 +29,13 @@ app.get('/api/health', async (c) => {
 });
 
 app.route('/api/auth', authRoutes);
-app.route('/api/admin', adminRoutes);
+const admin = new Hono<AppEnv>();
+admin.use('*', requireSession);
+admin.route('/', adminRoutes);
+admin.route('/', contentAdminRoutes);
+admin.route('/', mediaAdminRoutes);
+app.route('/api/admin', admin);
+app.route('/media', mediaPublicRoutes);
 
 /** Unknown API routes: JSON 404 (the SPA handles every other path). */
 app.all('/api/*', (c) => c.json({ error: 'not_found' }, 404));

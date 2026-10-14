@@ -3,12 +3,12 @@
  * Runs against local workerd started by scripts/test-integration.sh.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { BASE, Client } from './client';
+import { BASE, Client, OWNER_LOGIN, OWNER_PASSWORD, OWNER_TEMP, SENATOR } from './client';
 
-const OWNER_LOGIN = process.env.OWNER_LOGIN ?? 'test.wlasciciel';
-const OWNER_TEMP = process.env.OWNER_TEMP_PASSWORD ?? 'TymczasoweHaslo1';
-const OWNER_PASSWORD = 'NoweHasloWlasciciela2026';
-const SENATOR = 'loc_senator';
+
+
+
+
 
 const owner = new Client();
 let empA = { id: '', login: '', pin: '' };

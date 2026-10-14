@@ -148,11 +148,33 @@ export const contentItems = sqliteTable(
     requiresAck: integer('requires_ack', { mode: 'boolean' }).notNull().default(false),
     externalUrl: text('external_url'), // "Dokument zewnętrzny"
     attachmentKey: text('attachment_key'), // original PDF/DOCX in R2
+    attachmentName: text('attachment_name'),
+    /** Working copy edited in the admin panel; published as a new content_version. */
+    draftTitle: text('draft_title'),
+    draftBodyJson: text('draft_body_json'),
+    draftUpdatedAt: integer('draft_updated_at'),
+    draftUpdatedBy: text('draft_updated_by').references(() => users.id),
     sortOrder: integer('sort_order').notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex('content_items_slug_uq').on(t.locationId, t.slug), index('content_items_kind_idx').on(t.kind, t.status)],
+);
+
+/** Uploaded photos and files in R2 (key = loc/<locationId|shared>/<kind>/<id>.<ext>). */
+export const media = sqliteTable(
+  'media',
+  {
+    id: id(),
+    locationId: text('location_id').references(() => locations.id),
+    key: text('key').notNull().unique(),
+    contentType: text('content_type').notNull(),
+    size: integer('size').notNull(),
+    originalName: text('original_name'),
+    uploadedBy: text('uploaded_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index('media_loc_idx').on(t.locationId)],
 );
 
 /** Which positions see a document. No rows = everyone. */

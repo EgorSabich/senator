@@ -34,3 +34,41 @@ export class Client {
     return this.post('/api/auth/login', { login, secret });
   }
 }
+
+export const OWNER_LOGIN = process.env.OWNER_LOGIN ?? 'test.wlasciciel';
+export const OWNER_TEMP = process.env.OWNER_TEMP_PASSWORD ?? 'TymczasoweHaslo1';
+export const OWNER_PASSWORD = 'NoweHasloWlasciciela2026';
+export const SENATOR = 'loc_senator';
+
+/** Signed-in owner, whichever test file runs first. */
+export async function ownerClient(): Promise<Client> {
+  const c = new Client();
+  if ((await c.login(OWNER_LOGIN, OWNER_PASSWORD)).status === 200) return c;
+  await c.login(OWNER_LOGIN, OWNER_TEMP);
+  await c.post('/api/auth/change-secret', { current: OWNER_TEMP, next: OWNER_PASSWORD });
+  return c;
+}
+
+/** Creates a user via the admin API, activates it with `next` and returns a signed-in client. */
+export async function activateClient(login: string, temp: string, next: string): Promise<Client> {
+  const c = new Client();
+  await c.login(login, temp);
+  await c.post('/api/auth/change-secret', { current: temp, next });
+  return c;
+}
+
+export async function upload(c: Client, path: string, file: Blob, name: string) {
+  const form = new FormData();
+  form.append('file', file, name);
+  const res = await fetch(BASE + path, {
+    method: 'POST',
+    headers: { Origin: BASE, Cookie: c.cookie, 'CF-Connecting-IP': c.ip },
+    body: form,
+  });
+  return { status: res.status, data: (await res.json().catch(() => ({}))) as Record<string, any> };
+}
+
+export async function getRaw(c: Client | null, path: string) {
+  const res = await fetch(BASE + path, { headers: c ? { Cookie: c.cookie, 'CF-Connecting-IP': c.ip } : {} });
+  return { status: res.status, type: res.headers.get('content-type'), bytes: new Uint8Array(await res.arrayBuffer()) };
+}

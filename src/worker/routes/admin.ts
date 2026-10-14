@@ -13,11 +13,11 @@ import type { AppEnv } from '../env';
 import { auditStatement } from '../lib/audit';
 import { ApiError, badRequest, newId, readJson, str } from '../lib/http';
 import { generateTempPassword, generateTempPin, hashSecret } from '../auth/crypto';
-import { requireSession, revokeUserSessions } from '../auth/session';
+import { revokeUserSessions } from '../auth/session';
 import { loadAccess, requireManageableUser, requireOwner, requirePermission } from '../auth/access';
 
 export const adminRoutes = new Hono<AppEnv>();
-adminRoutes.use('*', requireSession);
+// Session is enforced by the /api/admin router (index.ts).
 
 async function uniqueLogin(db: D1Database, base: string): Promise<string> {
   const root = base || 'pracownik';
@@ -308,4 +308,28 @@ adminRoutes.get('/audit', async (c) => {
     .bind(limit)
     .all();
   return c.json({ entries: results });
+});
+
+adminRoutes.get('/managers', async (c) => {
+  const access = await loadAccess(c.env.DB, c.var.user);
+  requireOwner(access);
+  const now = Date.now();
+  const { results: managers } = await c.env.DB.prepare(
+    `SELECT id, first_name AS firstName, last_name AS lastName, login, status, last_login_at AS lastLoginAt,
+            CASE WHEN locked_until > ? THEN 1 ELSE 0 END AS locked
+     FROM users WHERE role = 'manager' AND status <> 'anonymized' ORDER BY last_name, first_name`,
+  )
+    .bind(now)
+    .all<{ id: string }>();
+  const { results: perms } = await c.env.DB.prepare(
+    `SELECT mp.user_id AS userId, mp.location_id AS locationId, mp.permission FROM manager_permissions mp
+     JOIN users u ON u.id = mp.user_id WHERE u.role = 'manager'`,
+  ).all<{ userId: string; locationId: string; permission: string }>();
+  return c.json({
+    managers: managers.map((m) => {
+      const byLoc: Record<string, string[]> = {};
+      for (const p of perms) if (p.userId === m.id) (byLoc[p.locationId] ??= []).push(p.permission);
+      return { ...m, permissions: byLoc };
+    }),
+  });
 });
