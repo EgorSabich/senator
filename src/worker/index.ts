@@ -1,12 +1,18 @@
 import { Hono } from 'hono';
-import type { Env } from './env';
+import { HTTPException } from 'hono/http-exception';
+import type { AppEnv, Env } from './env';
 import { securityHeaders } from './middleware/security';
+import { requireSameOrigin } from './auth/session';
+import { ApiError } from './lib/http';
+import { authRoutes } from './routes/auth';
+import { adminRoutes } from './routes/admin';
 import { runNightlyBackup } from './jobs/backup';
 import { anonymizeExpiredUsers } from './jobs/anonymize';
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<AppEnv>();
 
 app.use('*', securityHeaders);
+app.use('/api/*', requireSameOrigin);
 
 /** Liveness + database check. Never exposes data. */
 app.get('/api/health', async (c) => {
@@ -20,10 +26,17 @@ app.get('/api/health', async (c) => {
   return c.json({ ok: db, db, env: c.env.APP_ENV }, db ? 200 : 503);
 });
 
+app.route('/api/auth', authRoutes);
+app.route('/api/admin', adminRoutes);
+
 /** Unknown API routes: JSON 404 (the SPA handles every other path). */
 app.all('/api/*', (c) => c.json({ error: 'not_found' }, 404));
 
 app.onError((err, c) => {
+  if (err instanceof ApiError) {
+    return c.json({ error: err.code, ...(err.details ? { details: err.details } : {}) }, err.status);
+  }
+  if (err instanceof HTTPException) return c.json({ error: 'http_error' }, err.status);
   console.error('Unhandled error', err);
   return c.json({ error: 'internal_error' }, 500);
 });

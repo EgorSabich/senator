@@ -41,12 +41,58 @@ export const pl = {
     confirm: 'Potwierdzam',
     askKitchen: 'O skład i alergeny zawsze pytaj kuchnię.',
   },
-  shell: {
-    stageNote: 'Wersja w budowie. Logowanie pojawi się w kolejnym etapie.',
-    healthOk: 'Serwer działa',
-    healthDb: 'Baza danych',
-    healthFail: 'Brak połączenia z serwerem',
+  login: {
+    title: 'Logowanie',
+    loginLabel: 'Login',
+    loginHint: 'Na przykład anna.kowalska',
+    pinLabel: 'PIN',
+    passwordLabel: 'PIN lub hasło',
+    submit: 'Zaloguj się',
+    submitting: 'Logowanie…',
+    forgot: 'Nie pamiętasz PIN-u? Poproś menedżera zmiany o nowy.',
   },
+  changeSecret: {
+    titlePin: 'Ustaw swój PIN',
+    titlePassword: 'Ustaw swoje hasło',
+    introPin: 'Otrzymany PIN jest tymczasowy. Ustaw własny, 6-cyfrowy PIN — tylko Ty go znasz.',
+    introPassword: 'Otrzymane hasło jest tymczasowe. Ustaw własne hasło — co najmniej 10 znaków.',
+    currentPin: 'Obecny PIN',
+    currentPassword: 'Obecne hasło',
+    newPin: 'Nowy PIN (6 cyfr)',
+    newPassword: 'Nowe hasło',
+    repeat: 'Powtórz',
+    mismatch: 'Wpisane wartości się różnią.',
+    submit: 'Zapisz',
+    pinRules: 'Nie używaj powtórzeń ani ciągów, np. 000000, 123456.',
+  },
+  home: {
+    hello: (name: string) => `Dzień dobry, ${name}`,
+    stageNote: 'Szkolenia, Service Book i menu pojawią się w kolejnych etapach.',
+    logout: 'Wyloguj',
+    roleOwner: 'Właściciel',
+    roleManager: 'Menedżer',
+    roleEmployee: 'Pracownik',
+  },
+  errors: {
+    invalid_credentials: 'Nieprawidłowy login lub PIN.',
+    locked: 'Zbyt wiele nieudanych prób. Spróbuj ponownie za 15 minut albo poproś menedżera o odblokowanie.',
+    too_many_attempts: 'Zbyt wiele prób z tego urządzenia. Spróbuj ponownie za 15 minut.',
+    wrong_current_secret: 'Obecny PIN lub hasło jest nieprawidłowe.',
+    pin_format: 'PIN musi mieć dokładnie 6 cyfr.',
+    pin_too_simple: 'Ten PIN jest zbyt prosty. Wybierz inny.',
+    password_too_short: 'Hasło musi mieć co najmniej 10 znaków.',
+    same_secret: 'Nowy PIN musi być inny niż obecny.',
+    unauthorized: 'Sesja wygasła. Zaloguj się ponownie.',
+    forbidden: 'Nie masz uprawnień do tej czynności.',
+    not_found: 'Nie znaleziono.',
+    bad_origin: 'Żądanie odrzucone ze względów bezpieczeństwa. Odśwież stronę.',
+    network: 'Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie.',
+    generic: 'Coś poszło nie tak. Spróbuj ponownie za chwilę.',
+  } as Record<string, string>,
 } as const;
 
 export type Strings = typeof pl;
+
+export function errorText(code: string): string {
+  return pl.errors[code] ?? pl.errors.generic!;
+}

@@ -8,7 +8,9 @@
 4. GitHub: private repository `senator-academy`, push this code.
 5. Cloudflare → Workers → connect the GitHub repository (Workers Builds). Build command `npm run build`, deploy command `npx wrangler deploy` (staging: `CLOUDFLARE_ENV=staging` on a staging branch).
 6. Apply migrations: `npm run db:migrate:staging`, then `npm run db:migrate:prod` (needs `wrangler login` or a CI token kept in Cloudflare/GitHub secrets — never in the repo).
-7. Domain (.pl, bought by the owner) → add to Cloudflare → Custom domain on the production worker.
+7. Secret: `npx wrangler secret put AUTH_SECRET` (and `--env staging`) — a long random value, different per environment, never in the repo. Changing it later invalidates every PIN and password.
+8. First owner account: `AUTH_SECRET=<same value> node scripts/create-owner.mjs "Imię" "Nazwisko" > owner.sql`, then `npx wrangler d1 execute DB --remote --file owner.sql`; delete owner.sql. The script prints a temporary password once; it must be changed at first login.
+9. Domain (.pl, bought by the owner) → add to Cloudflare → Custom domain on the production worker.
 
 ## Release flow
 

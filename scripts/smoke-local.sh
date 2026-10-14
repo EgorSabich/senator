@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 PORT=${PORT:-8799}
 STATE=.wrangler/state
 WORK=$(mktemp -d)
-trap 'kill $DEV_PID 2>/dev/null || true; rm -rf "$WORK"' EXIT
+trap 'kill -- -$DEV_PID 2>/dev/null || true; rm -rf "$WORK"' EXIT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 ok() { echo "ok   $*"; }
@@ -18,7 +18,7 @@ npx wrangler d1 migrations apply DB --local --persist-to "$STATE" >/dev/null 2>&
 ok "migrations applied"
 
 npx vite build >/dev/null 2>&1 || fail "build"
-npx wrangler dev -c dist/senator_academy/wrangler.json --persist-to "$STATE" --port "$PORT" --test-scheduled \
+setsid npx wrangler dev -c dist/senator_academy/wrangler.json --persist-to "$STATE" --port "$PORT" --test-scheduled \
   >"$WORK/dev.log" 2>&1 &
 DEV_PID=$!
 for _ in $(seq 1 60); do curl -sf "http://localhost:$PORT/api/health" >/dev/null && break; sleep 1; done
@@ -47,7 +47,7 @@ sleep 2
 ANON=$(npx wrangler d1 execute DB --local --persist-to "$STATE" --json --command "SELECT id, status, first_name, secret_hash FROM users ORDER BY id" 2>/dev/null)
 echo "$ANON" | grep -q '"id":"u_old","status":"anonymized","first_name":"Anonimowy","secret_hash":null' \
   || echo "$ANON" | tr -d ' \n' | grep -q '"id":"u_old","status":"anonymized","first_name":"Anonimowy","secret_hash":null' \
-  || fail "old user not anonymized: $ANON"
+  || { tail -30 "$WORK/dev.log"; fail "old user not anonymized"; }
 echo "$ANON" | tr -d ' \n' | grep -q '"id":"u_new","status":"inactive","first_name":"Ewa"' || fail "recent user changed: $ANON"
 ok "anonymization: 3-year-old deactivation anonymized, 1-year-old kept"
 DAY=$(date -u +%F)

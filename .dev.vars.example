@@ -1,2 +1,4 @@
 # Copy to .dev.vars for local development (never commit .dev.vars).
 APP_ENV=development
+# Any long random string locally; production value is set with: npx wrangler secret put AUTH_SECRET
+AUTH_SECRET=local-dev-secret-change-me

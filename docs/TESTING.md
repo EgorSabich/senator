@@ -2,14 +2,28 @@
 
 | Command | What it checks |
 | --- | --- |
-| `npm test` | Unit: Polish folding and search equivalence (żurek = zurek, łosoś = losos), login normalization, Polish sorting, anonymization cutoff, backup naming |
 | `npm run typecheck` | TypeScript, whole repo |
-| `./scripts/smoke-local.sh` | On local workerd: migrations, `/api/health`, SPA fallback, robots.txt, noindex headers, API 404, cron → anonymization (3 y old anonymized, 1 y old kept), cron → backup in R2, backup → SQL restore after deleting data |
+| `npm test` | Unit: Polish folding and search equivalence, login normalization, Polish sorting, PIN/password rules, anonymization cutoff, backup naming |
+| `npm run test:smoke` | Local workerd: migrations, `/api/health`, SPA fallback, robots.txt, noindex headers, API 404, cron → anonymization, cron → backup in R2, backup → SQL restore |
+| `npm run test:int` | Local workerd, fresh DB + test owner: spec section L "Вход и доступ" and "Права и изоляция" (19 tests) |
+| `npm run test:all` | All of the above |
 
-## Stage 1 results (2026-10-14)
+## Stage 2 acceptance (spec L) → test
 
-- Unit: 7/7 passed.
-- Typecheck: clean.
-- Smoke: all 6 checks passed.
+| Criterion | Test |
+| --- | --- |
+| Same message for unknown login and wrong PIN | `answers unknown login and wrong PIN with the same message` |
+| 5 failures lock 15 min; manager unlocks | `locks the account after 5 failures…`, `locks unknown logins the same way` |
+| Temporary PIN unusable after first login; 123456 / 000000 refused | `refuses simple PINs and makes the temporary PIN unusable` |
+| Deactivated user loses every session at once | `ends every session at once and blocks login` |
+| Employee cannot reach other results / admin API | `employee has no admin access…` |
+| Manager without permission is refused; with it allowed | `manager without employees.manage…` |
+| Second location invisible to first location's manager | `manager sees only his location` |
+| Cookie flags, CSRF, IP limit, audit without secrets | `sets a hardened session cookie`, `request protection` suite |
 
-Acceptance criteria from spec section L are added to these suites stage by stage.
+## Results
+
+| Date | Stage | Unit | Smoke | Integration |
+| --- | --- | --- | --- | --- |
+| 2026-10-14 | 1 | 7/7 | 6/6 | — |
+| 2026-10-14 | 2 | 11/11 | 6/6 | 19/19 |

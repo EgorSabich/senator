@@ -30,3 +30,17 @@ Cron 01:30 UTC → nightly backup + anonymization (D19) + login-attempt cleanup
 - Every API handler that touches location data goes through the access layer (stage 2) — never query by id alone.
 - Correct test answers never leave the server before an attempt is submitted.
 - Nothing is hard-deleted except by the anonymization job and backup pruning.
+
+## API (stage 2)
+
+| Method | Path | Who |
+| --- | --- | --- |
+| POST | `/api/auth/login`, `/api/auth/logout`, `/api/auth/change-secret` | anyone / signed in |
+| GET | `/api/auth/me` | signed in |
+| GET / POST | `/api/admin/locations` | accessible list / owner |
+| GET / POST | `/api/admin/locations/:locId/employees` | `employees.view` / `employees.manage` |
+| POST | `/api/admin/users/:id/{reset-secret,unlock,logout-all,deactivate,reactivate}` | `employees.manage` in a shared location, or owner |
+| POST, PUT | `/api/admin/managers`, `/api/admin/managers/:id/permissions` | owner |
+| GET | `/api/admin/audit` | owner |
+
+Error bodies: `{ "error": "<code>" }`; the client maps codes to Polish (`src/client/i18n/pl.ts → errors`).

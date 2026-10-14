@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0 — 2026-10-14 — Stage 2: users & access
+
+- Login + 6-digit PIN (staff) / password (managers, owner); PBKDF2 with server pepper; PIN rules shared by server and UI.
+- Lockout (5 failures, 15 min doubling), IP limit, no account enumeration, login-attempt log.
+- Sessions in HttpOnly/Secure/SameSite=Lax cookie, hashed tokens, sliding expiry, revocation on reset/deactivation.
+- Forced change of temporary PIN/password at first login.
+- Access layer: location + permission on every request; owner / manager (per-location permissions) / employee.
+- Admin API: locations, employees (create with proposed login + temporary PIN, reset, unlock, log out everywhere, deactivate, reactivate), managers and permissions, audit log.
+- CSRF protection by Origin check.
+- Polish UI: login, set your own PIN/password, signed-in shell with logout.
+- `scripts/create-owner.mjs` for the first owner; integration test suite (19 tests).
+
 ## 0.1.0 — 2026-10-14 — Stage 1: foundation
 
 - Project: Cloudflare Worker (Hono) + React/Vite, TypeScript, production + staging config.
