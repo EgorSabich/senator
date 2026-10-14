@@ -43,4 +43,17 @@ Cron 01:30 UTC → nightly backup + anonymization (D19) + login-attempt cleanup
 | POST, PUT | `/api/admin/managers`, `/api/admin/managers/:id/permissions` | owner |
 | GET | `/api/admin/audit` | owner |
 
+### Stage 3
+
+| Method | Path | Who |
+| --- | --- | --- |
+| GET | `/api/admin/managers` | owner |
+| GET / POST | `/api/admin/locations/:locId/content` | `content.edit` (shared: owner) |
+| GET / PUT | `/api/admin/content/:id` | `content.edit` in its location (shared: owner) |
+| GET | `/api/admin/content/:id/versions/:versionId` | same |
+| POST | `/api/admin/content/:id/{publish,discard-draft,archive,restore}` | same |
+| POST / DELETE | `/api/admin/content/:id/attachment` | same |
+| POST | `/api/admin/locations/:locId/media` (`?shared=1`) | `content.edit` or `menu.edit` (shared: owner) |
+| GET | `/media/<key>` | signed in + access to the key's location |
+
 Error bodies: `{ "error": "<code>" }`; the client maps codes to Polish (`src/client/i18n/pl.ts → errors`).

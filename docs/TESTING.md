@@ -7,6 +7,7 @@
 | `npm run test:smoke` | Local workerd: migrations, `/api/health`, SPA fallback, robots.txt, noindex headers, API 404, cron → anonymization, cron → backup in R2, backup → SQL restore |
 | `npm run test:int` | Local workerd, fresh DB + test owner: spec section L "Вход и доступ" and "Права и изоляция" (19 tests) |
 | `npm run test:all` | All of the above |
+| `scripts/ui-server.sh` + `python3 tests/ui/panel_walkthrough.py` | Headless Chromium walkthrough of the panel (desktop 1280 px + phone 390 px), screenshots to `$SHOTS_DIR` |
 
 ## Stage 2 acceptance (spec L) → test
 
@@ -27,3 +28,4 @@
 | --- | --- | --- | --- | --- |
 | 2026-10-14 | 1 | 7/7 | 6/6 | — |
 | 2026-10-14 | 2 | 11/11 | 6/6 | 19/19 |
+| 2026-10-14 | 3 | 17/17 | 6/6 | 34/34 (+ UI walkthrough: no page errors) |

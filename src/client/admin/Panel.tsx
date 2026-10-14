@@ -1,0 +1,133 @@
+import { createContext, useContext, useMemo, useState } from 'react';
+import type { Me } from '../api';
+import { api } from '../api';
+import { pl } from '../i18n/pl';
+import { match, onNav, Redirect, usePath } from '../router';
+import { Btn, Icon, storageGet, storageSet } from './common';
+import { Employees } from './Employees';
+import { Managers } from './Managers';
+import { Locations } from './Locations';
+import { Audit } from './Audit';
+import { ContentList } from './ContentList';
+import { ContentEditor } from './ContentEditor';
+import '../styles/admin.css';
+
+interface PanelCtx {
+  me: Me;
+  locationId: string;
+  can: (perm: string) => boolean;
+  isOwner: boolean;
+  refreshMe: () => Promise<void>;
+}
+
+const Ctx = createContext<PanelCtx | null>(null);
+export function usePanel(): PanelCtx {
+  const v = useContext(Ctx);
+  if (!v) throw new Error('usePanel outside Panel');
+  return v;
+}
+
+const LOC_KEY = 'sa.panel.location';
+
+export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () => void; refreshMe: () => Promise<void> }) {
+  const path = usePath();
+  const stored = storageGet(LOC_KEY);
+  const [locationId, setLocationId] = useState(
+    me.locations.find((l) => l.id === stored)?.id ?? me.locations[0]?.id ?? '',
+  );
+  const isOwner = me.user.role === 'owner';
+  const current = me.locations.find((l) => l.id === locationId);
+  const ctx = useMemo<PanelCtx>(
+    () => ({ me, locationId, isOwner, can: (p) => isOwner || Boolean(current?.permissions.includes(p)), refreshMe }),
+    [me, locationId, isOwner, current, refreshMe],
+  );
+
+  const nav = [
+    { path: '/panel/pracownicy', label: pl.admin.nav.employees, icon: 'people', show: ctx.can('employees.view') },
+    { path: '/panel/materialy', label: pl.admin.nav.content, icon: 'book', show: ctx.can('content.edit') },
+    { path: '/panel/menedzerowie', label: pl.admin.nav.managers, icon: 'key', show: isOwner },
+    { path: '/panel/lokale', label: pl.admin.nav.locations, icon: 'pin', show: isOwner },
+    { path: '/panel/dziennik', label: pl.admin.nav.audit, icon: 'list', show: isOwner },
+  ].filter((n) => n.show);
+
+  let page: React.ReactNode = null;
+  let m: Record<string, string> | null;
+  if ((m = match('/panel/materialy/:id', path))) page = <ContentEditor id={m.id!} />;
+  else if (path.startsWith('/panel/materialy')) page = <ContentList />;
+  else if ((m = match('/panel/pracownicy/:id', path))) page = <Employees selectedId={m.id!} />;
+  else if (path.startsWith('/panel/pracownicy')) page = <Employees selectedId={null} />;
+  else if (path.startsWith('/panel/menedzerowie') && isOwner) page = <Managers />;
+  else if (path.startsWith('/panel/lokale') && isOwner) page = <Locations />;
+  else if (path.startsWith('/panel/dziennik') && isOwner) page = <Audit />;
+  else if (nav[0]) page = <Redirect to={nav[0].path} />;
+
+  async function logout() {
+    await api('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+    onLoggedOut();
+  }
+
+  return (
+    <Ctx.Provider value={ctx}>
+      <div className="panel">
+        <nav className="rail" aria-label={pl.admin.panel}>
+          <span className="monogram" aria-hidden="true">
+            S
+          </span>
+          {nav.map((n) => (
+            <a key={n.path} href={n.path} onClick={onNav(n.path)} aria-current={path.startsWith(n.path) ? 'page' : undefined}>
+              <Icon name={n.icon} />
+              <span>{n.label}</span>
+            </a>
+          ))}
+        </nav>
+        <div className="panel-main">
+          <header className="topbar">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, letterSpacing: '0.08em' }}>SENATOR</span>
+              {me.locations.length > 1 ? (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }} className="muted">
+                  {pl.admin.location}
+                  <select
+                    value={locationId}
+                    onChange={(e) => {
+                      setLocationId(e.target.value);
+                      storageSet(LOC_KEY, e.target.value);
+                    }}
+                    style={{ minHeight: 40, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'var(--font-ui)', fontSize: 14, padding: '0 10px' }}
+                  >
+                    {me.locations.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <span className="muted" style={{ fontSize: 13 }}>
+                  {current?.name}
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="muted" style={{ fontSize: 13 }}>
+                {me.user.firstName} {me.user.lastName}
+              </span>
+              <Btn onClick={() => void logout()}>{pl.home.logout}</Btn>
+            </div>
+          </header>
+          <main className="page" key={locationId}>
+            {page}
+          </main>
+        </div>
+        <nav className="tabbar" aria-label={pl.admin.panel}>
+          {nav.map((n) => (
+            <a key={n.path} href={n.path} onClick={onNav(n.path)} aria-current={path.startsWith(n.path) ? 'page' : undefined}>
+              <Icon name={n.icon} />
+              <span>{n.label}</span>
+            </a>
+          ))}
+        </nav>
+      </div>
+    </Ctx.Provider>
+  );
+}

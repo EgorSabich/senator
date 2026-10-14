@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 — 2026-10-14 — Stage 3: admin panel & content
+
+- Panel for owner/managers: dark rail on desktop, bottom bar on phones; location switcher.
+- People: employee list with search and filters (active / locked / inactive), detail, add employee with printable one-time login card, new PIN, unlock, log out everywhere, deactivate, reactivate.
+- Managers and per-location permissions (owner), locations (owner), audit log in Polish.
+- Content (lessons, Service Book, regulations, SOP, job descriptions, checklists): draft with autosave, publish with change level (kosmetyczna / doprecyzowanie / istotna) and note, version history, line diff between versions, archive/restore, shared content (owner only).
+- Editor: headings, bold/italic, lists, steps, "Ważne" / "Uwaga" / "Informacja" blocks, photos (resized in the browser, max 1600 px), links.
+- Documents: positions, mandatory read flag, external https link, original PDF/DOCX attachment.
+- Server-side rich-text sanitizer (whitelist), FTS search index updated on publish.
+- Private media: photos and files only through `/media/*` after login and location check; type checked by MIME and magic bytes.
+- Tests: 17 unit, 34 integration, UI walkthrough in headless Chromium (desktop + phone).
+
 ## 0.2.0 — 2026-10-14 — Stage 2: users & access
 
 - Login + 6-digit PIN (staff) / password (managers, owner); PBKDF2 with server pepper; PIN rules shared by server and UI.

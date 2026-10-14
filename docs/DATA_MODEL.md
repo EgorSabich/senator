@@ -13,6 +13,10 @@ Shared across locations: `users`, `allergens`, content with `location_id IS NULL
 | Tests | `tests`, `test_review_content`, `questions`, `answer_options`, `test_attempts`, `attempt_answers`, `extra_attempt_grants` | Attempt = separate row; each answer stores a snapshot of question + options + correct id |
 | Search | `search_index` (FTS5) | entity_type, entity_id, location_id, folded title/body |
 
+Migration `0002_content_drafts_media.sql`: `content_items` gets a working copy (`draft_title`, `draft_body_json`, `draft_updated_at/by`) and `attachment_name`; new table `media` (every uploaded photo/file: key, location, type, size, original name, uploader).
+
+Rich text is TipTap JSON, sanitized on save by `src/shared/richtext.ts` (allowed: paragraph, heading 2/3, bullet/ordered list, callout important/warning/info, image from `/media/` only, hard break, rule; marks bold, italic, underline, link http(s)/mailto/tel).
+
 Future (not created): `trusted_devices`, `time_events`, `time_corrections`.
 
 Known detail: `content_items (location_id, slug)` is unique, but SQLite allows repeated NULL `location_id`, so slug uniqueness of shared content is enforced in the app.
