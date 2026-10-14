@@ -8,6 +8,8 @@ import { adminRoutes } from './routes/admin';
 import { contentAdminRoutes } from './routes/content';
 import { mediaAdminRoutes, mediaPublicRoutes } from './routes/media';
 import { menuAdminRoutes, menuRoutes } from './routes/menu';
+import { programAdminRoutes } from './routes/programs';
+import { learnRoutes } from './routes/learn';
 import { requireSameOrigin, requireSession } from './auth/session';
 import { runNightlyBackup } from './jobs/backup';
 import { anonymizeExpiredUsers } from './jobs/anonymize';
@@ -36,13 +38,16 @@ admin.route('/', adminRoutes);
 admin.route('/', contentAdminRoutes);
 admin.route('/', mediaAdminRoutes);
 admin.route('/', menuAdminRoutes);
+admin.route('/', programAdminRoutes);
 app.route('/api/admin', admin);
 
 // Staff (waiter) views; every path here needs a session.
 const staff = new Hono<AppEnv>();
 staff.use('/locations/*', requireSession);
 staff.use('/menu/*', requireSession);
+staff.use('/content/*', requireSession);
 staff.route('/', menuRoutes);
+staff.route('/', learnRoutes);
 app.route('/api', staff);
 app.route('/media', mediaPublicRoutes);
 

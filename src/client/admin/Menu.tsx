@@ -23,7 +23,6 @@ interface ListItem {
   photoSrc: string | null;
   sortOrder: number;
   versionNo: number;
-  allergenState: 'confirmed' | 'partial' | 'none';
 }
 interface Category {
   id: string;
@@ -37,7 +36,6 @@ interface MenuData {
   categories: Category[];
   items: ListItem[];
   canEdit: boolean;
-  canConfirm: boolean;
 }
 
 const SECTION_KEY = 'sa.panel.menuSection';
@@ -145,7 +143,6 @@ export function Menu({ selectedId }: { selectedId: string | null }) {
                       <span style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
                         <span style={{ fontSize: 15, fontWeight: 700, overflowWrap: 'anywhere' }}>{i.nameGuest}</span>
                         <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                          <AllergenBadge state={i.allergenState} />
                           {!i.isActive && <span className="badge neutral">{t.archived}</span>}
                         </span>
                       </span>
@@ -184,9 +181,6 @@ export function Menu({ selectedId }: { selectedId: string | null }) {
   );
 }
 
-function AllergenBadge({ state }: { state: ListItem['allergenState'] }) {
-  return <span className={`badge ${state === 'confirmed' ? 'ok' : state === 'partial' ? 'warn' : 'neutral'}`}>{t.allergenState[state]}</span>;
-}
 
 function SectionNote({ section, note, canEdit, onSaved }: { section: MenuSection; note: string | null; canEdit: boolean; onSaved: () => Promise<void> }) {
   const { locationId } = usePanel();
@@ -247,7 +241,6 @@ interface Detail {
   diets: { diet: string; status: string; sourceNote: string | null; confirmedAt: number | null; confirmedByName: string | null }[];
   versions: { id: string; versionNo: number; changeLevel: string; changeNote: string | null; createdAt: number; authorFirstName: string | null; authorLastName: string | null }[];
   canEdit: boolean;
-  canConfirm: boolean;
 }
 
 const SINGLE_LINE: MenuTextField[] = ['nameGuest', 'namePos', 'keyIngredient', 'serving', 'alcoholNote'];
@@ -417,7 +410,7 @@ function ItemDetail({ id, categories, onChanged }: { id: string; categories: Cat
         )}
       </fieldset>
 
-      <Allergens d={d} onSaved={async () => { await load(); await onChanged(); }} />
+      {d.item.section === 'kitchen' && <Allergens d={d} onSaved={async () => { await load(); await onChanged(); }} />}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <h3 className="label" style={{ margin: 0 }}>{t.history}</h3>
@@ -452,14 +445,14 @@ function Allergens({ d, onSaved }: { d: Detail; onSaved: () => Promise<void> }) 
   }, [d]);
   const names = Object.fromEntries(EU_ALLERGENS.map((x) => [x.code, x.pl]));
 
-  async function confirm() {
+  async function save() {
     setBusy(true);
     setError(null);
     setMsg(null);
     try {
       await api(`/api/admin/menu/items/${d.item.id}/allergens`, { method: 'PUT', body: { allergens: a, diets: di, changeNote: note || undefined } });
       setNote('');
-      setMsg(t.confirmDone);
+      setMsg(t.allergensSaved);
       await onSaved();
     } catch (e) {
       setError(errOf(e));
@@ -471,7 +464,7 @@ function Allergens({ d, onSaved }: { d: Detail; onSaved: () => Promise<void> }) 
   const row = (key: string, label: string, status: string, options: Record<string, string>, src: { sourceNote: string | null; confirmedAt: number | null; confirmedByName: string | null }, onChange: (v: string) => void) => (
     <div key={key} className="allergen-row" data-status={status}>
       <span style={{ fontWeight: 600 }}>{label}</span>
-      {d.canConfirm ? (
+      {d.canEdit ? (
         <select aria-label={label} value={status} onChange={(e) => onChange(e.target.value)}>
           {Object.entries(options).map(([v, l]) => (
             <option key={v} value={v}>
@@ -484,7 +477,7 @@ function Allergens({ d, onSaved }: { d: Detail; onSaved: () => Promise<void> }) 
       )}
       <span className="muted" style={{ fontSize: 12 }}>
         {src.sourceNote ? t.source(src.sourceNote) + ' · ' : ''}
-        {src.confirmedAt ? t.confirmedBy(src.confirmedByName ?? '—', formatDateTime(src.confirmedAt)) : t.notConfirmed}
+        {src.confirmedAt ? t.changedBy(src.confirmedByName ?? '—', formatDateTime(src.confirmedAt)) : t.fromImport}
       </span>
     </div>
   );
@@ -493,22 +486,22 @@ function Allergens({ d, onSaved }: { d: Detail; onSaved: () => Promise<void> }) 
     <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }} aria-label={t.allergens}>
       <h3 className="label" style={{ margin: 0 }}>{t.allergens}</h3>
       <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
-        {d.canConfirm ? t.confirmIntro : t.confirmNoRight} {t.allergenChangeHint}
+        {t.allergensIntro} {t.allergenChangeHint}
       </p>
       <div className="allergen-grid">{d.allergens.map((x) => row(x.allergenId, names[x.allergenId] ?? x.allergenId, a[x.allergenId] ?? x.status, t.allergenStatus, x, (v) => setA({ ...a, [x.allergenId]: v })))}</div>
       <h3 className="label" style={{ margin: '8px 0 0' }}>{t.diets}</h3>
       <div className="allergen-grid">{d.diets.map((x) => row(x.diet, t.dietNames[x.diet] ?? x.diet, di[x.diet] ?? x.status, t.dietStatus, x, (v) => setDi({ ...di, [x.diet]: v })))}</div>
-      {d.canConfirm && (
+      {d.canEdit && (
         <>
           <div className="field">
-            <label htmlFor="anote">{t.confirmNote}</label>
+            <label htmlFor="anote">{t.allergensNote}</label>
             <input id="anote" value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} />
           </div>
           <ErrorBox message={error} />
           {msg && <div className="notice" role="status">{msg}</div>}
           <div className="btn-row">
-            <Btn kind="primary" disabled={busy} onClick={() => void confirm()}>
-              {t.confirmButton}
+            <Btn kind="primary" disabled={busy} onClick={() => void save()}>
+              {t.allergensSave}
             </Btn>
           </div>
         </>
@@ -589,7 +582,7 @@ function VersionDialog({ itemId, versionId, onClose }: { itemId: string; version
             <dd style={{ margin: '2px 0 0', fontSize: 14 }}>
               {Object.entries(v.snapshot.allergens)
                 .map(([k, s]) => `${names[k] ?? k}: ${t.allergenStatus[s] ?? s}`)
-                .join(' · ') || t.notConfirmed}
+                .join(' · ') || '—'}
             </dd>
           </div>
           <div>
@@ -597,7 +590,7 @@ function VersionDialog({ itemId, versionId, onClose }: { itemId: string; version
             <dd style={{ margin: '2px 0 0', fontSize: 14 }}>
               {Object.entries(v.snapshot.diets)
                 .map(([k, s]) => `${t.dietNames[k] ?? k}: ${t.dietStatus[s] ?? s}`)
-                .join(' · ') || t.notConfirmed}
+                .join(' · ') || '—'}
             </dd>
           </div>
         </dl>

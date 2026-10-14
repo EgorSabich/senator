@@ -1,12 +1,13 @@
 /**
  * Menu catalog (spec D5, D9, D10; decisions D1, D10, D11).
  *
- * Admin (/api/admin): categories, items with versions, allergens & diets with confirmation,
+ * Admin (/api/admin): categories, items with versions, allergens & diets (kitchen only),
  * photo, archive, import of the bundle built by scripts/menu/build_menu_bundle.py.
- * Staff view (/api/locations/:locId/menu): active items only, allergens/diets only when confirmed.
+ * Staff view (/api/locations/:locId/menu): active items only.
  *
- * Allergen rule: a row is visible to waiters only when status = contains AND confirmed_at is set.
- * Imported values are never confirmed — a person with allergens.confirm checks and confirms them.
+ * Allergen rule (D26, replaces the confirmation step of D24): waiters see allergens with status
+ * "contains" (sheet "X") and diets "yes" (sheet "tak") as imported. "?" / "tak*" stay "unconfirmed"
+ * and are not shown. Bar items have no allergens (owner's decision).
  */
 import { Hono } from 'hono';
 import { CHANGE_LEVELS, EU_ALLERGENS, type AllergenStatus, type ChangeLevel } from '../../shared/constants';
@@ -93,7 +94,7 @@ function textsOf(row: Partial<MenuTexts>): MenuTexts {
 function requireMenuView(access: Access, locationId: string): void {
   const perms = access.locations.get(locationId);
   if (!perms) throw notFound();
-  if (!perms.has('menu.edit') && !perms.has('allergens.confirm')) throw new ApiError(403, 'forbidden');
+  if (!perms.has('menu.edit')) throw new ApiError(403, 'forbidden');
 }
 
 async function loadItem(db: D1Database, access: Access, id: string): Promise<ItemRow> {
@@ -253,9 +254,7 @@ menuAdminRoutes.get('/locations/:locId/menu', async (c) => {
     db
       .prepare(
         `SELECT mi.id, mi.category_id AS categoryId, mc.section, mi.name_guest AS nameGuest, mi.name_pos AS namePos,
-                mi.is_active AS isActive, mi.photo_key AS photoKey, mi.sort_order AS sortOrder, mi.version_no AS versionNo, mi.updated_at AS updatedAt,
-                (SELECT COUNT(*) FROM menu_item_allergens a WHERE a.menu_item_id = mi.id AND a.confirmed_at IS NOT NULL) AS allergensConfirmed,
-                (SELECT COUNT(*) FROM menu_item_allergens a WHERE a.menu_item_id = mi.id AND a.confirmed_at IS NOT NULL AND a.status = 'unconfirmed') AS allergensOpen
+                mi.is_active AS isActive, mi.photo_key AS photoKey, mi.sort_order AS sortOrder, mi.version_no AS versionNo, mi.updated_at AS updatedAt
          FROM menu_items mi JOIN menu_categories mc ON mc.id = mi.category_id
          WHERE mi.location_id = ? ORDER BY mc.section, mc.sort_order, mi.sort_order, mi.name_guest`,
       )
@@ -266,8 +265,6 @@ menuAdminRoutes.get('/locations/:locId/menu', async (c) => {
     sections: Object.fromEntries(MENU_SECTIONS.map((s) => [s, { note: notes[s] ?? null }])),
     categories: categories!.results,
     items: (items!.results as Record<string, unknown>[]).map((r) => {
-      const confirmed = Number(r.allergensConfirmed);
-      const open = Number(r.allergensOpen);
       return {
         id: r.id,
         categoryId: r.categoryId,
@@ -279,11 +276,9 @@ menuAdminRoutes.get('/locations/:locId/menu', async (c) => {
         sortOrder: r.sortOrder,
         versionNo: r.versionNo,
         updatedAt: r.updatedAt,
-        allergenState: confirmed === 0 ? 'none' : confirmed < ALLERGEN_CODES.length || open > 0 ? 'partial' : 'confirmed',
       };
     }),
     canEdit: access.locations.get(locId)!.has('menu.edit'),
-    canConfirm: access.locations.get(locId)!.has('allergens.confirm'),
   });
 });
 
@@ -410,7 +405,6 @@ menuAdminRoutes.get('/menu/items/:id', async (c) => {
     diets: st.diets,
     versions,
     canEdit: perms.has('menu.edit'),
-    canConfirm: perms.has('allergens.confirm'),
   });
 });
 
@@ -471,14 +465,15 @@ menuAdminRoutes.put('/menu/items/:id', async (c) => {
 });
 
 /**
- * Saves allergen and diet statuses and confirms all of them (allergens.confirm).
- * Every status change is a significant change (new version); confirming without change is only audited.
+ * Saves allergen and diet statuses of a kitchen item (menu.edit). Every status change is a significant
+ * change (new version). confirmed_by / confirmed_at now mean "last changed by / at".
  */
 menuAdminRoutes.put('/menu/items/:id/allergens', async (c) => {
   const db = c.env.DB;
   const access = await loadAccess(db, c.var.user);
   const row = await loadItem(db, access, c.req.param('id'));
-  requirePermission(access, row.locationId, 'allergens.confirm');
+  requirePermission(access, row.locationId, 'menu.edit');
+  if (row.section !== 'kitchen') throw badRequest('allergens_kitchen_only');
   const body = await readJson<{ allergens?: Record<string, unknown>; diets?: Record<string, unknown>; changeNote?: unknown }>(c.req.raw);
   if (!body.allergens || typeof body.allergens !== 'object' || !body.diets || typeof body.diets !== 'object') throw badRequest('invalid_input');
   for (const code of ALLERGEN_CODES) if (!isAllergenStatus(body.allergens[code])) throw badRequest('allergens_incomplete');
@@ -493,9 +488,12 @@ menuAdminRoutes.put('/menu/items/:id/allergens', async (c) => {
   const allergenChanges = current.allergens.filter((a) => a.status !== body.allergens![a.allergenId]).map((a) => ({ code: a.allergenId, from: a.status, to: body.allergens![a.allergenId] }));
   const dietChanges = current.diets.filter((d) => d.status !== body.diets![d.diet]).map((d) => ({ diet: d.diet, from: d.status, to: body.diets![d.diet] }));
   const statusChanged = allergenChanges.length + dietChanges.length > 0;
+  if (!statusChanged) throw badRequest('no_changes');
 
-  const nextAllergens = current.allergens.map((a) => ({ code: a.allergenId, status: body.allergens![a.allergenId] as string, source: a.sourceNote, confirmedBy: me, confirmedAt: now }));
-  const nextDiets = current.diets.map((d) => ({ diet: d.diet, status: body.diets![d.diet] as string, source: d.sourceNote, confirmedBy: me, confirmedAt: now }));
+  const changedCodes = new Set(allergenChanges.map((x) => x.code));
+  const changedDiets = new Set(dietChanges.map((x) => x.diet));
+  const nextAllergens = current.allergens.map((a) => ({ code: a.allergenId, status: body.allergens![a.allergenId] as string, source: a.sourceNote, confirmedBy: changedCodes.has(a.allergenId) ? me : a.confirmedBy, confirmedAt: changedCodes.has(a.allergenId) ? now : a.confirmedAt }));
+  const nextDiets = current.diets.map((d) => ({ diet: d.diet, status: body.diets![d.diet] as string, source: d.sourceNote, confirmedBy: changedDiets.has(d.diet) ? me : d.confirmedBy, confirmedAt: changedDiets.has(d.diet) ? now : d.confirmedAt }));
   const statements = [...allergenInsert(db, row.id, nextAllergens), ...dietInsert(db, row.id, nextDiets)];
   let versionNo = row.versionNo;
   if (statusChanged) {
@@ -513,14 +511,14 @@ menuAdminRoutes.put('/menu/items/:id/allergens', async (c) => {
     auditStatement(db, {
       actorId: me,
       locationId: row.locationId,
-      action: 'menu.allergens_confirm',
+      action: 'menu.allergens_update',
       entityType: 'menu_item',
       entityId: row.id,
       after: { allergenChanges, dietChanges, versionNo },
     }),
   );
   await db.batch(statements);
-  return c.json({ versionNo, changed: statusChanged });
+  return c.json({ versionNo });
 });
 
 menuAdminRoutes.post('/menu/items/:id/photo', async (c) => {
@@ -702,14 +700,17 @@ menuAdminRoutes.post('/locations/:locId/menu/import', async (c) => {
 export const menuRoutes = new Hono<AppEnv>();
 // Session is enforced in index.ts.
 
-/** What a waiter may see: confirmed "contains" allergens and confirmed "yes" diets only. */
-function visibleStatuses(rows: { allergens: AllergenRow[]; diets: DietRow[] }) {
-  const confirmedAll =
-    ALLERGEN_CODES.every((code) => rows.allergens.some((a) => a.allergenId === code && a.confirmedAt !== null && a.status !== 'unconfirmed'));
+/**
+ * What a waiter sees (kitchen only): allergens "contains" and diets "yes".
+ * `allergensComplete` is false when any of the 14 is missing or "unconfirmed" (sheet "?").
+ */
+function visibleStatuses(section: string, rows: { allergens: AllergenRow[]; diets: DietRow[] }) {
+  if (section !== 'kitchen') return { showAllergens: false, allergens: [] as string[], diets: [] as string[], allergensComplete: false };
   return {
-    allergens: EU_ALLERGENS.filter((x) => rows.allergens.some((a) => a.allergenId === x.code && a.status === 'contains' && a.confirmedAt !== null)).map((x) => x.code),
-    diets: DIETS.filter((d) => rows.diets.some((r) => r.diet === d && r.status === 'yes' && r.confirmedAt !== null)),
-    allergensComplete: confirmedAll,
+    showAllergens: true,
+    allergens: EU_ALLERGENS.filter((x) => rows.allergens.some((a) => a.allergenId === x.code && a.status === 'contains')).map((x) => x.code),
+    diets: DIETS.filter((d) => rows.diets.some((r) => r.diet === d && r.status === 'yes')),
+    allergensComplete: ALLERGEN_CODES.every((code) => rows.allergens.some((a) => a.allergenId === code && a.status !== 'unconfirmed')),
   };
 }
 
@@ -758,7 +759,7 @@ menuRoutes.get('/locations/:locId/menu', async (c) => {
       nameGuest: i.nameGuest,
       namePos: i.namePos,
       photoSrc: i.photoKey ? `/media/${i.photoKey}` : null,
-      ...visibleStatuses({ allergens: aBy.get(i.id) ?? [], diets: dBy.get(i.id) ?? [] }),
+      ...visibleStatuses(i.section, { allergens: aBy.get(i.id) ?? [], diets: dBy.get(i.id) ?? [] }),
     })),
   });
 });
@@ -768,7 +769,7 @@ menuRoutes.get('/menu/items/:id', async (c) => {
   const access = await loadAccess(db, c.var.user);
   const row = await loadItem(db, access, c.req.param('id'));
   if (!row.isActive) throw notFound();
-  const vis = visibleStatuses(await loadAllergens(db, row.id));
+  const vis = visibleStatuses(row.section, await loadAllergens(db, row.id));
   return c.json({
     item: {
       id: row.id,

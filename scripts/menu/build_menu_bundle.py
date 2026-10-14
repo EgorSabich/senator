@@ -10,8 +10,8 @@ The bundle contains restaurant data and photos: never commit it to the repositor
 
 Rules (decisions D1, D10, D11):
   * texts are copied as they are — nothing is rewritten or invented;
-  * allergen matrix: "X" → contains, "?" → unconfirmed, empty → not_contains; every value arrives
-    unconfirmed and becomes visible to waiters only after a manager with allergens.confirm confirms it;
+  * allergen matrix (kitchen only): "X" → contains, "?" → unconfirmed, empty → not_contains;
+    waiters see "contains" right away (D26); the bar has no allergens;
   * diets: "tak" → yes, "nie" → no, "tak*" / "?" → unconfirmed (original kept in source note);
   * bar photos are taken from the pictures anchored in the "Foto" column, resized to max 1600 px.
 
@@ -297,7 +297,6 @@ def parse_bar(path: str, issues: list[str]):
             'diets': {},
             'photo': photo,
         })
-    issues.append('Bar: w pliku nie ma kolumny alergenów — wszystkie alergeny napojów są niepotwierdzone (np. HORTUS: mleko sojowe w opisie).')
     return categories, items
 
 

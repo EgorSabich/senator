@@ -1,5 +1,5 @@
 """Stage 4 UI walkthrough in headless Chromium: import the real menu bundle, browse kitchen/bar,
-edit an item with a change level, confirm allergens, phone layout.
+edit an item with a change level, change an allergen, phone layout.
 Needs a fresh server (scripts/ui-server.sh) and MENU_BUNDLE = path to the bundle built by
 scripts/menu/build_menu_bundle.py. Screenshots go to $SHOTS_DIR. Prints NO_ERRORS when the browser saw no page errors."""
 import os
@@ -64,9 +64,10 @@ with sync_playwright() as p:
     page.get_by_role("dialog").get_by_role("button", name="Zapisz zmiany").click()
     page.get_by_text("Zapisano.").wait_for()
 
-    # confirm allergens
-    page.get_by_role("button", name="Zatwierdź alergeny i diety").click()
-    page.get_by_text("Alergeny i diety zatwierdzone.").wait_for()
+    # change one allergen (kitchen only; no confirmation step — D26)
+    page.get_by_label("Łubin").select_option("unconfirmed")
+    page.get_by_role("button", name="Zapisz alergeny i diety").click()
+    page.get_by_text("Alergeny i diety zapisane.").wait_for()
     page.wait_for_timeout(300)
     shot(page, "m05-confirmed")
 

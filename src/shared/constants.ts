@@ -11,7 +11,6 @@ export const PERMISSIONS = [
   'results.view',
   'content.edit',
   'menu.edit',
-  'allergens.confirm',
   'tests.edit',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];

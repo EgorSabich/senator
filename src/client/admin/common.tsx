@@ -38,6 +38,15 @@ const paths: Record<string, ReactNode> = {
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,
+  learn: (
+    <>
+      <path d="M3 7l9-4 9 4-9 4z" />
+      <path d="M7 9v5c0 1.5 2.5 3 5 3s5-1.5 5-3V9" />
+    </>
+  ),
+  up: <path d="M6 15l6-6 6 6" />,
+  down: <path d="M6 9l6 6 6-6" />,
+  close: <path d="M6 6l12 12M18 6L6 18" />,
   menu: (
     <>
       <path d="M7 3v8a2 2 0 0 0 2 2v8M5 3v5M9 3v5" />

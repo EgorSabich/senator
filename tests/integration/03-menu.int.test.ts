@@ -95,8 +95,6 @@ describe('import', () => {
     const list = await editor.get(`/api/admin/locations/${SENATOR}/menu`);
     expect(list.data.sections.kitchen.note).toMatch(/celiaków/);
     expect(list.data.items.map((i: { nameGuest: string }) => i.nameGuest)).toEqual(expect.arrayContaining(['Żurek testowy', 'HORTUS testowy']));
-    const z = list.data.items.find((i: { nameGuest: string }) => i.nameGuest === 'Żurek testowy');
-    expect(z.allergenState).toBe('none');
   });
 
   it('a second import skips existing items (no duplicates)', async () => {
@@ -120,61 +118,55 @@ describe('import', () => {
   });
 });
 
-describe('allergens are visible to waiters only after confirmation', () => {
+describe('allergens (kitchen, no confirmation step — D26)', () => {
   let zurek = '';
+  let hortus = '';
 
-  it('imported allergens are hidden from waiters', async () => {
+  it('waiter sees "contains" and "yes" from the import right away; "?" stays hidden', async () => {
     const menu = await waiter.get(`/api/locations/${SENATOR}/menu`);
     expect(menu.status).toBe(200);
     const z = menu.data.items.find((i: { nameGuest: string }) => i.nameGuest === 'Żurek testowy');
     zurek = z.id;
-    expect(z.allergens).toEqual([]);
+    expect(z.showAllergens).toBe(true);
+    expect(z.allergens).toEqual(['gluten']);
     expect(z.diets).toEqual([]);
     expect(z.allergensComplete).toBe(false);
     const card = await waiter.get(`/api/menu/items/${zurek}`);
-    expect(card.data.item.allergens).toEqual([]);
+    expect(card.data.item.allergens).toEqual(['gluten']);
     expect(card.data.item.texts.howToSell).toMatch(/żurek/);
+  });
+
+  it('bar items carry no allergens', async () => {
+    const h = (await waiter.get(`/api/locations/${SENATOR}/menu`)).data.items.find((i: { nameGuest: string }) => i.nameGuest === 'HORTUS testowy');
+    hortus = h.id;
+    expect(h).toMatchObject({ showAllergens: false, allergens: [], diets: [] });
+    const res = await editor.put(`/api/admin/menu/items/${hortus}/allergens`, { allergens: allergenSet([]), diets });
+    expect(res.data.error).toBe('allergens_kitchen_only');
   });
 
   it('admin card keeps the source wording and shows all 14 allergens', async () => {
     const card = await editor.get(`/api/admin/menu/items/${zurek}`);
     expect(card.data.allergens).toHaveLength(14);
-    expect(card.data.allergens.find((a: { allergenId: string }) => a.allergenId === 'eggs')).toMatchObject({ status: 'unconfirmed', sourceNote: '?', confirmedAt: null });
+    expect(card.data.allergens.find((a: { allergenId: string }) => a.allergenId === 'eggs')).toMatchObject({ status: 'unconfirmed', sourceNote: '?' });
     expect(card.data.diets.find((d: { diet: string }) => d.diet === 'gluten_free')).toMatchObject({ status: 'unconfirmed', sourceNote: 'tak*' });
-    expect(card.data.canConfirm).toBe(false);
   });
 
-  it('manager without allergens.confirm cannot confirm', async () => {
-    const res = await editor.put(`/api/admin/menu/items/${zurek}/allergens`, { allergens: allergenSet(['gluten']), diets });
-    expect(res.status).toBe(403);
+  it('waiter cannot change allergens; incomplete list is refused', async () => {
+    expect((await waiter.put(`/api/admin/menu/items/${zurek}/allergens`, { allergens: allergenSet(['gluten']), diets })).status).toBe(403);
+    expect((await editor.put(`/api/admin/menu/items/${zurek}/allergens`, { allergens: { gluten: 'contains' }, diets })).data.error).toBe('allergens_incomplete');
   });
 
-  it('incomplete allergen list is refused', async () => {
-    const res = await owner.put(`/api/admin/menu/items/${zurek}/allergens`, { allergens: { gluten: 'contains' }, diets });
-    expect(res.data.error).toBe('allergens_incomplete');
-  });
-
-  it('after confirmation the waiter sees "contains" right away; a status change is a significant version', async () => {
-    const res = await owner.put(`/api/admin/menu/items/${zurek}/allergens`, { allergens: allergenSet(['gluten', 'eggs']), diets, changeNote: 'Jajko potwierdzone przez kuchnię' });
+  it('a change is visible to waiters at once and is a significant version; same values = no_changes', async () => {
+    const res = await editor.put(`/api/admin/menu/items/${zurek}/allergens`, { allergens: allergenSet(['gluten', 'eggs']), diets, changeNote: 'Jajko — wg kuchni' });
     expect(res.status).toBe(200);
-    expect(res.data.changed).toBe(true);
     const z = (await waiter.get(`/api/locations/${SENATOR}/menu`)).data.items.find((i: { id: string }) => i.id === zurek);
     expect(z.allergens).toEqual(['gluten', 'eggs']);
     expect(z.diets).toEqual(['gluten_free']);
     expect(z.allergensComplete).toBe(true);
-    const card = await owner.get(`/api/admin/menu/items/${zurek}`);
+    const card = await editor.get(`/api/admin/menu/items/${zurek}`);
     expect(card.data.versions[0]).toMatchObject({ versionNo: 2, changeLevel: 'significant' });
     expect(card.data.allergens.find((a: { allergenId: string }) => a.allergenId === 'eggs').confirmedByName).toBeTruthy();
-  });
-
-  it('confirming without changes does not create a version; "unconfirmed" stays hidden', async () => {
-    const res = await owner.put(`/api/admin/menu/items/${zurek}/allergens`, { allergens: allergenSet(['gluten'], ['eggs']), diets });
-    expect(res.data.versionNo).toBe(3);
-    const again = await owner.put(`/api/admin/menu/items/${zurek}/allergens`, { allergens: allergenSet(['gluten'], ['eggs']), diets });
-    expect(again.data).toMatchObject({ versionNo: 3, changed: false });
-    const z = (await waiter.get(`/api/menu/items/${zurek}`)).data.item;
-    expect(z.allergens).toEqual(['gluten']);
-    expect(z.allergensComplete).toBe(false);
+    expect((await editor.put(`/api/admin/menu/items/${zurek}/allergens`, { allergens: allergenSet(['gluten', 'eggs']), diets })).data.error).toBe('no_changes');
   });
 });
 
@@ -244,6 +236,6 @@ describe('isolation', () => {
   it('import is written to the audit log', async () => {
     const audit = await owner.get(`/api/admin/audit?limit=500`);
     const actions = (audit.data.entries ?? audit.data.items ?? []).map((e: { action: string }) => e.action);
-    expect(actions).toEqual(expect.arrayContaining(['menu.import', 'menu.allergens_confirm', 'menu.item_update']));
+    expect(actions).toEqual(expect.arrayContaining(['menu.import', 'menu.allergens_update', 'menu.item_update']));
   });
 });

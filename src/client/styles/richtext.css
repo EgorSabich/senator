@@ -1,0 +1,113 @@
+/* Rich text: editor surface in the panel and the reader in the Academy. */
+.rt {
+  font-size: 16px;
+  line-height: 1.65;
+}
+.rt h2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+  margin: 22px 0 8px;
+}
+.rt h3 {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 18px 0 6px;
+}
+.rt p {
+  margin: 10px 0;
+}
+.rt ul,
+.rt ol {
+  padding-left: 22px;
+}
+.rt img {
+  max-width: 100%;
+  border-radius: 12px;
+  display: block;
+  margin: 12px 0;
+}
+.rt img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+}
+.rt a {
+  color: var(--accent);
+}
+.rt hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+.rt .callout {
+  border-radius: 14px;
+  padding: 6px 16px;
+  margin: 14px 0;
+  border: 1px solid;
+}
+.rt .callout::before {
+  content: attr(data-label);
+  display: block;
+  padding-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.rt .callout[data-variant='important'] {
+  background: #2e2118;
+  border-color: var(--warn-border);
+}
+.rt .callout[data-variant='important']::before {
+  color: var(--warn-fg);
+}
+.rt .callout[data-variant='warning'] {
+  background: #2b1c1b;
+  border-color: var(--bad-border);
+}
+.rt .callout[data-variant='warning']::before {
+  color: var(--bad-fg);
+}
+.rt .callout[data-variant='info'] {
+  background: var(--surface);
+  border-color: var(--border);
+}
+.rt .callout[data-variant='info']::before {
+  color: var(--text-muted);
+}
+
+/* Steps (ordered lists) in the reader */
+.rt.reader ol {
+  list-style: none;
+  counter-reset: step;
+  padding-left: 0;
+}
+.rt.reader ol > li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 40px;
+  margin: 10px 0;
+}
+.rt.reader ol > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 26px;
+  height: 26px;
+  border-radius: 13px;
+  background: #33271f;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rt.reader ol > li > p {
+  margin: 0;
+}
+.rt mark {
+  background: #4a3020;
+  color: var(--text);
+  border-radius: 3px;
+}

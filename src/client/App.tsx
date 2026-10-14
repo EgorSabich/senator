@@ -5,9 +5,11 @@ import { Redirect, usePath } from './router';
 import { ChangeSecret } from './screens/ChangeSecret';
 import { Login } from './screens/Login';
 import { Brand, ErrorBox, SecondaryButton, screen } from './ui';
+import { clearPersonalCache } from './pwa';
 
 // The panel (editor, admin screens) is loaded only for managers and the owner.
 const Panel = lazy(() => import('./admin/Panel').then((m) => ({ default: m.Panel })));
+const Academy = lazy(() => import('./app/Academy').then((m) => ({ default: m.Academy })));
 
 type State = { kind: 'loading' } | { kind: 'anonymous' } | { kind: 'error'; message: string } | { kind: 'signed-in'; me: Me };
 
@@ -47,41 +49,35 @@ export function App() {
       </main>
     );
   }
-  if (state.kind === 'anonymous') return <Login onLoggedIn={() => void refresh()} />;
+  if (state.kind === 'anonymous')
+    return (
+      <Login
+        onLoggedIn={async () => {
+          await clearPersonalCache(); // another person may have used this phone
+          void refresh();
+        }}
+      />
+    );
   const me = state.me;
   if (me.user.mustChangeSecret) return <ChangeSecret me={me} onDone={() => void refresh()} />;
 
+  const loggedOut = () => {
+    void clearPersonalCache();
+    setState({ kind: 'anonymous' });
+  };
   const isStaff = me.user.role === 'owner' || me.user.role === 'manager';
-  if (isStaff) {
-    if (!path.startsWith('/panel')) return <Redirect to="/panel" />;
+  if (isStaff && (path === '/' || path.startsWith('/panel'))) {
+    if (path === '/') return <Redirect to="/panel" />;
     return (
       <Suspense fallback={<Loading />}>
-        <Panel me={me} onLoggedOut={() => setState({ kind: 'anonymous' })} refreshMe={refresh} />
+        <Panel me={me} onLoggedOut={loggedOut} refreshMe={refresh} />
       </Suspense>
     );
   }
   if (path.startsWith('/panel')) return <Redirect to="/" />;
-  return <Home me={me} onLoggedOut={() => setState({ kind: 'anonymous' })} />;
-}
-
-function Home({ me, onLoggedOut }: { me: Me; onLoggedOut: () => void }) {
-  async function logout() {
-    await api('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
-    onLoggedOut();
-  }
   return (
-    <main style={screen}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Brand />
-        <SecondaryButton onClick={() => void logout()}>{pl.home.logout}</SecondaryButton>
-      </header>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600 }}>{pl.home.hello(me.user.firstName)}</h1>
-        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 14 }}>
-          {pl.home.roleEmployee} · {me.locations.map((l) => l.name).join(', ')}
-        </p>
-      </div>
-      <p style={{ margin: 0, color: 'var(--text-soft)', fontSize: 15, lineHeight: 1.6 }}>{pl.home.stageNote}</p>
-    </main>
+    <Suspense fallback={<Loading />}>
+      <Academy me={me} onLoggedOut={loggedOut} refreshMe={refresh} />
+    </Suspense>
   );
 }
