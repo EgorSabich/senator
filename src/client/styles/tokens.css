@@ -1,0 +1,63 @@
+/* Senator Academy — design tokens (spec section H, decision D21). Dark theme only. */
+:root {
+  --bg: #1c1513;
+  --bg-nav: #211916;
+  --bg-rail: #141010;
+  --surface: #271e1b;
+  --surface-2: #2c221e;
+  --surface-raised: #2a1f1a;
+  --border: #3e312b;
+  --text: #f3e6d3;
+  --text-muted: #b5a391;
+  --text-soft: #d9c9b6;
+  --text-disabled: #8c7b6c;
+  --accent: #e07b32;
+  --accent-hover: #f0974f;
+  --on-accent: #1c1513;
+
+  --ok-fg: #9ccb9f;
+  --ok-bg: #1f2e22;
+  --bad-fg: #f09a8e;
+  --bad-bg: #3b2422;
+  --bad-border: #5a2e2a;
+  --warn-fg: #f0a365;
+  --warn-bg: #3a2a1c;
+  --warn-border: #5a3a22;
+
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-ui: 'Manrope', system-ui, sans-serif;
+
+  --radius-s: 10px;
+  --radius-m: 14px;
+  --radius-l: 18px;
+  --tap: 44px;
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+}
+a:hover {
+  color: var(--accent-hover);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

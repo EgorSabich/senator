@@ -1,0 +1,49 @@
+// Senator Academy — konfiguracja Cloudflare.
+// Poziom główny = produkcja. Środowisko testowe: CLOUDFLARE_ENV=staging.
+// database_id uzupełniamy po utworzeniu baz w koncie Cloudflare właściciela (DEPLOYMENT.md).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "senator-academy",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/media/*"]
+  },
+  "observability": { "enabled": true },
+  "vars": { "APP_ENV": "production" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "senator-academy-prod",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    { "binding": "PHOTOS", "bucket_name": "senator-academy-photos" },
+    { "binding": "BACKUPS", "bucket_name": "senator-academy-backups" }
+  ],
+  // 01:30 UTC = 02:30 / 03:30 czasu warszawskiego (zależnie od zmiany czasu)
+  "triggers": { "crons": ["30 1 * * *"] },
+  "env": {
+    "staging": {
+      "name": "senator-academy-staging",
+      "vars": { "APP_ENV": "staging" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "senator-academy-staging",
+          "database_id": "00000000-0000-0000-0000-000000000001",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        { "binding": "PHOTOS", "bucket_name": "senator-academy-photos-staging" },
+        { "binding": "BACKUPS", "bucket_name": "senator-academy-backups-staging" }
+      ],
+      "triggers": { "crons": ["30 1 * * *"] }
+    }
+  }
+}
