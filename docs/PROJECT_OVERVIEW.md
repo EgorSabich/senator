@@ -14,8 +14,8 @@
 | 1 | Foundation: project, Cloudflare config, schema, migrations, backups, docs | Done — in GitHub; not deployed (waiting for Cloudflare account) |
 | 2 | Users & access | Done — 19/19 integration tests |
 | 3 | Admin panel & content | Done — 34/34 integration, UI walkthrough |
-| 4 | Menu catalog & import | Next |
-| 5 | Academy for waiters | — |
+| 4 | Menu catalog & import | Done — 55/55 integration, real import 81 items; allergens await confirmation |
+| 5 | Academy for waiters | Next |
 | 6 | Tests | — |
 | 7 | Analytics & assignments | — |
 | 8 | Quality & launch | — |

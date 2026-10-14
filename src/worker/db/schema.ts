@@ -277,6 +277,18 @@ export const menuCategories = sqliteTable('menu_categories', {
   sortOrder: integer('sort_order').notNull().default(0),
 });
 
+/** One note per location and section, shown above the list (e.g. kitchen allergen remarks from the source sheet). */
+export const menuSections = sqliteTable(
+  'menu_sections',
+  {
+    locationId: text('location_id').notNull().references(() => locations.id),
+    section: text('section', { enum: ['kitchen', 'bar'] }).notNull(),
+    note: text('note'),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.locationId, t.section] })],
+);
+
 export const menuItems = sqliteTable(
   'menu_items',
   {
@@ -295,6 +307,9 @@ export const menuItems = sqliteTable(
     upsell: text('upsell'),
     guestQuestions: text('guest_questions'),
     alcoholNote: text('alcohol_note'),
+    warnGuest: text('warn_guest'), // "Uprzedź gościa"
+    dietNote: text('diet_note'), // remarks under "Dla kogo"
+    importKey: text('import_key'), // "kitchen:<folded name>" — re-import skips existing items
     photoKey: text('photo_key'),
     isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
     versionNo: integer('version_no').notNull().default(1),
@@ -302,7 +317,10 @@ export const menuItems = sqliteTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index('menu_items_loc_idx').on(t.locationId, t.categoryId)],
+  (t) => [
+    index('menu_items_loc_idx').on(t.locationId, t.categoryId),
+    uniqueIndex('menu_items_import_key_unique').on(t.locationId, t.importKey),
+  ],
 );
 
 export const menuItemVersions = sqliteTable('menu_item_versions', {
@@ -341,6 +359,7 @@ export const menuItemDiets = sqliteTable(
     menuItemId: text('menu_item_id').notNull().references(() => menuItems.id),
     diet: text('diet', { enum: ['vegetarian', 'vegan', 'gluten_free', 'dairy_free'] }).notNull(),
     status: text('status', { enum: ['yes', 'no', 'unconfirmed'] }).notNull().default('unconfirmed'),
+    sourceNote: text('source_note'),
     confirmedBy: text('confirmed_by').references(() => users.id),
     confirmedAt: integer('confirmed_at'),
   },

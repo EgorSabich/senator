@@ -26,3 +26,6 @@ Source of truth for scope: the approved spec (Claude Docs, Russian). This file l
 | D20 | Own .pl domain; owner buys it. |
 | D21 | Dark theme, copper-orange accent #E07B32, Cormorant Garamond + Manrope. |
 | D22 | "Regulaminy i SOP" inside the app; mandatory documents confirmed after scrolling to the end; confirmation per version replaces paper sign-off lists. MVP: waiter + general documents. |
+| D23 | Menu import through a bundle file built from the source sheets (kitchen Google Sheet 12.10.2026 + Kelnerzy Bar.xlsx); texts copied without rewriting; re-import skips existing items. The bundle is not stored in the (public) repository. |
+| D24 | Imported allergens and diets are never confirmed. A person with `allergens.confirm` reviews all 14 allergens + 4 diets of an item and confirms them together; waiters see only confirmed "Zawiera" and confirmed diets; every status change is a significant version. |
+| D25 | Kitchen sheets "Ściąga", "Słowniczek", "Zwroty" are training material, not menu items — they become lessons in stage 5. |

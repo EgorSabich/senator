@@ -6,3 +6,7 @@ dist/
 *.log
 .DS_Store
 backups-local/
+
+# Restaurant data (menu import bundles, source sheets) — never commit, the repository is public
+menu-bundle*.json
+*.xlsx

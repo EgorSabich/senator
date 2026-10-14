@@ -43,24 +43,33 @@ export async function storeUpload(
   file: File,
   opts: { kind: 'img' | 'files'; locationId: string | null; userId: string },
 ): Promise<StoredFile> {
+  return storeBytes(env, new Uint8Array(await file.arrayBuffer()), file.type, file.name, opts);
+}
+
+export async function storeBytes(
+  env: AppEnv['Bindings'],
+  bytes: Uint8Array,
+  contentType: string,
+  originalName: string | null,
+  opts: { kind: 'img' | 'files'; locationId: string | null; userId: string },
+): Promise<StoredFile> {
   const table = opts.kind === 'img' ? IMAGE_TYPES : DOC_TYPES;
   const limit = opts.kind === 'img' ? IMAGE_MAX_BYTES : FILE_MAX_BYTES;
-  const type = table[file.type];
+  const type = table[contentType];
   if (!type) throw badRequest(opts.kind === 'img' ? 'image_type' : 'file_type');
-  if (file.size === 0 || file.size > limit) throw badRequest('file_size');
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.byteLength === 0 || bytes.byteLength > limit) throw badRequest('file_size');
   if (!type.magic(bytes)) throw badRequest(opts.kind === 'img' ? 'image_type' : 'file_type');
 
   const id = newId('m');
   const key = `${opts.locationId ? `loc/${opts.locationId}` : 'shared'}/${opts.kind}/${id}.${type.ext}`;
-  const name = (file.name || `plik.${type.ext}`).slice(0, 150);
-  await env.PHOTOS.put(key, bytes, { httpMetadata: { contentType: file.type } });
+  const name = (originalName || `plik.${type.ext}`).slice(0, 150);
+  await env.PHOTOS.put(key, bytes, { httpMetadata: { contentType } });
   await env.DB.prepare(
     `INSERT INTO media (id, location_id, key, content_type, size, original_name, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(id, opts.locationId, key, file.type, bytes.byteLength, name, opts.userId)
+    .bind(id, opts.locationId, key, contentType, bytes.byteLength, name, opts.userId)
     .run();
-  return { key, src: `/media/${key}`, contentType: file.type, size: bytes.byteLength, name };
+  return { key, src: `/media/${key}`, contentType, size: bytes.byteLength, name };
 }
 
 export async function requireUploadRight(access: Access, locationId: string | null): Promise<void> {

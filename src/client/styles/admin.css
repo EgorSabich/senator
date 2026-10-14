@@ -481,3 +481,133 @@
   color: var(--bad-fg);
   text-decoration: line-through;
 }
+
+/* Menu catalog */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  outline: none;
+}
+.row-btn.menu-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+.menu-row img,
+.menu-row .thumb-empty {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: 10px;
+  object-fit: cover;
+}
+.thumb-empty {
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+}
+.menu-photo {
+  width: 180px;
+  height: 180px;
+  border-radius: 14px;
+  object-fit: cover;
+}
+.file-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.file-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.file-btn:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.allergen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+}
+.allergen-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.allergen-row[data-status='contains'] {
+  border-color: var(--accent);
+}
+.allergen-row select {
+  min-height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  padding: 0 8px;
+}
+.notice.warn-notice {
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+.sticky-actions {
+  position: sticky;
+  bottom: 0;
+  padding: 10px 0;
+  background: var(--surface);
+}
+@media (max-width: 767px) {
+  .sticky-actions {
+    bottom: 64px;
+  }
+}
+.phone-only {
+  display: none;
+}
+@media (max-width: 767px) {
+  .phone-only {
+    display: block;
+  }
+  .split.has-selection > .list {
+    display: none;
+  }
+}

@@ -7,6 +7,7 @@ import { authRoutes } from './routes/auth';
 import { adminRoutes } from './routes/admin';
 import { contentAdminRoutes } from './routes/content';
 import { mediaAdminRoutes, mediaPublicRoutes } from './routes/media';
+import { menuAdminRoutes, menuRoutes } from './routes/menu';
 import { requireSameOrigin, requireSession } from './auth/session';
 import { runNightlyBackup } from './jobs/backup';
 import { anonymizeExpiredUsers } from './jobs/anonymize';
@@ -34,7 +35,15 @@ admin.use('*', requireSession);
 admin.route('/', adminRoutes);
 admin.route('/', contentAdminRoutes);
 admin.route('/', mediaAdminRoutes);
+admin.route('/', menuAdminRoutes);
 app.route('/api/admin', admin);
+
+// Staff (waiter) views; every path here needs a session.
+const staff = new Hono<AppEnv>();
+staff.use('/locations/*', requireSession);
+staff.use('/menu/*', requireSession);
+staff.route('/', menuRoutes);
+app.route('/api', staff);
 app.route('/media', mediaPublicRoutes);
 
 /** Unknown API routes: JSON 404 (the SPA handles every other path). */

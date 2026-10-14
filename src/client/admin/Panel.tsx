@@ -10,6 +10,7 @@ import { Locations } from './Locations';
 import { Audit } from './Audit';
 import { ContentList } from './ContentList';
 import { ContentEditor } from './ContentEditor';
+import { Menu } from './Menu';
 import '../styles/admin.css';
 
 interface PanelCtx {
@@ -45,6 +46,7 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
   const nav = [
     { path: '/panel/pracownicy', label: pl.admin.nav.employees, icon: 'people', show: ctx.can('employees.view') },
     { path: '/panel/materialy', label: pl.admin.nav.content, icon: 'book', show: ctx.can('content.edit') },
+    { path: '/panel/menu', label: pl.admin.nav.menu, icon: 'menu', show: ctx.can('menu.edit') || ctx.can('allergens.confirm') },
     { path: '/panel/menedzerowie', label: pl.admin.nav.managers, icon: 'key', show: isOwner },
     { path: '/panel/lokale', label: pl.admin.nav.locations, icon: 'pin', show: isOwner },
     { path: '/panel/dziennik', label: pl.admin.nav.audit, icon: 'list', show: isOwner },
@@ -54,6 +56,8 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
   let m: Record<string, string> | null;
   if ((m = match('/panel/materialy/:id', path))) page = <ContentEditor id={m.id!} />;
   else if (path.startsWith('/panel/materialy')) page = <ContentList />;
+  else if ((m = match('/panel/menu/:id', path))) page = <Menu selectedId={m.id!} />;
+  else if (path.startsWith('/panel/menu')) page = <Menu selectedId={null} />;
   else if ((m = match('/panel/pracownicy/:id', path))) page = <Employees selectedId={m.id!} />;
   else if (path.startsWith('/panel/pracownicy')) page = <Employees selectedId={null} />;
   else if (path.startsWith('/panel/menedzerowie') && isOwner) page = <Managers />;

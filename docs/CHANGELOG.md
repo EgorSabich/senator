@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 — 2026-10-14 — Stage 4: menu catalog & import
+
+- Menu in the panel: Kuchnia / Bar tabs, categories as in the source sheets, search, category filter, archived items on demand; phone layout list → item.
+- Item card: guest-menu and GoPOS names, photo, description, ingredients, key ingredient, taste, serving, how to sell, good to know, upsell, guest questions, "Uprzedź gościa", alcohol, diet remarks; every save asks for the change level and creates a version (preview of each version).
+- Allergens (14 EU) and diets with confirmation: shows the original value from the sheet and who confirmed when; only `allergens.confirm` confirms; status change = significant version.
+- Staff API: waiters get only active items, confirmed "Zawiera" allergens and confirmed diets.
+- Import: `scripts/menu/build_menu_bundle.py` (kitchen sheet 12.10.2026 + Kelnerzy Bar.xlsx, bar photos from the sheet) → upload in the panel, chunked, re-import skips existing items, data issues listed before import.
+- Migration 0003: `warn_guest`, `diet_note`, `import_key`, diet `source_note`, `menu_sections`.
+- Tests: 55 integration (21 new), menu UI walkthrough with the real data.
+
 ## 0.3.0 — 2026-10-14 — Stage 3: admin panel & content
 
 - Panel for owner/managers: dark rail on desktop, bottom bar on phones; location switcher.

@@ -21,4 +21,21 @@ Future (not created): `trusted_devices`, `time_events`, `time_corrections`.
 
 Known detail: `content_items (location_id, slug)` is unique, but SQLite allows repeated NULL `location_id`, so slug uniqueness of shared content is enforced in the app.
 
-Menu fields will be checked against the real sheet columns during stage 4 import; changes go in a new migration.
+Migration `0003_menu_import.sql` (stage 4, after checking the real sheets):
+- `menu_items` + `warn_guest` ("Uprzedź gościa"), `diet_note` (remarks under "Dla kogo"), `import_key` (unique per location; `kitchen:<folded name>` / `bar:<folded name>`, so a re-import never duplicates).
+- `menu_item_diets` + `source_note` (original "tak*", "?").
+- New `menu_sections` (location, section kitchen/bar, note shown above the list — e.g. the remark under the kitchen allergen sheet).
+
+Menu field mapping:
+
+| Source | Field |
+| --- | --- |
+| Kitchen "Karty dań": title "N. Name" | `name_guest` (no GoPOS name in the sheet) |
+| Jak sprzedać / Warto wiedzieć / Sprzedaż dodatkowa / Pytania gości / Kluczowy składnik / Uprzedź gościa | `how_to_sell` / `good_to_know` / `upsell` / `guest_questions` / `key_ingredient` / `warn_guest` |
+| Dla kogo (first line) | diets — taken from the "Alergeny" sheet; lines after the first → `diet_note` |
+| Alkohol ("-" = none) | `alcohol_note` |
+| "Alergeny" sheet: X / ? / empty | `contains` / `unconfirmed` / `not_contains`, never confirmed on import |
+| Wege / Wegańskie / Bez glutenu / Bez nabiału: tak / nie / tak* / ? | `yes` / `no` / `unconfirmed` / `unconfirmed` |
+| Bar: Rozdział, Nazwa "CHOICE OR", Nazwa "GO POS", Skład, Opis, Sposób podania, picture in "Foto" | category, `name_guest`, `name_pos`, `ingredients_json`, `description`, `serving`, `photo_key` |
+
+Version snapshot (`menu_item_versions.snapshot_json`): category, all texts, ingredients, allergen and diet statuses.

@@ -38,6 +38,12 @@ const paths: Record<string, ReactNode> = {
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,
+  menu: (
+    <>
+      <path d="M7 3v8a2 2 0 0 0 2 2v8M5 3v5M9 3v5" />
+      <path d="M17 21V3c-2 1.5-3 4-3 7v4h3" />
+    </>
+  ),
   back: <path d="M15 6l-6 6 6 6" />,
   search: (
     <>
