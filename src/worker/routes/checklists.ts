@@ -6,7 +6,8 @@
 import { Hono } from 'hono';
 import { checklistItems } from '../../shared/checklist';
 import type { RtNode } from '../../shared/richtext';
-import { businessDate, dateRange, isIsoDate, OPEN_SHIFT_STALE_HOURS } from '../../shared/time';
+import { businessDate, dateRange, isIsoDate } from '../../shared/time';
+import { locationRules } from '../lib/location';
 import type { AppEnv } from '../env';
 import { auditStatement } from '../lib/audit';
 import { ApiError, badRequest, newId, notFound, readJson } from '../lib/http';
@@ -82,9 +83,10 @@ async function dayView(db: D1Database, cl: ChecklistRow & { body: RtNode | null 
 }
 
 async function openShift(db: D1Database, userId: string, locationId: string, now: number) {
+  const { staleHours } = await locationRules(db, locationId);
   return db
     .prepare(`SELECT id, clock_in_at AS since FROM time_entries WHERE user_id = ? AND location_id = ? AND clock_out_at IS NULL AND clock_in_at > ? ORDER BY clock_in_at DESC LIMIT 1`)
-    .bind(userId, locationId, now - OPEN_SHIFT_STALE_HOURS * 3600_000)
+    .bind(userId, locationId, now - staleHours * 3600_000)
     .first<{ id: string; since: number }>();
 }
 
@@ -97,7 +99,8 @@ checklistRoutes.get('/locations/:locId/checklists/today', async (c) => {
   const access = await loadAccess(db, c.var.user);
   requireLocation(access, locId);
   const now = Date.now();
-  const date = businessDate(now);
+  const { dayStartHour } = await locationRules(db, locId);
+  const date = businessDate(now, dayStartHour);
   const positions = await userPositions(db, c.var.user, locId);
   const lists = await visibleContent(db, locId, positions, ['checklist']);
   const shift = await openShift(db, c.var.user.id, locId, now);
@@ -119,13 +122,14 @@ async function staffChecklist(c: { env: AppEnv['Bindings']; var: AppEnv['Variabl
   if (!locId || !access.locations.has(locId)) throw notFound();
   const positions = await userPositions(db, c.var.user, locId);
   if (!isVisibleFor(cl.positions, positions)) throw notFound();
-  return { cl, locId };
+  const { dayStartHour: day } = await locationRules(db, locId);
+  return { cl, locId, day };
 }
 
 checklistRoutes.get('/checklists/:id/today', async (c) => {
-  const { cl, locId } = await staffChecklist(c, c.req.param('id'));
+  const { cl, locId, day } = await staffChecklist(c, c.req.param('id'));
   const now = Date.now();
-  const date = businessDate(now);
+  const date = businessDate(now, day);
   const shift = await openShift(c.env.DB, c.var.user.id, locId, now);
   return c.json({ id: cl.id, title: cl.title, date, me: c.var.user.id, onShift: shift ? { since: shift.since } : null, ...(await dayView(c.env.DB, cl, date, locId)) });
 });
@@ -142,9 +146,9 @@ async function requireOpenDay(db: D1Database, id: string, date: string) {
 
 checklistRoutes.post('/checklists/:id/marks', async (c) => {
   const db = c.env.DB;
-  const { cl, locId } = await staffChecklist(c, c.req.param('id'));
+  const { cl, locId, day } = await staffChecklist(c, c.req.param('id'));
   await requireShift(c, locId);
-  const date = businessDate(Date.now());
+  const date = businessDate(Date.now(), day);
   await requireOpenDay(db, cl.id, date);
   const body = await readJson<{ key?: unknown }>(c.req.raw);
   const item = checklistItems(cl.body).find((i) => i.key === body.key);
@@ -167,8 +171,8 @@ checklistRoutes.post('/checklists/:id/marks', async (c) => {
 /** Undo your own mark (same day, before the list is closed). */
 checklistRoutes.delete('/checklists/:id/marks/:key', async (c) => {
   const db = c.env.DB;
-  const { cl } = await staffChecklist(c, c.req.param('id'));
-  const date = businessDate(Date.now());
+  const { cl, day } = await staffChecklist(c, c.req.param('id'));
+  const date = businessDate(Date.now(), day);
   await requireOpenDay(db, cl.id, date);
   const res = await db
     .prepare(`DELETE FROM checklist_marks WHERE content_item_id = ? AND business_date = ? AND item_key = ? AND user_id = ?`)
@@ -181,9 +185,9 @@ checklistRoutes.delete('/checklists/:id/marks/:key', async (c) => {
 /** Close the checklist for today; items not marked stay "not done". */
 checklistRoutes.post('/checklists/:id/close', async (c) => {
   const db = c.env.DB;
-  const { cl, locId } = await staffChecklist(c, c.req.param('id'));
+  const { cl, locId, day } = await staffChecklist(c, c.req.param('id'));
   await requireShift(c, locId);
-  const date = businessDate(Date.now());
+  const date = businessDate(Date.now(), day);
   await requireOpenDay(db, cl.id, date);
   const v = await dayView(db, cl, date, locId);
   await db.batch([

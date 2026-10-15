@@ -46,6 +46,7 @@ interface TimeData {
   days: string[];
   now: number;
   staleHours: number;
+  dayStartHour: number;
   wages: boolean;
   rates: Rate[];
   people: Person[];
@@ -70,9 +71,9 @@ const longLabel = (d: string) => longFmt.format(new Date(d + 'T12:00:00Z'));
 const minutesOf = (e: Entry) => (e.clockOutAt ? (e.clockOutAt - e.clockInAt) / 60000 : 0);
 
 /** "HH:MM" on a business day: 00:00–05:59 is the night after that day. */
-function businessTimeToMs(date: string, hhmm: string): number {
+function businessTimeToMs(date: string, hhmm: string, dayStartHour: number): number {
   const hour = Number(hhmm.slice(0, 2));
-  return warsawToMs(hour < 6 ? addDays(date, 1) : date, hhmm);
+  return warsawToMs(hour < dayStartHour ? addDays(date, 1) : date, hhmm);
 }
 
 export function TimeTracking() {
@@ -251,7 +252,7 @@ export function TimeTracking() {
               <tr>
                 <th className="sticky">{t.person}</th>
                 {data.days.map((d) => (
-                  <th key={d} className={d === businessDate(data.now) ? 'today' : ''}>
+                  <th key={d} className={d === businessDate(data.now, data.dayStartHour) ? 'today' : ''}>
                     {dayLabel(d)}
                   </th>
                 ))}
@@ -272,7 +273,7 @@ export function TimeTracking() {
                       const es = groupEntries.filter((e) => e.businessDate === d);
                       const mins = es.reduce((s, e) => s + minutesOf(e), 0);
                       return (
-                        <td key={d} className={d === businessDate(data.now) ? 'today' : ''}>
+                        <td key={d} className={d === businessDate(data.now, data.dayStartHour) ? 'today' : ''}>
                           {mins ? (
                             <span className="group-sum">
                               {formatDuration(mins)}
@@ -303,7 +304,7 @@ export function TimeTracking() {
                         {data.days.map((d) => {
                           const es = mine.filter((e) => e.businessDate === d);
                           return (
-                            <td key={d} className={d === businessDate(data.now) ? 'today' : ''}>
+                            <td key={d} className={d === businessDate(data.now, data.dayStartHour) ? 'today' : ''}>
                               <button type="button" className={`cell${es.length ? ' has' : ''}`} onClick={() => setCell({ person: p, date: d })} aria-label={`${p.firstName} ${p.lastName}, ${d}`}>
                                 {es.map((e) => {
                                   const cost = costOf(e);
@@ -344,6 +345,7 @@ export function TimeTracking() {
 
       {cell && data && (
         <DayDialog
+          dayStartHour={data.dayStartHour}
           locationId={locationId}
           person={cell.person}
           date={cell.date}
@@ -385,7 +387,7 @@ const TimeField = forwardRef<HTMLInputElement, { id: string; value: string; onCh
   },
 );
 
-function EntryEditor({ entry, date, onSave, onDelete }: { entry: Entry | null; date: string; onSave: (inAt: number, outAt: number | null, note: string) => Promise<string | null>; onDelete?: () => Promise<void> }) {
+function EntryEditor({ entry, date, dayStartHour, onSave, onDelete }: { entry: Entry | null; date: string; dayStartHour: number; onSave: (inAt: number, outAt: number | null, note: string) => Promise<string | null>; onDelete?: () => Promise<void> }) {
   const toHHMM = (ms: number) => formatClock(ms);
   const [inT, setIn] = useState(entry ? toHHMM(entry.clockInAt) : '');
   const [outT, setOut] = useState(entry?.clockOutAt ? toHHMM(entry.clockOutAt) : '');
@@ -402,8 +404,8 @@ function EntryEditor({ entry, date, onSave, onDelete }: { entry: Entry | null; d
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const inAt = businessTimeToMs(day, inT);
-    let outAt = outT ? businessTimeToMs(day, outT) : null;
+    const inAt = businessTimeToMs(day, inT, dayStartHour);
+    let outAt = outT ? businessTimeToMs(day, outT, dayStartHour) : null;
     if (outAt !== null && outAt <= inAt) outAt += 24 * 3600_000; // e.g. 05:00 → 07:00 next morning
     setError(await onSave(inAt, outAt, note));
     setBusy(false);
@@ -446,7 +448,7 @@ function EntryEditor({ entry, date, onSave, onDelete }: { entry: Entry | null; d
   );
 }
 
-function DayDialog(props: { locationId: string; person: Person; date: string; entries: Entry[]; onClose: () => void; onChanged: () => Promise<void> }) {
+function DayDialog(props: { locationId: string; person: Person; date: string; dayStartHour: number; entries: Entry[]; onClose: () => void; onChanged: () => Promise<void> }) {
   const [adding, setAdding] = useState(props.entries.length === 0);
   const [punches, setPunches] = useState<{ id: string; at: number; outcome: string; person: string | null; offline: number }[] | null>(null);
   useEffect(() => {
@@ -472,6 +474,7 @@ function DayDialog(props: { locationId: string; person: Person; date: string; en
       {props.entries.length === 0 && !adding && <p className="muted">{t.noEntries}</p>}
       {props.entries.map((e) => (
         <EntryEditor
+          dayStartHour={props.dayStartHour}
           key={`${e.id}-${e.clockInAt}-${e.clockOutAt}`}
           entry={e}
           date={props.date}
@@ -484,6 +487,7 @@ function DayDialog(props: { locationId: string; person: Person; date: string; en
       ))}
       {adding ? (
         <EntryEditor
+          dayStartHour={props.dayStartHour}
           entry={null}
           date={props.date}
           onSave={async (inAt, outAt, note) => {
@@ -496,7 +500,7 @@ function DayDialog(props: { locationId: string; person: Person; date: string; en
         <Btn onClick={() => setAdding(true)}>{t.addEntry}</Btn>
       )}
       <p className="muted" style={{ margin: 0, fontSize: 12 }}>
-        {t.afterMidnight}
+        {t.afterMidnight(props.dayStartHour)}
       </p>
       {mine.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

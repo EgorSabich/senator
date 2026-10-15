@@ -136,7 +136,7 @@ contentAdminRoutes.post('/locations/:locId/content', async (c) => {
   const locationId = shared ? null : locId;
   const id = newId('ci');
   const now = Date.now();
-  const isDocument = kind !== 'lesson' && kind !== 'service_book';
+  const isDocument = kind !== 'lesson'; // Service Book is mandatory to read too (D38)
   await db.batch([
     db
       .prepare(
@@ -497,7 +497,7 @@ contentAdminRoutes.post('/locations/:locId/content/import', async (c) => {
     const positions = raw.positions === undefined ? [] : parsePositions(raw.positions);
     const section = str(raw.section, 120);
     const sortOrder = Number.isInteger(raw.sortOrder) ? Number(raw.sortOrder) : 0;
-    const isDocument = kind !== 'lesson' && kind !== 'service_book';
+    const isDocument = kind !== 'lesson'; // Service Book is mandatory to read too (D38)
     const requiresAck = raw.requiresAck === undefined ? isDocument : raw.requiresAck === true;
     const id = newId('ci');
     await db.batch([

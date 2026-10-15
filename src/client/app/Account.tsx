@@ -3,7 +3,7 @@ import { api } from '../api';
 import { pl } from '../i18n/pl';
 import { clearPersonalCache } from '../pwa';
 import { ChangeSecret } from '../screens/ChangeSecret';
-import { useAcademy } from './shared';
+import { useAcademy, useApi } from './shared';
 
 const t = pl.academy.profile;
 
@@ -47,6 +47,7 @@ export function Account({ onLoggedOut, refreshMe }: { onLoggedOut: () => void; r
           {t.login}: <strong style={{ color: 'var(--text)' }}>{me.user.login}</strong>
         </span>
       </div>
+      <LocationInfo />
       {done && (
         <div className="a-note" role="status">
           {t.saved}
@@ -64,3 +65,52 @@ export function Account({ onLoggedOut, refreshMe }: { onLoggedOut: () => void; r
   );
 }
 
+
+const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+
+/** Address, phone, opening hours and the owner's note for the team (D38). */
+function LocationInfo() {
+  const { locationId } = useAcademy();
+  const { data } = useApi<{
+    location: { name: string; address: string | null; phone: string | null; email: string | null; openingHours: Record<string, string>; staffNote: string | null };
+  }>(`/api/locations/${locationId}/info`);
+  if (!data) return null;
+  const l = data.location;
+  const hours = DAYS.filter((d) => l.openingHours[d]);
+  if (!l.address && !l.phone && !l.email && !hours.length && !l.staffNote) return null;
+  const tp = pl.academy.profile;
+  return (
+    <div className="a-card">
+      <span className="a-label">{tp.location}</span>
+      <span style={{ fontSize: 18, fontWeight: 700 }}>{l.name}</span>
+      {l.address && <span className="a-sub">{l.address}</span>}
+      {(l.phone || l.email) && (
+        <span className="a-sub">
+          {l.phone && <a href={`tel:${l.phone.replace(/\s/g, '')}`}>{l.phone}</a>}
+          {l.phone && l.email ? ' · ' : ''}
+          {l.email && <a href={`mailto:${l.email}`}>{l.email}</a>}
+        </span>
+      )}
+      {hours.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span className="a-label" style={{ marginTop: 6 }}>
+            {tp.hours}
+          </span>
+          {hours.map((d) => (
+            <span key={d} className="a-sub" style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+              <span>{pl.admin.locations.days[d]}</span>
+              <span style={{ color: 'var(--text)' }}>{l.openingHours[d]}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {l.staffNote && (
+        <div className="a-note" style={{ whiteSpace: 'pre-wrap' }}>
+          <span>
+            <strong>{tp.note}:</strong> {l.staffNote}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}

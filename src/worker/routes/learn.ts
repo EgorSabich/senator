@@ -9,8 +9,9 @@ import { snippet } from '../../shared/progress';
 import type { AppEnv } from '../env';
 import { ApiError, badRequest, notFound, readJson } from '../lib/http';
 import { ftsQuery } from '../lib/search';
+import { locationView } from './admin';
 import { loadAccess, requireLocation } from '../auth/access';
-import { DOCUMENT_KINDS, isVisibleFor, programFor, progressFor, userPositions, visibleContent, type VisibleItem } from '../lib/learning';
+import { DOCUMENT_KINDS, MANDATORY_KINDS, isVisibleFor, programFor, progressFor, userPositions, visibleContent, type VisibleItem } from '../lib/learning';
 
 export const learnRoutes = new Hono<AppEnv>();
 // Session is enforced in index.ts.
@@ -45,7 +46,7 @@ learnRoutes.get('/locations/:locId/home', async (c) => {
   const [program, docs] = await Promise.all([programFor(db, user, locId), visibleContent(db, locId, positions, [...DOCUMENT_KINDS, 'service_book'])]);
   const docProgress = await progressFor(db, user.id, docs.map((d) => d.id));
 
-  const mandatoryDocs = docs.filter((d) => d.requiresAck && !d.externalUrl && DOCUMENT_KINDS.includes(d.kind as never));
+  const mandatoryDocs = docs.filter((d) => d.requiresAck && !d.externalUrl && (MANDATORY_KINDS as readonly string[]).includes(d.kind));
   const toConfirm = mandatoryDocs.filter((d) => docProgress.get(d.id)!.status !== 'done').map((d) => ({ ...docSummary(d), status: docProgress.get(d.id)!.status }));
 
   // Lessons to repeat (program) + documents to re-confirm are both "Do powtórki".
@@ -64,6 +65,19 @@ learnRoutes.get('/locations/:locId/home', async (c) => {
     review,
     updated,
   });
+});
+
+/** Location details for staff: address, phone, opening hours, note from the owner (D38). */
+learnRoutes.get('/locations/:locId/info', async (c) => {
+  const locId = c.req.param('locId');
+  await locationGuard(c, locId);
+  const l = await c.env.DB.prepare(
+    `SELECT id, name, slug, address, phone, email, opening_hours_json AS openingHoursJson, staff_note AS staffNote, day_start_hour AS dayStartHour, stale_hours AS staleHours FROM locations WHERE id = ?`,
+  )
+    .bind(locId)
+    .first<Parameters<typeof locationView>[0]>();
+  if (!l) throw notFound();
+  return c.json({ location: locationView(l) });
 });
 
 /* ───────── Program ───────── */

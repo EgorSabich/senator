@@ -3,7 +3,8 @@
  * Permission "time.manage" (owner always). Every change is in the audit log.
  */
 import { Hono } from 'hono';
-import { addDays, businessDate, dateRange, isIsoDate, OPEN_SHIFT_STALE_HOURS } from '../../shared/time';
+import { addDays, businessDate, dateRange, isIsoDate } from '../../shared/time';
+import { locationRules } from '../lib/location';
 import { proposeLogin } from '../../shared/text';
 import type { AppEnv } from '../env';
 import { auditStatement } from '../lib/audit';
@@ -11,7 +12,7 @@ import { ApiError, badRequest, newId, notFound, readJson, str } from '../lib/htt
 import { generateTempPassword, hashSecret } from '../auth/crypto';
 import { revokeUserSessions } from '../auth/session';
 import { loadAccess, requireOwner, requirePermission } from '../auth/access';
-import { DOCUMENT_KINDS, progressFor, visibleContent } from '../lib/learning';
+import { MANDATORY_KINDS, progressFor, visibleContent } from '../lib/learning';
 
 export const timeAdminRoutes = new Hono<AppEnv>();
 
@@ -78,7 +79,7 @@ timeAdminRoutes.get('/locations/:locId/time', async (c) => {
     now: Date.now(),
     wages,
     rates,
-    staleHours: OPEN_SHIFT_STALE_HOURS,
+    ...(await locationRules(db, locId)),
     people: people!.results,
     entries: entries!.results,
     openBefore: stale.results,
@@ -129,6 +130,7 @@ timeAdminRoutes.post('/locations/:locId/time/entries', async (c) => {
   const { inAt, outAt } = parseTimes(body);
   if (await overlaps(db, userId, inAt, outAt, null)) throw new ApiError(409, 'time_overlap');
   const note = str(body.note, 300);
+  const { dayStartHour } = await locationRules(db, locId);
   const id = newId('te');
   const now = Date.now();
   await db.batch([
@@ -137,7 +139,7 @@ timeAdminRoutes.post('/locations/:locId/time/entries', async (c) => {
         `INSERT INTO time_entries (id, location_id, user_id, business_date, clock_in_at, clock_out_at, in_source, out_source, note, edited_by, edited_at, created_at)
          VALUES (?, ?, ?, ?, ?, ?, 'manual', ?, ?, ?, ?, ?)`,
       )
-      .bind(id, locId, userId, businessDate(inAt), inAt, outAt, outAt === null ? null : 'manual', note, c.var.user.id, now, now),
+      .bind(id, locId, userId, businessDate(inAt, dayStartHour), inAt, outAt, outAt === null ? null : 'manual', note, c.var.user.id, now, now),
     auditStatement(db, { actorId: c.var.user.id, locationId: locId, action: 'time.entry_add', entityType: 'time_entry', entityId: id, after: { userId, clockInAt: inAt, clockOutAt: outAt, note } }),
   ]);
   return c.json({ id }, 201);
@@ -160,6 +162,7 @@ timeAdminRoutes.put('/time/entries/:id', async (c) => {
   const { inAt, outAt } = parseTimes(body);
   if (await overlaps(db, e.userId, inAt, outAt, e.id)) throw new ApiError(409, 'time_overlap');
   const note = body.note === undefined ? e.note : str(body.note, 300);
+  const { dayStartHour } = await locationRules(db, e.locationId);
   const now = Date.now();
   await db.batch([
     db
@@ -169,7 +172,7 @@ timeAdminRoutes.put('/time/entries/:id', async (c) => {
            out_source = CASE WHEN ? IS NULL THEN NULL WHEN clock_out_at = ? THEN out_source ELSE 'manual' END,
            edited_by = ?, edited_at = ? WHERE id = ?`,
       )
-      .bind(inAt, outAt, businessDate(inAt), note, inAt, outAt, outAt, c.var.user.id, now, e.id),
+      .bind(inAt, outAt, businessDate(inAt, dayStartHour), note, inAt, outAt, outAt, c.var.user.id, now, e.id),
     auditStatement(db, {
       actorId: c.var.user.id,
       locationId: e.locationId,
@@ -211,7 +214,8 @@ timeAdminRoutes.get('/locations/:locId/time/punches', async (c) => {
     )
     .bind(locId, Date.parse(addDays(date, -1) + 'T00:00:00Z'), Date.parse(addDays(date, 2) + 'T00:00:00Z'))
     .all<{ at: number }>();
-  return c.json({ punches: results.filter((p) => businessDate(p.at) === date) });
+  const { dayStartHour } = await locationRules(db, locId);
+  return c.json({ punches: results.filter((p) => businessDate(p.at, dayStartHour) === date) });
 });
 
 /* ───────── Terminal accounts (owner) ───────── */
@@ -333,7 +337,7 @@ timeAdminRoutes.put('/locations/:locId/users/:id/rate', async (c) => {
   const body = await readJson<{ rate?: unknown; validFrom?: unknown }>(c.req.raw);
   const rate = typeof body.rate === 'number' ? body.rate : typeof body.rate === 'string' ? Number(body.rate.replace(',', '.')) : NaN;
   if (!Number.isFinite(rate) || rate < 0 || rate > 10_000) throw badRequest('rate_invalid');
-  const validFrom = body.validFrom === undefined ? businessDate(Date.now()) : body.validFrom;
+  const validFrom = body.validFrom === undefined ? businessDate(Date.now(), (await locationRules(db, locId)).dayStartHour) : body.validFrom;
   if (!isIsoDate(validFrom)) throw badRequest('invalid_input');
   const grosze = Math.round(rate * 100);
   await db.batch([
@@ -364,11 +368,11 @@ timeAdminRoutes.get('/locations/:locId/users/:id/summary', async (c) => {
 
   const items = await visibleContent(db, locId, positions);
   const lessons = items.filter((i) => i.kind === 'lesson');
-  const mandatory = items.filter((i) => Boolean(i.requiresAck) && !i.externalUrl && (DOCUMENT_KINDS as readonly string[]).includes(i.kind));
+  const mandatory = items.filter((i) => Boolean(i.requiresAck) && !i.externalUrl && (MANDATORY_KINDS as readonly string[]).includes(i.kind));
   const progress = await progressFor(db, person.id, [...lessons, ...mandatory].map((i) => i.id));
   const done = (id: string) => progress.get(id)?.status === 'done';
 
-  const today = businessDate(Date.now());
+  const today = businessDate(Date.now(), (await locationRules(db, locId)).dayStartHour);
   const thisMonth = today.slice(0, 7);
   const d = new Date(Date.parse(thisMonth + '-15T12:00:00Z'));
   d.setUTCMonth(d.getUTCMonth() - 1);

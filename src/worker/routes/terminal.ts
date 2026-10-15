@@ -6,7 +6,8 @@
 import { Hono } from 'hono';
 import { AUTH } from '../../shared/constants';
 import { checkPin } from '../../shared/secret-rules';
-import { businessDate, DOUBLE_TAP_SECONDS, OFFLINE_MAX_AGE_HOURS, OPEN_SHIFT_STALE_HOURS } from '../../shared/time';
+import { businessDate, DOUBLE_TAP_SECONDS, OFFLINE_MAX_AGE_HOURS } from '../../shared/time';
+import { locationRules } from '../lib/location';
 import type { AppEnv } from '../env';
 import { ApiError, badRequest, newId, readJson } from '../lib/http';
 import { pinLookup, verifySecret } from '../auth/crypto';
@@ -36,6 +37,7 @@ async function loadTerminal(c: { env: AppEnv['Bindings']; var: AppEnv['Variables
 
 /** People currently on shift at the location (open, not stale). */
 async function onShift(db: D1Database, locationId: string, now: number) {
+  const { staleHours } = await locationRules(db, locationId);
   const { results } = await db
     .prepare(
       `SELECT u.first_name AS firstName, u.last_name AS lastName, e.clock_in_at AS since
@@ -43,7 +45,7 @@ async function onShift(db: D1Database, locationId: string, now: number) {
        WHERE e.location_id = ? AND e.clock_out_at IS NULL AND e.clock_in_at > ?
        ORDER BY e.clock_in_at`,
     )
-    .bind(locationId, now - OPEN_SHIFT_STALE_HOURS * 3600_000)
+    .bind(locationId, now - staleHours * 3600_000)
     .all<{ firstName: string; lastName: string; since: number }>();
   return results.map((r) => ({ name: `${r.firstName} ${r.lastName.slice(0, 1)}.`, since: r.since }));
 }
@@ -121,6 +123,7 @@ terminalRoutes.post('/punch', async (c) => {
     .bind(person.id)
     .first<{ id: string; clockInAt: number }>();
   const source = offline ? 'offline' : 'terminal';
+  const rules = await locationRules(db, t.locationId);
 
   if (open && at <= open.clockInAt) {
     // An old offline punch arriving after a newer one: keep it in the log for the manager, change nothing.
@@ -131,7 +134,7 @@ terminalRoutes.post('/punch', async (c) => {
     await record(db, t.id, clientId, person.id, at, offline, 'duplicate', open.id);
     return c.json({ outcome: 'duplicate' as Outcome, at: open.clockInAt, firstName: person.firstName });
   }
-  if (open && at - open.clockInAt <= OPEN_SHIFT_STALE_HOURS * 3600_000) {
+  if (open && at - open.clockInAt <= rules.staleHours * 3600_000) {
     await db.batch([
       db.prepare(`UPDATE time_entries SET clock_out_at = ?, out_source = ?, out_terminal_id = ? WHERE id = ?`).bind(at, source, t.id, open.id),
       recordStatement(db, t.id, clientId, person.id, at, offline, 'out', open.id),
@@ -147,7 +150,7 @@ terminalRoutes.post('/punch', async (c) => {
         `INSERT INTO time_entries (id, location_id, user_id, business_date, clock_in_at, in_source, in_terminal_id, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, t.locationId, person.id, businessDate(at), at, source, t.id, now),
+      .bind(id, t.locationId, person.id, businessDate(at, rules.dayStartHour), at, source, t.id, now),
     recordStatement(db, t.id, clientId, person.id, at, offline, 'in', id),
   ]);
   return c.json({ outcome: 'in' as Outcome, at, firstName: person.firstName, missingExit: Boolean(open) });

@@ -30,6 +30,17 @@ export const locations = sqliteTable('locations', {
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  /** Location details shown to staff (D38). */
+  address: text('address'),
+  phone: text('phone'),
+  email: text('email'),
+  /** JSON: { mon: "12:00–00:00", … } */
+  openingHoursJson: text('opening_hours_json'),
+  staffNote: text('staff_note'),
+  /** Business day starts at this hour (time tracking, daily checklists). */
+  dayStartHour: integer('day_start_hour').notNull().default(6),
+  /** An open shift older than this many hours counts as "missing exit". */
+  staleHours: integer('stale_hours').notNull().default(16),
   createdAt: createdAt(),
 });
 

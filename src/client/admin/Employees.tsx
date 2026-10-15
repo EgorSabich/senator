@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { POSITIONS } from '../../shared/constants';
 import { comparePl, foldPolish } from '../../shared/text';
 import { api, ApiFailure } from '../api';
@@ -7,7 +7,7 @@ import { navigate } from '../router';
 import { ErrorBox, LogoLoader } from '../ui';
 import { businessDate, formatDuration } from '../../shared/time';
 import { formatMoney } from './TimeTracking';
-import { Btn, DeleteForeverModal, formatDateTime, Icon, Modal, SecretCardModal, type SecretInfo } from './common';
+import { Btn, DeleteForeverModal, formatDateTime, Icon, Modal, SecretCardModal, storageGet, storageSet, type SecretInfo } from './common';
 import { usePanel } from './Panel';
 
 interface Employee {
@@ -24,6 +24,11 @@ interface Employee {
 }
 
 type Filter = 'all' | 'active' | 'locked' | 'inactive';
+const SORT_KEY = 'sa.panel.employeesSort';
+const posRank = (p: string) => {
+  const i = (POSITIONS as readonly string[]).indexOf(p);
+  return i < 0 ? 99 : i;
+};
 const t = pl.admin.employees;
 
 export function Employees({ selectedId }: { selectedId: string | null }) {
@@ -32,6 +37,8 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('active');
+  const [positions, setPositions] = useState<string[]>([]);
+  const [byPosition, setByPosition] = useState(() => storageGet(SORT_KEY) === 'position');
   const [adding, setAdding] = useState(false);
   const [secret, setSecret] = useState<SecretInfo | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -55,8 +62,12 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
     return (list ?? [])
       .filter((e) => (filter === 'all' ? true : filter === 'active' ? e.status === 'active' : filter === 'inactive' ? e.status === 'inactive' : e.locked === 1))
       .filter((e) => !q || foldPolish(`${e.firstName} ${e.lastName} ${e.login}`).includes(q))
-      .sort((a, b) => comparePl(`${a.lastName} ${a.firstName}`, `${b.lastName} ${b.firstName}`));
-  }, [list, query, filter]);
+      .filter((e) => !positions.length || positions.includes(e.position))
+      .sort(
+        (a, b) => (byPosition ? posRank(a.position) - posRank(b.position) : 0) || comparePl(`${a.lastName} ${a.firstName}`, `${b.lastName} ${b.firstName}`),
+      );
+  }, [list, query, filter, positions, byPosition]);
+  const presentPositions = useMemo(() => [...new Set((list ?? []).map((e) => e.position))].sort((a, b) => posRank(a) - posRank(b)), [list]);
 
   const selected = list?.find((e) => e.id === selectedId) ?? null;
   useScrollIntoView(list ? selectedId : null);
@@ -163,81 +174,141 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
               </button>
             ))}
           </div>
+          {presentPositions.length > 1 && (
+            <div className="btn-row" role="group" aria-label={t.positionFilter} style={{ alignItems: 'center' }}>
+              <button className="chip" aria-pressed={positions.length === 0} onClick={() => setPositions([])}>
+                {t.allPositions}
+              </button>
+              {presentPositions.map((p) => (
+                <button
+                  key={p}
+                  className="chip"
+                  aria-pressed={positions.includes(p)}
+                  onClick={() => setPositions(positions.includes(p) ? positions.filter((x) => x !== p) : [...positions, p])}
+                >
+                  {pl.admin.positions[p] ?? p} · {(list ?? []).filter((e) => e.position === p).length}
+                </button>
+              ))}
+            </div>
+          )}
+          <label className="check" style={{ fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={byPosition}
+              onChange={(e) => {
+                setByPosition(e.target.checked);
+                storageSet(SORT_KEY, e.target.checked ? 'position' : 'name');
+              }}
+            />
+            <span>{t.groupByPosition}</span>
+          </label>
           {list === null && <LogoLoader />}
           {list !== null && shown.length === 0 && <p className="muted">{list.length ? t.empty : t.emptyAll}</p>}
-          {shown.map((e) => (
-            <div key={e.id} className={`emp${e.id === selectedId ? ' open' : ''}`} data-emp={e.id}>
-              <button
-                className="row-btn"
-                aria-current={e.id === selectedId}
-                aria-expanded={e.id === selectedId}
-                onClick={() => navigate(e.id === selectedId ? '/panel/pracownicy' : `/panel/pracownicy/${e.id}`)}
-              >
-                <span
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    gap: 8,
-                    width: '100%',
-                  }}
+          {shown.map((e, i) => (
+            <Fragment key={e.id}>
+              {byPosition && (i === 0 || shown[i - 1]!.position !== e.position) && (
+                <div className="label emp-group">{pl.admin.divisions[e.position] ?? pl.admin.positions[e.position] ?? e.position}</div>
+              )}
+              <div className={`emp${e.id === selectedId ? ' open' : ''}`} data-emp={e.id}>
+                <button
+                  className="row-btn"
+                  aria-current={e.id === selectedId}
+                  aria-expanded={e.id === selectedId}
+                  onClick={() => navigate(e.id === selectedId ? '/panel/pracownicy' : `/panel/pracownicy/${e.id}`)}
                 >
-                  <span style={{ fontSize: 15, fontWeight: 700 }}>
-                    {e.firstName} {e.lastName}
+                  <span
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                      width: '100%',
+                    }}
+                  >
+                    <span style={{ fontSize: 15, fontWeight: 700 }}>
+                      {e.firstName} {e.lastName}
+                    </span>
+                    <StatusBadge e={e} />
                   </span>
-                  <StatusBadge e={e} />
-                </span>
-                <span className="muted" style={{ fontSize: 12 }}>
-                  {pl.admin.positions[e.position] ?? e.position} · {e.login}
-                </span>
-              </button>
-              <div className="emp-detail" inert={e.id !== selectedId}>
-                <div className="emp-detail-inner">
-                  {e.id === selectedId && selected && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 18,
-                      }}
-                    >
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    {pl.admin.positions[e.position] ?? e.position} · {e.login}
+                  </span>
+                </button>
+                <div className="emp-detail" inert={e.id !== selectedId}>
+                  <div className="emp-detail-inner">
+                    {e.id === selectedId && selected && (
                       <div
                         style={{
                           display: 'flex',
-                          flexWrap: 'wrap',
-                          justifyContent: 'space-between',
-                          alignItems: 'flex-start',
-                          gap: 10,
+                          flexDirection: 'column',
+                          gap: 18,
                         }}
                       >
-                        <div>
-                          <span className="muted" style={{ fontSize: 13 }}>
-                            {pl.admin.positions[selected.position] ?? selected.position}
-                            {selected.startDate ? ` · ${t.startDate.toLowerCase()}: ${selected.startDate}` : ''}
-                          </span>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            gap: 10,
+                          }}
+                        >
+                          <div>
+                            <span className="muted" style={{ fontSize: 13 }}>
+                              {pl.admin.positions[selected.position] ?? selected.position}
+                              {selected.startDate ? ` · ${t.startDate.toLowerCase()}: ${selected.startDate}` : ''}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      <dl
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-                          gap: 10,
-                          margin: 0,
-                        }}
-                      >
-                        <Stat label={t.login} value={selected.login} />
-                        <Stat label={t.lastLogin} value={selected.lastLoginAt ? formatDateTime(selected.lastLoginAt) : t.never} />
-                      </dl>
-                      {selected.role === 'employee' && <Summary key={selected.id} userId={selected.id} locationId={locationId} />}
-                      {canManage && selected.id !== me.user.id && (selected.role === 'employee' || (isOwner && selected.role === 'manager')) && (
-                        <div className="btn-row">
-                          {selected.status === 'active' && (
-                            <>
+                        <dl
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                            gap: 10,
+                            margin: 0,
+                          }}
+                        >
+                          <Stat label={t.login} value={selected.login} />
+                          <Stat label={t.lastLogin} value={selected.lastLoginAt ? formatDateTime(selected.lastLoginAt) : t.never} />
+                        </dl>
+                        {selected.role === 'employee' && <Summary key={selected.id} userId={selected.id} locationId={locationId} />}
+                        {canManage && selected.id !== me.user.id && (selected.role === 'employee' || (isOwner && selected.role === 'manager')) && (
+                          <div className="btn-row">
+                            {selected.status === 'active' && (
+                              <>
+                                <Btn
+                                  onClick={() =>
+                                    confirm(
+                                      (selected.role === 'manager' ? t.confirmResetPassword : t.confirmReset)(`${selected.firstName} ${selected.lastName}`),
+                                    ) &&
+                                    void act(`/api/admin/users/${selected.id}/reset-secret`, t.done, (d) =>
+                                      setSecret({
+                                        name: `${selected.firstName} ${selected.lastName}`,
+                                        login: d.login,
+                                        tempSecret: d.tempSecret,
+                                        secretKind: d.secretKind,
+                                      }),
+                                    )
+                                  }
+                                >
+                                  {selected.role === 'manager' ? t.resetPassword : t.resetPin}
+                                </Btn>
+                                {selected.locked === 1 && <Btn onClick={() => void act(`/api/admin/users/${selected.id}/unlock`, t.done)}>{t.unlock}</Btn>}
+                                <Btn onClick={() => void act(`/api/admin/users/${selected.id}/logout-all`, t.done)}>{t.logoutAll}</Btn>
+                                <Btn
+                                  kind="danger"
+                                  onClick={() =>
+                                    confirm(t.confirmDeactivate(`${selected.firstName} ${selected.lastName}`)) &&
+                                    void act(`/api/admin/users/${selected.id}/deactivate`, t.done)
+                                  }
+                                >
+                                  {t.deactivate}
+                                </Btn>
+                              </>
+                            )}
+                            {selected.status === 'inactive' && (
                               <Btn
                                 onClick={() =>
-                                  confirm(
-                                    (selected.role === 'manager' ? t.confirmResetPassword : t.confirmReset)(`${selected.firstName} ${selected.lastName}`),
-                                  ) &&
-                                  void act(`/api/admin/users/${selected.id}/reset-secret`, t.done, (d) =>
+                                  void act(`/api/admin/users/${selected.id}/reactivate`, t.done, (d) =>
                                     setSecret({
                                       name: `${selected.firstName} ${selected.lastName}`,
                                       login: d.login,
@@ -247,49 +318,22 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                                   )
                                 }
                               >
-                                {selected.role === 'manager' ? t.resetPassword : t.resetPin}
+                                {t.reactivate}
                               </Btn>
-                              {selected.locked === 1 && <Btn onClick={() => void act(`/api/admin/users/${selected.id}/unlock`, t.done)}>{t.unlock}</Btn>}
-                              <Btn onClick={() => void act(`/api/admin/users/${selected.id}/logout-all`, t.done)}>{t.logoutAll}</Btn>
-                              <Btn
-                                kind="danger"
-                                onClick={() =>
-                                  confirm(t.confirmDeactivate(`${selected.firstName} ${selected.lastName}`)) &&
-                                  void act(`/api/admin/users/${selected.id}/deactivate`, t.done)
-                                }
-                              >
-                                {t.deactivate}
+                            )}
+                            {selected.status === 'inactive' && (
+                              <Btn kind="danger" onClick={() => setDeleting(true)}>
+                                {pl.admin.deleteForever.button}
                               </Btn>
-                            </>
-                          )}
-                          {selected.status === 'inactive' && (
-                            <Btn
-                              onClick={() =>
-                                void act(`/api/admin/users/${selected.id}/reactivate`, t.done, (d) =>
-                                  setSecret({
-                                    name: `${selected.firstName} ${selected.lastName}`,
-                                    login: d.login,
-                                    tempSecret: d.tempSecret,
-                                    secretKind: d.secretKind,
-                                  }),
-                                )
-                              }
-                            >
-                              {t.reactivate}
-                            </Btn>
-                          )}
-                          {selected.status === 'inactive' && (
-                            <Btn kind="danger" onClick={() => setDeleting(true)}>
-                              {pl.admin.deleteForever.button}
-                            </Btn>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            </Fragment>
           ))}
         </section>
       </div>
@@ -561,7 +605,13 @@ function Summary({ userId, locationId }: { userId: string; locationId: string })
           </div>
           <div className="field" style={{ flex: '1 1 120px' }}>
             <label htmlFor={`rate-${userId}`}>{s.newRate}</label>
-            <input id={`rate-${userId}`} inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value.replace(/[^0-9.,]/g, ''))} placeholder="np. 32,50" />
+            <input
+              id={`rate-${userId}`}
+              inputMode="decimal"
+              value={rate}
+              onChange={(e) => setRate(e.target.value.replace(/[^0-9.,]/g, ''))}
+              placeholder="np. 32,50"
+            />
           </div>
           <div className="field" style={{ flex: '1 1 150px' }}>
             <label htmlFor={`rate-from-${userId}`}>{s.validFrom}</label>
@@ -570,7 +620,11 @@ function Summary({ userId, locationId }: { userId: string; locationId: string })
           <Btn kind="primary" type="submit" disabled={!rate || !from}>
             {s.saveRate}
           </Btn>
-          {saved && <span className="muted" style={{ fontSize: 13, alignSelf: 'center' }}>{s.saved}</span>}
+          {saved && (
+            <span className="muted" style={{ fontSize: 13, alignSelf: 'center' }}>
+              {s.saved}
+            </span>
+          )}
           {error && <ErrorBox message={error} />}
         </form>
       )}

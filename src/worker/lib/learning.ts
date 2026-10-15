@@ -5,6 +5,8 @@ import { itemProgress, moduleStates, programPercent, type ItemProgress, type Mod
 import type { SessionUser } from '../env';
 
 export const DOCUMENT_KINDS = ['regulation', 'sop', 'job_description', 'checklist'] as const;
+/** Kinds whose items can be mandatory to read and confirm; the Service Book too (D38). */
+export const MANDATORY_KINDS = [...DOCUMENT_KINDS, 'service_book'] as const;
 
 export interface VisibleItem {
   id: string;

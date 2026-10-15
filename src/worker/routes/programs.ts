@@ -3,6 +3,7 @@
  * module items = published content (lessons, Service Book chapters, documents). Tests join in stage 6.
  * Permission: content.edit in the program's location.
  */
+import { confirmMatches } from '../lib/purge';
 import { Hono } from 'hono';
 import { POSITIONS } from '../../shared/constants';
 import type { AppEnv } from '../env';
@@ -118,6 +119,33 @@ programAdminRoutes.put('/programs/:id', async (c) => {
     );
   }
   stmts.push(auditStatement(db, { actorId: c.var.user.id, locationId: p.locationId, action: 'program.update', entityType: 'program', entityId: p.id, before: { name: p.name }, after: { name, isDefault: body.isDefault === true || Boolean(p.isDefault) } }));
+  await db.batch(stmts);
+  return c.json({ ok: true });
+});
+
+/** Delete a training program with its modules (D38). Reading progress (acknowledgements) stays: it belongs to the materials.
+ * If it was the default for its position, the oldest other program of that position becomes the default. */
+programAdminRoutes.delete('/programs/:id', async (c) => {
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  const p = await loadProgram(db, access, c.req.param('id'));
+  const body = await readJson<{ confirm?: unknown }>(c.req.raw);
+  if (!confirmMatches(body.confirm, p.name)) throw badRequest('delete_confirm_mismatch');
+  const stmts = [
+    db.prepare(`DELETE FROM module_items WHERE module_id IN (SELECT id FROM modules WHERE program_id = ?)`).bind(p.id),
+    db.prepare(`DELETE FROM modules WHERE program_id = ?`).bind(p.id),
+    db.prepare(`DELETE FROM programs WHERE id = ?`).bind(p.id),
+  ];
+  if (p.isDefault) {
+    stmts.push(
+      db
+        .prepare(
+          `UPDATE programs SET is_default = 1 WHERE id = (SELECT id FROM programs WHERE location_id = ? AND position = ? AND id <> ? ORDER BY created_at LIMIT 1)`,
+        )
+        .bind(p.locationId, p.position, p.id),
+    );
+  }
+  stmts.push(auditStatement(db, { actorId: c.var.user.id, locationId: p.locationId, action: 'program.delete', entityType: 'program', entityId: p.id, before: { name: p.name, position: p.position } }));
   await db.batch(stmts);
   return c.json({ ok: true });
 });

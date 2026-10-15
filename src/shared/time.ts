@@ -20,9 +20,9 @@ export function warsawDate(ms: number): string {
   return fmt.format(new Date(ms));
 }
 
-/** Business date of a moment: Warsaw date of (moment − 6 h). */
-export function businessDate(ms: number): string {
-  return warsawDate(ms - DAY_START_HOUR * 3600_000);
+/** Business date of a moment: Warsaw date of (moment − start hour); the start hour is a location setting (D38). */
+export function businessDate(ms: number, dayStartHour: number = DAY_START_HOUR): string {
+  return warsawDate(ms - dayStartHour * 3600_000);
 }
 
 export function formatClock(ms: number): string {

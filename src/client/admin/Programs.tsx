@@ -6,7 +6,7 @@ import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { navigate } from '../router';
 import { ErrorBox } from '../ui';
-import { Btn, Icon, Modal } from './common';
+import { Btn, DeleteForeverModal, Icon, Modal } from './common';
 import { usePanel } from './Panel';
 
 const t = pl.admin.programs;
@@ -172,6 +172,7 @@ function ProgramDetail({ id, onChanged }: { id: string; onChanged: () => Promise
   const [notice, setNotice] = useState<string | null>(null);
   const [newModule, setNewModule] = useState('');
   const [name, setName] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -221,7 +222,25 @@ function ProgramDetail({ id, onChanged }: { id: string; onChanged: () => Promise
           {pl.common.save}
         </Btn>
         {!d.program.isDefault && <Btn onClick={() => void run(() => api(`/api/admin/programs/${id}`, { method: 'PUT', body: { isDefault: true } }))}>{t.makeDefault}</Btn>}
+        <Btn kind="danger" onClick={() => setDeleting(true)}>
+          {t.deleteProgram}
+        </Btn>
       </div>
+      {deleting && (
+        <DeleteForeverModal
+          title={t.deleteTitle(d.program.name)}
+          impactPath={null}
+          confirmText={d.program.name}
+          lines={() => t.deleteLines(d.modules.length, d.program.isDefault)}
+          deletePath={`/api/admin/programs/${id}`}
+          onClose={() => setDeleting(false)}
+          onDeleted={async () => {
+            setDeleting(false);
+            await onChanged();
+            navigate('/panel/programy');
+          }}
+        />
+      )}
       <span className="muted" style={{ fontSize: 13 }}>
         {pl.admin.positions[d.program.position]}
         {d.program.isDefault ? ` · ${t.default}` : ''}

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2 — 2026-10-16 — Location settings, Service Book mandatory, program deletion
+
+- D38: Lokale page with details, opening hours, note for the team, summary and time rules (migration 0007); staff see the details in Konto.
+- Service Book chapters are mandatory to read ("Do zapoznania się"); program deletion; Pracownicy filter and grouping by position.
+- Tests: 92 integration (new 08-settings).
+
 ## 0.6.1 — 2026-10-15 — Divisions, rates, employee card
 
 - D37: only employees are timed (managers/owner not; their terminal PIN removed). Czas pracy split by division with a multi-select filter; cells show "10:00–18:30" and the shift cost; division and person totals; CSV with division and cost.

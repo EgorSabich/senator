@@ -11,7 +11,7 @@ import {
 import { foldPolish, proposeLogin } from '../../shared/text';
 import type { AppEnv } from '../env';
 import { auditStatement } from '../lib/audit';
-import { ApiError, badRequest, newId, readJson, str } from '../lib/http';
+import { ApiError, badRequest, newId, notFound, readJson, str } from '../lib/http';
 import { generateTempPassword, generateTempPin, hashSecret } from '../auth/crypto';
 import { revokeUserSessions } from '../auth/session';
 import { loadAccess, requireManageableUser, requireOwner, requirePermission } from '../auth/access';
@@ -64,6 +64,131 @@ adminRoutes.post('/locations', async (c) => {
     auditStatement(c.env.DB, { actorId: c.var.user.id, locationId: id, action: 'location.create', entityType: 'location', entityId: id, after: { name } }),
   ]);
   return c.json({ id, name, slug }, 201);
+});
+
+const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+
+interface LocationRow {
+  id: string;
+  name: string;
+  slug: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  openingHoursJson: string | null;
+  staffNote: string | null;
+  dayStartHour: number;
+  staleHours: number;
+}
+
+const LOCATION_SELECT = `SELECT id, name, slug, address, phone, email, opening_hours_json AS openingHoursJson, staff_note AS staffNote,
+  day_start_hour AS dayStartHour, stale_hours AS staleHours FROM locations`;
+
+export function locationView(l: LocationRow) {
+  let hours: Record<string, string> = {};
+  try {
+    hours = l.openingHoursJson ? (JSON.parse(l.openingHoursJson) as Record<string, string>) : {};
+  } catch {
+    hours = {};
+  }
+  return {
+    id: l.id,
+    name: l.name,
+    address: l.address,
+    phone: l.phone,
+    email: l.email,
+    openingHours: Object.fromEntries(DAYS.map((d) => [d, typeof hours[d] === 'string' ? hours[d] : ''])),
+    staffNote: l.staffNote,
+    dayStartHour: l.dayStartHour,
+    staleHours: l.staleHours,
+  };
+}
+
+/** Location settings and a short summary (D38). Owner edits; managers of the location can read. */
+adminRoutes.get('/locations/:id/settings', async (c) => {
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  const id = c.req.param('id');
+  if (!access.locations.has(id)) throw notFound();
+  const l = await db.prepare(`${LOCATION_SELECT} WHERE id = ?`).bind(id).first<LocationRow>();
+  if (!l) throw notFound();
+  const now = Date.now();
+  const counts = await db
+    .prepare(
+      `SELECT
+         (SELECT COUNT(DISTINCT ul.user_id) FROM user_locations ul JOIN users u ON u.id = ul.user_id WHERE ul.location_id = ?1 AND ul.is_active = 1 AND u.status = 'active' AND u.role = 'employee') AS employees,
+         (SELECT COUNT(DISTINCT mp.user_id) FROM manager_permissions mp JOIN users u ON u.id = mp.user_id WHERE mp.location_id = ?1 AND u.status = 'active') AS managers,
+         (SELECT COUNT(*) FROM terminals t JOIN users u ON u.id = t.user_id WHERE t.location_id = ?1 AND u.status = 'active') AS terminals,
+         (SELECT COUNT(*) FROM content_items WHERE (location_id = ?1 OR location_id IS NULL) AND status = 'published') AS materials,
+         (SELECT COUNT(*) FROM menu_items WHERE location_id = ?1 AND is_active = 1) AS menuItems,
+         (SELECT COUNT(*) FROM programs WHERE location_id = ?1) AS programs,
+         (SELECT COUNT(*) FROM time_entries WHERE location_id = ?1 AND clock_out_at IS NULL AND clock_in_at > ?2) AS onShift`,
+    )
+    .bind(id, now - l.staleHours * 3600_000)
+    .first<Record<string, number>>();
+  return c.json({ location: locationView(l), counts, canEdit: access.role === 'owner' });
+});
+
+adminRoutes.put('/locations/:id/settings', async (c) => {
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  requireOwner(access);
+  const id = c.req.param('id');
+  if (!access.locations.has(id)) throw notFound();
+  const before = await db.prepare(`${LOCATION_SELECT} WHERE id = ?`).bind(id).first<LocationRow>();
+  if (!before) throw notFound();
+  const body = await readJson<Record<string, unknown>>(c.req.raw);
+  const name = body.name === undefined ? before.name : str(body.name, 80);
+  if (!name) throw badRequest('name_required');
+  const text = (k: string, max: number, old: string | null) => (body[k] === undefined ? old : str(body[k], max));
+  const email = text('email', 120, before.email);
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw badRequest('email_invalid');
+  const hoursIn = body.openingHours;
+  let hoursJson = before.openingHoursJson;
+  if (hoursIn !== undefined) {
+    if (!hoursIn || typeof hoursIn !== 'object') throw badRequest('invalid_input');
+    const h: Record<string, string> = {};
+    for (const d of DAYS) {
+      const v = (hoursIn as Record<string, unknown>)[d];
+      h[d] = typeof v === 'string' ? v.trim().slice(0, 40) : '';
+    }
+    hoursJson = JSON.stringify(h);
+  }
+  const int = (k: string, min: number, max: number, old: number) => {
+    if (body[k] === undefined) return old;
+    const n = Number(body[k]);
+    if (!Number.isInteger(n) || n < min || n > max) throw badRequest('setting_invalid', { field: k });
+    return n;
+  };
+  const dayStartHour = int('dayStartHour', 0, 12, before.dayStartHour);
+  const staleHours = int('staleHours', 8, 24, before.staleHours);
+  const after = {
+    name,
+    address: text('address', 200, before.address),
+    phone: text('phone', 40, before.phone),
+    email,
+    openingHoursJson: hoursJson,
+    staffNote: text('staffNote', 1000, before.staffNote),
+    dayStartHour,
+    staleHours,
+  };
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE locations SET name = ?, address = ?, phone = ?, email = ?, opening_hours_json = ?, staff_note = ?, day_start_hour = ?, stale_hours = ? WHERE id = ?`,
+      )
+      .bind(after.name, after.address, after.phone, after.email, after.openingHoursJson, after.staffNote, after.dayStartHour, after.staleHours, id),
+    auditStatement(db, {
+      actorId: c.var.user.id,
+      locationId: id,
+      action: 'location.update',
+      entityType: 'location',
+      entityId: id,
+      before: { name: before.name, dayStartHour: before.dayStartHour, staleHours: before.staleHours },
+      after: { name, dayStartHour, staleHours },
+    }),
+  ]);
+  return c.json({ ok: true });
 });
 
 /* ───────── Employees ───────── */
