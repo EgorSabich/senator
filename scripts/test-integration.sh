@@ -24,4 +24,4 @@ DEV_PID=$!
 for _ in $(seq 1 60); do curl -sf "$ACADEMY_URL/api/health" >/dev/null && break; sleep 1; done
 curl -sf "$ACADEMY_URL/api/health" >/dev/null || { cat "$LOG"; exit 1; }
 
-npx vitest run -c vitest.int.config.ts || { echo "--- worker log ---"; tail -50 "$LOG"; exit 1; }
+npx vitest run -c vitest.int.config.ts ${INT_FILTER:-} || { echo "--- worker log ---"; tail -50 "$LOG"; exit 1; }

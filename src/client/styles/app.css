@@ -677,3 +677,61 @@ a.a-dish:hover {
 .a-module-inner > .a-row:first-child {
   border-top: 1px solid var(--border);
 }
+
+/* Daily checklist tasks */
+.a-task {
+  cursor: pointer;
+  align-items: flex-start;
+}
+.a-task:disabled {
+  cursor: default;
+}
+.a-task .t {
+  font-weight: 500;
+  line-height: 1.45;
+}
+.a-tick {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  margin-top: 1px;
+  border-radius: 8px;
+  border: 2px solid #6b5648;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--on-accent);
+  transition: background-color 200ms ease, border-color 200ms ease, transform 200ms var(--ease-out, ease);
+}
+.a-task.done .a-tick {
+  background: var(--accent);
+  border-color: var(--accent);
+  animation: tick-pop 300ms var(--ease-out, ease);
+}
+.a-task.done .t {
+  color: var(--text-muted);
+}
+.a-task.other .a-tick {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+@keyframes tick-pop {
+  50% {
+    transform: scale(1.18);
+  }
+}
+.a-input {
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  padding: 0 12px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+}
+.a-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}

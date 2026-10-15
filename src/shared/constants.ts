@@ -1,6 +1,6 @@
 /** Domain constants shared by worker and client. Codes are English; labels live in i18n/pl.ts. */
 
-export const ROLES = ['owner', 'manager', 'employee'] as const;
+export const ROLES = ['owner', 'manager', 'employee', 'terminal'] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Permissions a manager can be granted per location (spec section B). */
@@ -12,6 +12,8 @@ export const PERMISSIONS = [
   'content.edit',
   'menu.edit',
   'tests.edit',
+  'time.manage',
+  'checklists.view',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -59,6 +61,11 @@ export const AUTH = {
   ipWindowMinutes: 15,
   employeeSessionDays: 30,
   staffSessionDays: 7,
+  /** The time-clock phone stays signed in; leaving terminal mode needs its password (D35). */
+  terminalSessionDays: 400,
+  /** Wrong PINs in a row on one terminal before it pauses. */
+  terminalFailLimit: 5,
+  terminalPauseSeconds: 30,
 } as const;
 
 /** Data retention after deactivation (decision D19). */

@@ -5,7 +5,9 @@ import { normalizeLogin } from '../../shared/text';
 import type { AppEnv } from '../env';
 import { auditStatement } from '../lib/audit';
 import { ApiError, badRequest, newId, readJson } from '../lib/http';
-import { hashIp, hashSecret, verifySecret } from '../auth/crypto';
+import { hashIp, hashSecret, pinLookup, verifySecret } from '../auth/crypto';
+import { assignPinLookup, burnPinStatement, pinTaken } from '../lib/pin';
+import { checkPin } from '../../shared/secret-rules';
 import { clearSessionCookie, createSession, requireSession, revokeUserSessions } from '../auth/session';
 import { loadAccess } from '../auth/access';
 
@@ -19,7 +21,10 @@ const locked = () => new ApiError(429, 'locked');
 
 interface LoginRow {
   id: string;
-  role: 'owner' | 'manager' | 'employee';
+  role: 'owner' | 'manager' | 'employee' | 'terminal';
+  secretKind: 'pin' | 'password';
+  pinLookup: string | null;
+  mustChangeSecret: number;
   secretHash: string | null;
   secretSalt: string | null;
   failedAttempts: number;
@@ -58,7 +63,8 @@ authRoutes.post('/login', async (c) => {
 
   const user = await db
     .prepare(
-      `SELECT id, role, secret_hash AS secretHash, secret_salt AS secretSalt, failed_attempts AS failedAttempts,
+      `SELECT id, role, secret_kind AS secretKind, pin_lookup AS pinLookup, must_change_secret AS mustChangeSecret,
+              secret_hash AS secretHash, secret_salt AS secretSalt, failed_attempts AS failedAttempts,
               lock_count AS lockCount, locked_until AS lockedUntil
        FROM users WHERE login = ? AND status = 'active'`,
     )
@@ -102,6 +108,13 @@ authRoutes.post('/login', async (c) => {
     .bind(now, user.id)
     .run();
   await recordAttempt(true);
+  // Link the PIN to the time terminal (D35). A temporary PIN is never linked.
+  if (user.secretKind === 'pin' && !user.mustChangeSecret) {
+    const lookup = await pinLookup(secret, c.env.AUTH_SECRET);
+    if (user.pinLookup !== lookup && (await assignPinLookup(db, user.id, lookup)) === 'conflict') {
+      await db.prepare(`UPDATE users SET must_change_secret = 1 WHERE id = ?`).bind(user.id).run();
+    }
+  }
   await createSession(c, user.id, user.role);
   return c.json({ ok: true });
 });
@@ -157,13 +170,55 @@ authRoutes.post('/change-secret', requireSession, async (c) => {
   if (problem) throw badRequest(problem);
   if (next === current) throw badRequest('same_secret');
 
+  // PINs are unique (time terminal, D35). A PIN someone tried to take is burned for its holder too.
+  let lookup: string | null = null;
+  if (user.secretKind === 'pin') {
+    lookup = await pinLookup(next, c.env.AUTH_SECRET);
+    const holder = await pinTaken(db, user.id, lookup);
+    if (holder) {
+      await burnPinStatement(db, holder).run();
+      throw badRequest('pin_unavailable');
+    }
+  }
+
   const { hash, salt } = await hashSecret(next, c.env.AUTH_SECRET);
   await db.batch([
     db
       .prepare(`UPDATE users SET secret_hash = ?, secret_salt = ?, must_change_secret = 0, updated_at = ? WHERE id = ?`)
       .bind(hash, salt, Date.now(), user.id),
+    ...(lookup ? [db.prepare(`UPDATE users SET pin_lookup = ? WHERE id = ?`).bind(lookup, user.id)] : []),
     revokeUserSessions(db, user.id, user.sessionId),
     auditStatement(db, { actorId: user.id, action: 'user.change_secret', entityType: 'user', entityId: user.id }),
   ]);
   return c.json({ ok: true });
+});
+
+/** Password users (managers, owner) may set a separate PIN for the time terminal (D35). */
+authRoutes.put('/terminal-pin', requireSession, async (c) => {
+  const user = c.var.user;
+  if (user.secretKind !== 'password') throw badRequest('terminal_pin_is_login_pin');
+  const body = await readJson<{ password?: unknown; pin?: unknown }>(c.req.raw);
+  const password = typeof body.password === 'string' ? body.password : '';
+  const pin = typeof body.pin === 'string' ? body.pin : '';
+  const db = c.env.DB;
+  const row = await db.prepare(`SELECT secret_hash AS hash, secret_salt AS salt FROM users WHERE id = ?`).bind(user.id).first<{ hash: string | null; salt: string | null }>();
+  if (!row?.hash || !row.salt || !(await verifySecret(password, c.env.AUTH_SECRET, row.hash, row.salt))) throw new ApiError(400, 'wrong_current_secret');
+  const problem = checkPin(pin);
+  if (problem) throw badRequest(problem);
+  const lookup = await pinLookup(pin, c.env.AUTH_SECRET);
+  const holder = await pinTaken(db, user.id, lookup);
+  if (holder) {
+    await burnPinStatement(db, holder).run();
+    throw badRequest('pin_unavailable');
+  }
+  await db.batch([
+    db.prepare(`UPDATE users SET pin_lookup = ?, updated_at = ? WHERE id = ?`).bind(lookup, Date.now(), user.id),
+    auditStatement(db, { actorId: user.id, action: 'user.terminal_pin', entityType: 'user', entityId: user.id }),
+  ]);
+  return c.json({ ok: true });
+});
+
+authRoutes.get('/terminal-pin', requireSession, async (c) => {
+  const row = await c.env.DB.prepare(`SELECT pin_lookup IS NOT NULL AS set_ FROM users WHERE id = ?`).bind(c.var.user.id).first<{ set_: number }>();
+  return c.json({ set: Boolean(row?.set_) });
 });

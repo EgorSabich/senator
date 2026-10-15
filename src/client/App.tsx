@@ -10,8 +10,18 @@ import { clearPersonalCache } from './pwa';
 // The panel (editor, admin screens) is loaded only for managers and the owner.
 const Panel = lazy(() => import('./admin/Panel').then((m) => ({ default: m.Panel })));
 const Academy = lazy(() => import('./app/Academy').then((m) => ({ default: m.Academy })));
+const Terminal = lazy(() => import('./terminal/Terminal').then((m) => ({ default: m.Terminal })));
 
-type State = { kind: 'loading' } | { kind: 'anonymous' } | { kind: 'error'; message: string } | { kind: 'signed-in'; me: Me };
+/** Set on a phone in time-clock mode: it opens the terminal even when the network is down at start. */
+function isTerminalPhone(): boolean {
+  try {
+    return localStorage.getItem('sa.terminal') === '1';
+  } catch {
+    return false;
+  }
+}
+
+type State = { kind: 'loading' } | { kind: 'anonymous' } | { kind: 'error'; message: string } | { kind: 'signed-in'; me: Me } | { kind: 'terminal-offline' };
 
 function Loading() {
   return (
@@ -30,6 +40,7 @@ export function App() {
       setState({ kind: 'signed-in', me: await api<Me>('/api/auth/me') });
     } catch (err) {
       if (err instanceof ApiFailure && err.status === 401) setState({ kind: 'anonymous' });
+      else if (err instanceof ApiFailure && err.status === 0 && isTerminalPhone()) setState({ kind: 'terminal-offline' });
       else setState({ kind: 'error', message: errorText(err instanceof ApiFailure ? err.code : 'generic') });
     }
   }, []);
@@ -39,6 +50,13 @@ export function App() {
   }, [refresh]);
 
   if (state.kind === 'loading') return <Loading />;
+  if (state.kind === 'terminal-offline' || (state.kind === 'signed-in' && state.me.user.role === 'terminal')) {
+    return (
+      <Suspense fallback={<Loading />}>
+        <Terminal onSignedOut={() => setState({ kind: 'anonymous' })} />
+      </Suspense>
+    );
+  }
   if (state.kind === 'error') {
     return (
       <main style={{ ...screen, justifyContent: 'center' }}>

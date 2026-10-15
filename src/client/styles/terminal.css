@@ -1,0 +1,416 @@
+/* Time clock (terminal mode): one screen, big touch targets, readable from arm's length. */
+.t-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(8px, 2vh, 20px);
+  padding: calc(env(safe-area-inset-top) + 10px) 20px calc(env(safe-area-inset-bottom) + 10px);
+  background: radial-gradient(120% 80% at 50% 0%, #2a1e19 0%, var(--bg) 60%);
+  color: var(--text);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.t-center {
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 28px;
+  letter-spacing: 0.1em;
+}
+.t-top {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.t-brand {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.t-word {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+.t-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.t-top-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.t-net {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-soft);
+}
+.t-net i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok-fg);
+  box-shadow: 0 0 0 0 rgba(156, 203, 159, 0.6);
+  animation: t-pulse 2.4s ease-out infinite;
+}
+.t-net.off {
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+.t-net.off i {
+  background: var(--warn-fg);
+  animation: none;
+}
+@keyframes t-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(156, 203, 159, 0.55);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 8px rgba(156, 203, 159, 0);
+  }
+}
+.t-exit {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0.7;
+}
+.t-clock {
+  text-align: center;
+  margin-top: clamp(0px, 2vh, 24px);
+}
+.t-time {
+  font-family: var(--font-display);
+  font-size: clamp(56px, 13vh, 104px);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.t-date {
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--text-muted);
+}
+.t-date::first-letter {
+  text-transform: uppercase;
+}
+.t-pin-area {
+  min-height: clamp(110px, 17vh, 150px);
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.t-label {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+.t-dots {
+  display: flex;
+  gap: 16px;
+}
+.t-dots span {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #6b5648;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 160ms var(--ease-out, ease);
+}
+.t-dots span.filled {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.12);
+}
+.t-dots.busy span.filled {
+  animation: t-wave 900ms ease-in-out infinite;
+}
+.t-dots.busy span:nth-child(2) {
+  animation-delay: 80ms;
+}
+.t-dots.busy span:nth-child(3) {
+  animation-delay: 160ms;
+}
+.t-dots.busy span:nth-child(4) {
+  animation-delay: 240ms;
+}
+.t-dots.busy span:nth-child(5) {
+  animation-delay: 320ms;
+}
+.t-dots.busy span:nth-child(6) {
+  animation-delay: 400ms;
+}
+@keyframes t-wave {
+  50% {
+    transform: translateY(-6px) scale(1.12);
+    opacity: 0.6;
+  }
+}
+.t-dots[data-shake] {
+  animation: t-shake 420ms ease;
+}
+@keyframes t-shake {
+  20%,
+  60% {
+    transform: translateX(-10px);
+  }
+  40%,
+  80% {
+    transform: translateX(10px);
+  }
+}
+.t-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(10px, 1.6vh, 16px);
+  width: 100%;
+  max-width: 360px;
+}
+.t-pad button {
+  aspect-ratio: 1.35;
+  max-height: 12vh;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: clamp(24px, 4.2vh, 34px);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 120ms ease, background-color 160ms ease;
+}
+.t-pad button:active:not(:disabled) {
+  transform: scale(0.94);
+  background: #3a2b23;
+}
+.t-pad button.t-small {
+  font-size: 15px;
+  color: var(--text-muted);
+  background: none;
+}
+.t-pad button:disabled {
+  opacity: 0.55;
+}
+.t-foot {
+  margin-top: auto;
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.t-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.45;
+}
+.t-shift {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(39, 30, 27, 0.7);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+.t-shift-label {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+.t-shift-names {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.t-shift-names span {
+  flex: none;
+  font-size: 12px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--ok-bg);
+  color: var(--ok-fg);
+}
+.t-shift-names .t-muted {
+  background: none;
+  color: var(--text-muted);
+}
+
+/* result */
+.t-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  animation: pop-in 320ms var(--ease-out, ease) both;
+}
+.t-result-icon svg {
+  width: 52px;
+  height: 52px;
+  fill: none;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.t-result-icon circle {
+  stroke-dasharray: 152;
+  stroke-dashoffset: 152;
+  animation: t-draw 600ms var(--ease-out, ease) forwards;
+}
+.t-result-icon path {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: t-draw 400ms 300ms var(--ease-out, ease) forwards;
+}
+@keyframes t-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.t-result.ok svg {
+  stroke: var(--ok-fg);
+}
+.t-result.warn svg {
+  stroke: var(--warn-fg);
+}
+.t-result.bad svg {
+  stroke: var(--bad-fg);
+}
+.t-result-title {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.t-result-sub {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-soft);
+  max-width: 360px;
+}
+
+/* exit */
+.t-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 7, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fade-in 200ms ease both;
+  user-select: text;
+}
+.t-modal {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  animation: pop-in 260ms var(--ease-out, ease) both;
+}
+.t-modal h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+}
+.t-modal p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+.t-modal .t-warn {
+  color: var(--warn-fg);
+}
+.t-modal .t-error {
+  color: var(--bad-fg);
+}
+.t-modal label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.t-modal input {
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  padding: 0 12px;
+  font-size: 16px;
+}
+.t-modal-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+.t-modal-row button {
+  flex: 1;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 15px;
+}
+.t-modal-row button.primary {
+  border: none;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.t-modal-row button:disabled {
+  background: var(--border);
+  color: var(--text-disabled);
+}
+@media (max-height: 640px) {
+  .t-hint {
+    display: none;
+  }
+}

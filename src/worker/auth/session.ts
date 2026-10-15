@@ -9,6 +9,7 @@ export const SESSION_COOKIE = 'sa_session';
 const SLIDE_AFTER_MS = 60 * 60 * 1000; // refresh expiry at most once an hour
 
 export function sessionDays(role: SessionUser['role']): number {
+  if (role === 'terminal') return AUTH.terminalSessionDays;
   return role === 'employee' ? AUTH.employeeSessionDays : AUTH.staffSessionDays;
 }
 
@@ -89,6 +90,10 @@ export const requireSession: MiddlewareHandler<AppEnv> = async (c, next) => {
   };
   if (user.mustChangeSecret && !ALLOWED_DURING_CHANGE.has(c.req.path)) {
     throw new ApiError(403, 'must_change_secret');
+  }
+  // A time-clock phone reaches only the terminal API (D35).
+  if (user.role === 'terminal' && !c.req.path.startsWith('/api/terminal/') && c.req.path !== '/api/auth/me') {
+    throw new ApiError(403, 'forbidden');
   }
   c.set('user', user);
   await next();

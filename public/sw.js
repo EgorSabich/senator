@@ -2,7 +2,7 @@
    Shell: cache-first for hashed assets, network-first for pages.
    Data: network-first for staff API GETs and /media, kept in a cache cleared on logout/login.
    Never cached: auth (except /api/auth/me), admin API, non-GET, error answers. */
-const SHELL = 'sa-shell-v2';
+const SHELL = 'sa-shell-v3';
 const DATA = 'sa-data-v1';
 
 self.addEventListener('install', (event) => {
@@ -58,6 +58,8 @@ self.addEventListener('fetch', (event) => {
 
   // Only "who am I" from auth is kept, so the app can open offline; admin data is never cached.
   if ((p.startsWith('/api/auth/') && p !== '/api/auth/me') || p.startsWith('/api/admin/') || p === '/api/health') return;
+  // The time clock must see the real connection state: never answer it from the cache.
+  if (p.startsWith('/api/terminal/')) return;
   if (p.startsWith('/api/')) {
     event.respondWith(networkFirst(req, DATA));
     return;

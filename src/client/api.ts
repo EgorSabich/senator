@@ -30,7 +30,7 @@ export interface Me {
     firstName: string;
     lastName: string;
     login: string;
-    role: 'owner' | 'manager' | 'employee';
+    role: 'owner' | 'manager' | 'employee' | 'terminal';
     secretKind: 'pin' | 'password';
     mustChangeSecret: boolean;
   };

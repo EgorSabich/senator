@@ -19,6 +19,10 @@ export function purgeUserStatements(db: D1Database, userId: string, login: strin
     s(`DELETE FROM user_locations WHERE user_id = ?`, userId),
     s(`DELETE FROM sessions WHERE user_id = ?`, userId),
     s(`DELETE FROM login_attempts WHERE login = ?`, login),
+    s(`UPDATE time_punches SET entry_id = NULL WHERE entry_id IN (SELECT id FROM time_entries WHERE user_id = ?)`, userId),
+    s(`DELETE FROM time_entries WHERE user_id = ?`, userId),
+    s(`DELETE FROM time_punches WHERE user_id = ?`, userId),
+    s(`DELETE FROM checklist_marks WHERE user_id = ?`, userId),
     // links where they were the actor
     s(`UPDATE extra_attempt_grants SET granted_by = NULL WHERE granted_by = ?`, userId),
     s(`UPDATE assignments SET assigned_by = NULL WHERE assigned_by = ?`, userId),
@@ -30,6 +34,8 @@ export function purgeUserStatements(db: D1Database, userId: string, login: strin
     s(`UPDATE menu_item_diets SET confirmed_by = NULL WHERE confirmed_by = ?`, userId),
     s(`UPDATE tests SET created_by = NULL WHERE created_by = ?`, userId),
     s(`UPDATE media SET uploaded_by = NULL WHERE uploaded_by = ?`, userId),
+    s(`UPDATE time_entries SET edited_by = NULL WHERE edited_by = ?`, userId),
+    s(`UPDATE checklist_days SET closed_by = NULL WHERE closed_by = ?`, userId),
     // audit log: keep what happened, drop who it was
     s(`UPDATE audit_log SET actor_id = NULL WHERE actor_id = ?`, userId),
     s(`UPDATE audit_log SET before_json = NULL, after_json = NULL WHERE entity_type = 'user' AND entity_id = ?`, userId),
@@ -52,6 +58,8 @@ export function purgeMenuItemStatements(db: D1Database, itemId: string): D1Prepa
 export function purgeContentStatements(db: D1Database, itemId: string): D1PreparedStatement[] {
   return [
     db.prepare(`DELETE FROM content_acknowledgements WHERE content_item_id = ?`).bind(itemId),
+    db.prepare(`DELETE FROM checklist_marks WHERE content_item_id = ?`).bind(itemId),
+    db.prepare(`DELETE FROM checklist_days WHERE content_item_id = ?`).bind(itemId),
     db.prepare(`DELETE FROM module_items WHERE content_item_id = ?`).bind(itemId),
     db.prepare(`DELETE FROM test_review_content WHERE content_item_id = ?`).bind(itemId),
     db.prepare(`DELETE FROM assignments WHERE ref_id = ?`).bind(itemId),

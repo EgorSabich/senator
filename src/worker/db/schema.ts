@@ -41,7 +41,8 @@ export const users = sqliteTable(
     lastName: text('last_name').notNull(),
     /** Normalized login (folded Polish, lower case). */
     login: text('login').notNull(),
-    role: text('role', { enum: ['owner', 'manager', 'employee'] }).notNull(),
+    /** "terminal" = the time-clock account of a work phone (D35): it can only register time. */
+    role: text('role', { enum: ['owner', 'manager', 'employee', 'terminal'] }).notNull(),
     status: text('status', { enum: ['active', 'inactive', 'anonymized'] }).notNull().default('active'),
     /** PBKDF2 hash of PIN (employee) or password (manager/owner); null after anonymization. */
     secretHash: text('secret_hash'),
@@ -54,10 +55,16 @@ export const users = sqliteTable(
     lastLoginAt: integer('last_login_at'),
     deactivatedAt: integer('deactivated_at'),
     anonymizedAt: integer('anonymized_at'),
+    /** HMAC(AUTH_SECRET, PIN) — finds the person on the time terminal by PIN alone (D35). Unique; null until set. */
+    pinLookup: text('pin_lookup'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex('users_login_uq').on(t.login), index('users_status_idx').on(t.status, t.deactivatedAt)],
+  (t) => [
+    uniqueIndex('users_login_uq').on(t.login),
+    index('users_status_idx').on(t.status, t.deactivatedAt),
+    uniqueIndex('users_pin_lookup_uq').on(t.pinLookup),
+  ],
 );
 
 export const userLocations = sqliteTable(
@@ -466,3 +473,99 @@ export const extraAttemptGrants = sqliteTable('extra_attempt_grants', {
   grantedBy: text('granted_by').references(() => users.id),
   createdAt: createdAt(),
 });
+
+/* ───────────── Time tracking & daily checklists (D35, D36) ───────────── */
+
+/** A work phone in time-clock mode. One terminal account per phone. */
+export const terminals = sqliteTable(
+  'terminals',
+  {
+    id: id(),
+    locationId: text('location_id').notNull().references(() => locations.id),
+    userId: text('user_id').notNull().references(() => users.id),
+    name: text('name').notNull(),
+    lastSeenAt: integer('last_seen_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('terminals_user_uq').on(t.userId), index('terminals_loc_idx').on(t.locationId)],
+);
+
+/** One shift: clock-in → clock-out. business_date = Warsaw date of clock-in, day starting 06:00. */
+export const timeEntries = sqliteTable(
+  'time_entries',
+  {
+    id: id(),
+    locationId: text('location_id').notNull().references(() => locations.id),
+    userId: text('user_id').notNull().references(() => users.id),
+    businessDate: text('business_date').notNull(),
+    clockInAt: integer('clock_in_at').notNull(),
+    clockOutAt: integer('clock_out_at'),
+    /** terminal | offline | manual */
+    inSource: text('in_source').notNull(),
+    outSource: text('out_source'),
+    inTerminalId: text('in_terminal_id'),
+    outTerminalId: text('out_terminal_id'),
+    note: text('note'),
+    editedBy: text('edited_by').references(() => users.id),
+    editedAt: integer('edited_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('time_entries_loc_date_idx').on(t.locationId, t.businessDate),
+    index('time_entries_user_idx').on(t.userId, t.clockInAt),
+  ],
+);
+
+/** Every PIN entered on a terminal (also wrong ones); client_id makes offline re-sends idempotent. */
+export const timePunches = sqliteTable(
+  'time_punches',
+  {
+    id: id(),
+    clientId: text('client_id').notNull(),
+    terminalId: text('terminal_id').notNull().references(() => terminals.id),
+    userId: text('user_id').references(() => users.id),
+    at: integer('at').notNull(),
+    offline: integer('offline', { mode: 'boolean' }).notNull().default(false),
+    /** in | out | unknown_pin | rejected */
+    outcome: text('outcome').notNull(),
+    entryId: text('entry_id'),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('time_punches_client_uq').on(t.terminalId, t.clientId), index('time_punches_user_idx').on(t.userId)],
+);
+
+/** Who did which checklist item on which business day. One item = one person. */
+export const checklistMarks = sqliteTable(
+  'checklist_marks',
+  {
+    id: id(),
+    locationId: text('location_id').notNull().references(() => locations.id),
+    contentItemId: text('content_item_id').notNull().references(() => contentItems.id),
+    businessDate: text('business_date').notNull(),
+    itemKey: text('item_key').notNull(),
+    itemText: text('item_text').notNull(),
+    section: text('section'),
+    userId: text('user_id').notNull().references(() => users.id),
+    markedAt: integer('marked_at').notNull(),
+  },
+  (t) => [
+    uniqueIndex('checklist_marks_uq').on(t.contentItemId, t.businessDate, t.itemKey),
+    index('checklist_marks_loc_date_idx').on(t.locationId, t.businessDate),
+    index('checklist_marks_user_idx').on(t.userId, t.businessDate),
+  ],
+);
+
+/** A checklist closed for a business day (items left unmarked are kept as "not done"). */
+export const checklistDays = sqliteTable(
+  'checklist_days',
+  {
+    contentItemId: text('content_item_id').notNull().references(() => contentItems.id),
+    businessDate: text('business_date').notNull(),
+    locationId: text('location_id').notNull().references(() => locations.id),
+    closedBy: text('closed_by').references(() => users.id),
+    closedAt: integer('closed_at').notNull(),
+    doneCount: integer('done_count').notNull(),
+    totalCount: integer('total_count').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.contentItemId, t.businessDate] }), index('checklist_days_loc_idx').on(t.locationId, t.businessDate)],
+);

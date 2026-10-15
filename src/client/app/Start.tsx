@@ -1,5 +1,6 @@
 import { pl } from '../i18n/pl';
 import { onNav } from '../router';
+import { TodayCard } from './Checklist';
 import { ModuleList, type ProgramView } from './Program';
 import { contentHref, Icon, Loading, Problem, useAcademy, useApi } from './shared';
 
@@ -38,6 +39,7 @@ export function Start() {
       {!data && !error && <Loading />}
       {data && (
         <>
+          <TodayCard />
           {data.program ? (
             <section className="a-card" aria-label={data.program.name}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>

@@ -4,6 +4,7 @@ import { pl } from '../i18n/pl';
 import { match, onNav, usePath } from '../router';
 import { Brand } from '../ui';
 import { Account } from './Account';
+import { ChecklistDay } from './Checklist';
 import { Knowledge } from './Knowledge';
 import { MenuItem, MenuList } from './Menu';
 import { Program } from './Program';
@@ -33,6 +34,9 @@ export function Academy({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: (
   let m: Record<string, string> | null;
   if ((m = match('/m/:id', path))) {
     page = <Reader key={m.id} id={m.id!} />;
+    full = true;
+  } else if ((m = match('/listy/:id', path))) {
+    page = <ChecklistDay key={m.id} id={m.id!} />;
     full = true;
   } else if ((m = match('/menu/:id', path))) {
     page = <MenuItem key={m.id} id={m.id!} />;

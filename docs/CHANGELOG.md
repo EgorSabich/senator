@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0 — 2026-10-15 — Time clock and daily checklists
+
+- D35 time clock: terminal accounts (panel → Czas pracy → Terminale), terminal mode on the phone (PIN pad, clock, who is on shift, connection state, Wake Lock, offline queue with idempotent re-send, self-restart after errors, exit only with the terminal password); unique PINs (`users.pin_lookup` = HMAC with AUTH_SECRET, linked at the next sign-in or PIN change); terminal PIN for managers/owner in Konto.
+- Panel Czas pracy: week/month calendar per person, live "now on shift", missing exits, edit/add/delete shifts with audit, PIN log of the day, CSV export.
+- D36 daily checklists: tasks from list items, marks only while on shift, one item = one person, close the day; Start shows "Dziś" (shift status + lists); panel Listy (day view, stats, reopen).
+- Migration 0005 (terminals, time_entries, time_punches, checklist_marks, checklist_days, users.pin_lookup); permissions `time.manage`, `checklists.view`; deleting a person/material also removes its time and checklist records.
+- Tests: 88 integration (new 07-time), unit tests for business day and checklist items, UI walkthrough `tests/ui/time_walkthrough.py`.
+
 ## 0.5.1 — 2026-10-15 — Full kitchen card, permanent deletion
 
 - D33: menu builder reads the Menu_Kuchnia workbook (`--kitchen-cards`): 93 dishes with composition, description, taste, photos; re-import fills empty fields of existing items without overwriting.

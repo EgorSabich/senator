@@ -139,7 +139,7 @@ adminRoutes.post('/users/:id/reset-secret', async (c) => {
     db
       .prepare(
         `UPDATE users SET secret_hash = ?, secret_salt = ?, must_change_secret = 1, failed_attempts = 0, lock_count = 0,
-           locked_until = NULL, updated_at = ? WHERE id = ?`,
+           locked_until = NULL, pin_lookup = CASE WHEN secret_kind = 'pin' THEN NULL ELSE pin_lookup END, updated_at = ? WHERE id = ?`,
       )
       .bind(hash, salt, Date.now(), target.id),
     revokeUserSessions(db, target.id),

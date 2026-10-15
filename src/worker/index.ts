@@ -10,6 +10,9 @@ import { mediaAdminRoutes, mediaPublicRoutes } from './routes/media';
 import { menuAdminRoutes, menuRoutes } from './routes/menu';
 import { programAdminRoutes } from './routes/programs';
 import { learnRoutes } from './routes/learn';
+import { terminalRoutes } from './routes/terminal';
+import { timeAdminRoutes } from './routes/time';
+import { checklistAdminRoutes, checklistRoutes } from './routes/checklists';
 import { requireSameOrigin, requireSession } from './auth/session';
 import { runNightlyBackup } from './jobs/backup';
 import { anonymizeExpiredUsers } from './jobs/anonymize';
@@ -41,6 +44,8 @@ admin.route('/', contentAdminRoutes);
 admin.route('/', mediaAdminRoutes);
 admin.route('/', menuAdminRoutes);
 admin.route('/', programAdminRoutes);
+admin.route('/', timeAdminRoutes);
+admin.route('/', checklistAdminRoutes);
 app.route('/api/admin', admin);
 
 // Staff (waiter) views; every path here needs a session.
@@ -48,8 +53,15 @@ const staff = new Hono<AppEnv>();
 staff.use('/locations/*', requireSession);
 staff.use('/menu/*', requireSession);
 staff.use('/content/*', requireSession);
+staff.use('/checklists/*', requireSession);
 staff.route('/', menuRoutes);
 staff.route('/', learnRoutes);
+staff.route('/', checklistRoutes);
+// Time clock phone (role "terminal" reaches nothing else — see requireSession).
+const terminal = new Hono<AppEnv>();
+terminal.use('*', requireSession);
+terminal.route('/', terminalRoutes);
+app.route('/api/terminal', terminal);
 app.route('/api', staff);
 app.route('/media', mediaPublicRoutes);
 

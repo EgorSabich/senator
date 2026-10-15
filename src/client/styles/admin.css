@@ -87,20 +87,27 @@
     display: none;
   }
   .tabbar {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
-    background: var(--bg-nav);
+    background: rgba(33, 25, 22, 0.86);
+    -webkit-backdrop-filter: saturate(140%) blur(14px);
+    backdrop-filter: saturate(140%) blur(14px);
     border-top: 1px solid var(--border);
-    padding: 6px 4px calc(8px + env(safe-area-inset-bottom));
+    padding: 2px 4px max(4px, calc(env(safe-area-inset-bottom) - 16px));
     z-index: 20;
   }
+  .tabbar::-webkit-scrollbar {
+    display: none;
+  }
   .tabbar a {
-    min-height: 50px;
+    flex: 1 0 68px;
+    min-height: 48px;
+    white-space: nowrap;
   }
 }
 
@@ -534,4 +541,181 @@
   .split.has-selection > .list {
     display: none;
   }
+}
+
+/* Time tracking grid: people × days */
+.time-grid-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.time-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-size: 13px;
+}
+.time-grid th,
+.time-grid td {
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  white-space: nowrap;
+}
+.time-grid thead th {
+  padding: 10px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: capitalize;
+  background: var(--surface);
+}
+.time-grid .sticky {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  text-align: left;
+  padding: 8px 12px;
+  min-width: 150px;
+  border-right: 1px solid var(--border);
+}
+.time-grid tbody th.sticky {
+  display: table-cell;
+}
+.time-grid .name {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+.time-grid .pos {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.time-grid .today {
+  background: rgba(224, 123, 50, 0.07);
+}
+.time-grid thead th.today {
+  color: var(--accent);
+}
+.time-grid .cell {
+  width: 100%;
+  min-width: 58px;
+  min-height: 44px;
+  border: none;
+  background: none;
+  color: var(--text-disabled);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.time-grid .cell:hover {
+  background: var(--surface-raised);
+}
+.time-grid .cell.has {
+  color: var(--text);
+}
+.time-grid .cell.live {
+  color: var(--ok-fg);
+}
+.time-grid .cell.miss {
+  color: var(--bad-fg);
+  background: var(--bad-bg);
+  font-size: 15px;
+}
+.time-grid .total {
+  padding: 0 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.time-grid tbody tr:last-child th,
+.time-grid tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Checklist results */
+.cl-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+.cl-bar > div {
+  height: 6px;
+  background: var(--accent);
+  transition: width 600ms var(--ease-out, ease);
+}
+.cl-items {
+  display: flex;
+  flex-direction: column;
+}
+.cl-item {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-top: 1px solid rgba(62, 49, 43, 0.6);
+  font-size: 14px;
+}
+.cl-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--bad-fg);
+}
+.cl-item.done .cl-dot {
+  background: var(--ok-fg);
+  border-color: var(--ok-fg);
+}
+.cl-text {
+  line-height: 1.45;
+}
+.cl-who {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.cl-item:not(.done) .cl-who {
+  color: var(--bad-fg);
+}
+@media (max-width: 600px) {
+  .cl-item {
+    grid-template-columns: 14px 1fr;
+  }
+  .cl-who {
+    grid-column: 2;
+    white-space: normal;
+  }
+}
+.cl-person {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 2fr auto;
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+}
+.cl-person-name {
+  font-weight: 600;
+}
+.cl-person-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--border);
+  overflow: hidden;
+}
+.cl-person-bar > span {
+  display: block;
+  height: 8px;
+  background: var(--accent);
+}
+.cl-person-num {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }

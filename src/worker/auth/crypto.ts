@@ -76,3 +76,11 @@ export function generateTempPassword(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(12));
   return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
 }
+
+/**
+ * Terminal lookup of a PIN (D35): deterministic HMAC with the server pepper, so the time clock finds a person
+ * by PIN alone. Without AUTH_SECRET a leaked value cannot be tested; PINs are unique per active person.
+ */
+export async function pinLookup(pin: string, pepper: string): Promise<string> {
+  return toB64Url(await hmac(pepper, `terminal-pin:${pin}`));
+}

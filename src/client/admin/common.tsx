@@ -55,6 +55,18 @@ const paths: Record<string, ReactNode> = {
     </>
   ),
   back: <path d="M15 6l-6 6 6 6" />,
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  checklist: (
+    <>
+      <path d="M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17" />
+      <path d="M11 6h9M11 12h9M11 18h9" />
+    </>
+  ),
   search: (
     <>
       <circle cx="11" cy="11" r="7" />
@@ -201,6 +213,9 @@ export interface SecretInfo {
   login: string;
   tempSecret: string;
   secretKind: 'pin' | 'password';
+  /** Overrides the default note (e.g. a terminal password, which is not changed at first sign-in). */
+  note?: string;
+  secretLabel?: string;
 }
 
 export function SecretCardModal({ info, onClose }: { info: SecretInfo; onClose: () => void }) {
@@ -219,12 +234,12 @@ export function SecretCardModal({ info, onClose }: { info: SecretInfo; onClose: 
           <div className="value">{info.login}</div>
         </div>
         <div>
-          <div className="label">{isPin ? pl.admin.card.pin : pl.admin.card.password}</div>
+          <div className="label">{info.secretLabel ?? (isPin ? pl.admin.card.pin : pl.admin.card.password)}</div>
           <div className="value">{info.tempSecret}</div>
         </div>
       </div>
       <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
-        {isPin ? pl.admin.card.note : pl.admin.card.notePassword}
+        {info.note ?? (isPin ? pl.admin.card.note : pl.admin.card.notePassword)}
       </p>
       <div className="btn-row">
         <Btn kind="primary" onClick={() => window.print()}>
