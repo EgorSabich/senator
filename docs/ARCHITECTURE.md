@@ -60,17 +60,36 @@ Cron 01:30 UTC → nightly backup + anonymization (D19) + login-attempt cleanup
 
 | Method | Path | Who |
 | --- | --- | --- |
-| GET | `/api/admin/locations/:locId/menu` | `menu.edit` or `allergens.confirm` |
+| GET | `/api/admin/locations/:locId/menu` | `menu.edit` |
 | POST | `/api/admin/locations/:locId/menu/categories`, PUT `/api/admin/menu/categories/:id` | `menu.edit` |
 | PUT | `/api/admin/locations/:locId/menu/sections/:section` (note above the list) | `menu.edit` |
 | POST | `/api/admin/locations/:locId/menu/items` | `menu.edit` |
-| GET | `/api/admin/menu/items/:id`, `/api/admin/menu/items/:id/versions/:versionId` | `menu.edit` or `allergens.confirm` |
+| GET | `/api/admin/menu/items/:id`, `/api/admin/menu/items/:id/versions/:versionId` | `menu.edit` |
 | PUT | `/api/admin/menu/items/:id` (texts, ingredients, category + change level → new version) | `menu.edit` |
-| PUT | `/api/admin/menu/items/:id/allergens` (all 14 allergens + 4 diets; saves and confirms; status change = significant version) | `allergens.confirm` |
+| PUT | `/api/admin/menu/items/:id/allergens` (kitchen only; all 14 allergens + 4 diets; `no_changes` if nothing changed; change = significant version + audit `menu.allergens_update`) — D26 | `menu.edit` |
 | POST / DELETE | `/api/admin/menu/items/:id/photo`; POST `/archive`, `/restore` | `menu.edit` |
 | POST | `/api/admin/locations/:locId/menu/import` (bundle chunk, max 8 items; existing `import_key` skipped) | `menu.edit` |
-| GET | `/api/locations/:locId/menu`, `/api/menu/items/:id` — staff view: active items, only confirmed "contains" allergens and confirmed "yes" diets | any signed-in user of the location |
+| GET | `/api/locations/:locId/menu`, `/api/menu/items/:id` — staff view: active items; kitchen items show "contains" allergens and "yes" diets (D26), bar items no allergens | any signed-in user of the location |
 
 Menu import: `scripts/menu/build_menu_bundle.py` turns the source sheets into one JSON bundle (texts as they are, photos from the bar sheet resized to 1600 px, list of data issues). The owner uploads it in Panel → Menu → Import z pliku; the panel sends it in chunks of 8 items so one request stays far below D1 per-request limits. The bundle holds restaurant data — it is never committed (the repository is public).
+
+## API (stage 5)
+
+Staff routes (`requireSession`; employees see only published content for their position, owner/managers see all):
+
+| Method | Path | What |
+| --- | --- | --- |
+| GET | `/api/locations/:locId/home` | user, program (percent, modules), next step, documents to confirm, "Do powtórki", "Zaktualizowano" |
+| GET | `/api/locations/:locId/program` | default program for the employee's position with module states (unlock rules: open / after_module / after_all_mandatory) |
+| GET | `/api/content/:id` | current version, progress, acknowledgedAt, module, next item; `lesson_locked` (403) |
+| POST | `/api/content/:id/ack` `{versionId, scrolledToEnd:true}` | one confirmation per user per version; `version_changed` (409), `scroll_required`, `external_no_ack` |
+| GET | `/api/locations/:locId/library`, `/api/locations/:locId/service-book` | Regulaminy i SOP, Service Book chapters |
+| GET | `/api/locations/:locId/search?q=` | FTS5 (bm25 weights title 5, body 1), Polish folding, highlighted snippet |
+
+Admin (`content.edit`): programs CRUD (`/api/admin/locations/:locId/programs`, first program of a position becomes default), modules POST/PUT/DELETE/order, `PUT /api/admin/modules/:id/items`; content import `POST /api/admin/locations/:locId/content/import` (bundle chunk, max 4 items, drafts, existing `import_key` skipped) and `POST /api/admin/locations/:locId/content/import/publish` `{ids ≤ 20}` (publishes never-published imported drafts as a significant version, note "Import").
+
+Material import: `scripts/content/build_content_bundle.py --manifest manifest.json --out bundle.json` turns edited Markdown (headings, nested lists, tables, `> [!WAŻNE|UWAGA|INFO]` callouts, plain quotes → info callout, rules, bold/italic/links) into TipTap JSON. Manifest items: `importKey`, `kind`, `file`, `section`, `positions`, `requiresAck`, `sortOrder`. Bundles and source texts hold restaurant data and are never committed.
+
+PWA: `public/sw.js` — shell cache-first (`sa-shell-v2`), staff API + `/api/auth/me` + `/media` network-first with fallback (`sa-data-v1`); admin and auth (except `/me`) never cached; logout clears the data cache.
 
 Error bodies: `{ "error": "<code>" }`; the client maps codes to Polish (`src/client/i18n/pl.ts → errors`).

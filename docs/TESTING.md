@@ -7,7 +7,9 @@
 | `npm run test:smoke` | Local workerd: migrations, `/api/health`, SPA fallback, robots.txt, noindex headers, API 404, cron → anonymization, cron → backup in R2, backup → SQL restore |
 | `npm run test:int` | Local workerd, fresh DB + test owner: spec section L "Вход и доступ" and "Права и изоляция" (19 tests) |
 | `npm run test:all` | All of the above |
-| `scripts/ui-server.sh` + `MENU_BUNDLE=… python3 tests/ui/menu_walkthrough.py` | Menu: real bundle import (81 items, 25 photos), edit with change level, allergen confirmation, bar photos, phone layout without horizontal scroll |
+| `scripts/ui-server.sh` + `MENU_BUNDLE=… python3 tests/ui/menu_walkthrough.py` | Menu: real bundle import (81 items, 25 photos), edit with change level, allergen editing (kitchen only), bar photos, phone layout without horizontal scroll |
+| `scripts/ui-server.sh` + `python3 tests/ui/academy_walkthrough.py` | Employee app on a phone: start, program, lesson, document confirmation after scroll, menu, search, offline reading |
+| `scripts/ui-server.sh` + `CONTENT_BUNDLE=… python3 tests/ui/import_walkthrough.py` | Material import: real bundle (66 items) → drafts, re-import skips all, publish per tab, read Service Book / document with tables on desktop and phone, search highlight |
 | `scripts/ui-server.sh` + `python3 tests/ui/panel_walkthrough.py` | Headless Chromium walkthrough of the panel (desktop 1280 px + phone 390 px), screenshots to `$SHOTS_DIR` |
 
 ## Stage 2 acceptance (spec L) → test
@@ -33,7 +35,7 @@
 | Photo not reachable without login / from another location | `photo upload checks the type; photo needs a session` |
 | Archived items hidden from waiters, kept in history | `archived items disappear for waiters…` |
 | Every edit = version with change level | `every edit needs a change level…` |
-| "zurek" finds "żurek" | index is written with Polish folding on import/edit; search screen and its test come in stage 5 |
+| "zurek" finds "żurek" | index is written with Polish folding on import/edit; `tests/progress.test.ts` (snippet), search integration test, academy walkthrough |
 
 ## Results
 
@@ -43,3 +45,4 @@
 | 2026-10-14 | 2 | 11/11 | 6/6 | 19/19 |
 | 2026-10-14 | 3 | 17/17 | 6/6 | 34/34 (+ UI walkthrough: no page errors) |
 | 2026-10-14 | 4 | 17/17 | 6/6 | 55/55 (+ menu UI walkthrough with the real bundle: no page errors) |
+| 2026-10-15 | 5 | 29/29 | 6/6 | 73/73 (+ UI: academy phone/offline, import of 66 real materials, panel — no page errors) |

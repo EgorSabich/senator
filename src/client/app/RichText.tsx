@@ -47,6 +47,20 @@ function Node({ n }: { n: RtNode }): ReactNode {
       return <hr />;
     case 'image':
       return <img src={String(n.attrs?.src ?? '')} alt={String(n.attrs?.alt ?? '')} loading="lazy" />;
+    case 'table':
+      return (
+        <div className="rt-table">
+          <table>
+            <tbody>{children(n)}</tbody>
+          </table>
+        </div>
+      );
+    case 'tableRow':
+      return <tr>{children(n)}</tr>;
+    case 'tableHeader':
+      return <th colSpan={Number(n.attrs?.colspan ?? 1)} rowSpan={Number(n.attrs?.rowspan ?? 1)} scope="col">{children(n)}</th>;
+    case 'tableCell':
+      return <td colSpan={Number(n.attrs?.colspan ?? 1)} rowSpan={Number(n.attrs?.rowspan ?? 1)}>{children(n)}</td>;
     case 'callout': {
       const variant = String(n.attrs?.variant ?? 'info');
       return (

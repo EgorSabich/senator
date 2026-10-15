@@ -154,11 +154,16 @@ export const contentItems = sqliteTable(
     draftBodyJson: text('draft_body_json'),
     draftUpdatedAt: integer('draft_updated_at'),
     draftUpdatedBy: text('draft_updated_by').references(() => users.id),
+    importKey: text('import_key'), // set by the material import; re-import skips existing items
     sortOrder: integer('sort_order').notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex('content_items_slug_uq').on(t.locationId, t.slug), index('content_items_kind_idx').on(t.kind, t.status)],
+  (t) => [
+    uniqueIndex('content_items_slug_uq').on(t.locationId, t.slug),
+    index('content_items_kind_idx').on(t.kind, t.status),
+    uniqueIndex('content_items_import_key_uq').on(t.locationId, t.importKey),
+  ],
 );
 
 /** Uploaded photos and files in R2 (key = loc/<locationId|shared>/<kind>/<id>.<ext>). */

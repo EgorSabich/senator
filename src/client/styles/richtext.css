@@ -111,3 +111,42 @@
   color: var(--text);
   border-radius: 3px;
 }
+/* Tables: scroll sideways on phones instead of squeezing */
+.rt .rt-table,
+.rt .tableWrapper {
+  overflow-x: auto;
+  margin: 14px 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.rt table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 420px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.rt th,
+.rt td {
+  border-top: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  min-width: 90px;
+}
+.rt tr:first-child th,
+.rt tr:first-child td {
+  border-top: none;
+}
+.rt th {
+  background: var(--surface-2);
+  font-weight: 700;
+  font-size: 13px;
+}
+.rt th p,
+.rt td p {
+  margin: 0;
+}
+.rt .selectedCell {
+  background: #3a2a1c;
+}

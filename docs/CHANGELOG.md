@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 — 2026-10-15 — Stage 5: employee app, documents, import of materials
+
+- Employee app (phone first): Start (program progress, next step, documents to confirm, "Do powtórki", "Zaktualizowano"), Nauka (program → modules → lessons with unlock rules), Menu (cards, kitchen allergens per D26, reminder), Wiedza (Service Book, Regulaminy i SOP), Szukaj (FTS5 with Polish folding, highlighted snippets), Konto (PIN change, logout).
+- Reader: lessons "Przeczytane — dalej"; documents confirmed only after scrolling to the end ("Potwierdzam"), one confirmation per version; significant changes send items back to review.
+- Panel: Programy (programs per position, modules, unlock rules, lesson order), "Widok kelnera".
+- Rich text: tables (editor toolbar + reader), callouts, numbered steps.
+- Import of materials: content bundle → drafts (chunked, re-import skips existing `import_key`), "Opublikuj wszystkie szkice z importu"; migration 0004 (`content_items.import_key`).
+- D26: no allergen confirmation; waiters see kitchen "contains" allergens directly; no bar allergens; `allergens.confirm` removed.
+- PWA: service worker, offline reading of previously opened content, personal cache cleared on logout.
+- Tests: 73 integration, unit tests for progress/snippets/tables, UI walkthroughs: academy (phone, offline) and import of 66 real materials.
+
 ## 0.4.0 — 2026-10-14 — Stage 4: menu catalog & import
 
 - Menu in the panel: Kuchnia / Bar tabs, categories as in the source sheets, search, category filter, archived items on demand; phone layout list → item.

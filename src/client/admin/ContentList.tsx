@@ -6,6 +6,7 @@ import { errorText, pl } from '../i18n/pl';
 import { navigate } from '../router';
 import { ErrorBox } from '../ui';
 import { Btn, formatDateTime, Modal, storageGet, storageSet } from './common';
+import { ContentImport } from './ContentImport';
 import { usePanel } from './Panel';
 
 interface Item {
@@ -17,6 +18,7 @@ interface Item {
   status: 'draft' | 'published' | 'archived';
   versionNo: number | null;
   hasDraft: boolean;
+  imported: boolean;
   shared: boolean;
   editable: boolean;
   requiresAck: boolean;
@@ -34,6 +36,8 @@ export function ContentList() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setItems(null);
@@ -60,10 +64,46 @@ export function ContentList() {
     <>
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <h1 className="page-title">{t.title}</h1>
-        <Btn kind="primary" onClick={() => setCreating(true)}>
-          {t.new}
-        </Btn>
+        <div className="btn-row">
+          <Btn kind="primary" onClick={() => setCreating(true)}>
+            {t.new}
+          </Btn>
+          <Btn onClick={() => setImporting(true)}>{t.importButton}</Btn>
+        </div>
       </div>
+      {notice && (
+        <div className="notice" role="status">
+          {notice}
+        </div>
+      )}
+      {(() => {
+        const pending = (items ?? []).filter((i) => i.imported && i.versionNo === null && i.status !== 'archived');
+        if (!pending.length) return null;
+        return (
+          <div className="card" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between', padding: 14 }}>
+            <span style={{ fontSize: 14, lineHeight: 1.5 }}>{t.importPending(pending.length)}</span>
+            <Btn
+              kind="primary"
+              onClick={async () => {
+                if (!confirm(t.importPublishConfirm(pending.length))) return;
+                setError(null);
+                try {
+                  let n = 0;
+                  for (let i = 0; i < pending.length; i += 20) {
+                    n += (await api<{ published: number }>(`/api/admin/locations/${locationId}/content/import/publish`, { method: 'POST', body: { ids: pending.slice(i, i + 20).map((p) => p.id) } })).published;
+                  }
+                  setNotice(t.importPublished(n));
+                  await load();
+                } catch (e) {
+                  setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+                }
+              }}
+            >
+              {t.importPublishAll}
+            </Btn>
+          </div>
+        );
+      })()}
       <div role="tablist" aria-label={t.title} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, borderBottom: '1px solid var(--border)' }}>
         {CONTENT_KINDS.map((k) => (
           <button
@@ -125,6 +165,7 @@ export function ContentList() {
           ))}
         </section>
       ))}
+      {importing && <ContentImport onClose={() => setImporting(false)} onDone={load} />}
       {creating && (
         <NewContent
           defaultKind={kind}

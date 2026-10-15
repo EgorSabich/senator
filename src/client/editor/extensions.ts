@@ -1,6 +1,7 @@
 import { mergeAttributes, Node } from '@tiptap/core';
 import Image from '@tiptap/extension-image';
 import StarterKit from '@tiptap/starter-kit';
+import { TableKit } from '@tiptap/extension-table';
 import { CALLOUT_VARIANTS, type CalloutVariant } from '../../shared/richtext';
 import { pl } from '../i18n/pl';
 
@@ -66,4 +67,5 @@ export const editorExtensions = [
   }),
   Image.configure({ inline: false, allowBase64: false }),
   Callout,
+  TableKit.configure({ table: { resizable: false } }),
 ];

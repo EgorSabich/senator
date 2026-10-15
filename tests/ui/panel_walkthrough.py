@@ -16,7 +16,8 @@ with sync_playwright() as p:
     b = p.chromium.launch()
     ctx = b.new_context(viewport={"width": 1280, "height": 860}, locale="pl-PL")
     page = ctx.new_page()
-    page.on("console", lambda m: errors.append(f"console {m.type}: {m.text}") if m.type in ("error",) else None)
+    # Google Fonts are unreachable in the sandbox, and /api/auth/me answers 401 before login — both are expected noise.
+    page.on("console", lambda m: errors.append(f"console {m.type}: {m.text}") if m.type in ("error",) and "ERR_TUNNEL_CONNECTION_FAILED" not in m.text and "401 (Unauthorized)" not in m.text else None)
     page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
 
     page.goto(BASE + "/")

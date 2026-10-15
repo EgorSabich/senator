@@ -14,7 +14,8 @@ export interface RtNode {
 export const CALLOUT_VARIANTS = ['important', 'warning', 'info'] as const;
 export type CalloutVariant = (typeof CALLOUT_VARIANTS)[number];
 
-const BLOCK_CONTAINERS = new Set(['doc', 'bulletList', 'orderedList', 'listItem', 'callout']);
+const BLOCK_CONTAINERS = new Set(['doc', 'bulletList', 'orderedList', 'listItem', 'callout', 'tableCell', 'tableHeader']);
+const TABLE_CELLS = new Set(['tableCell', 'tableHeader']);
 const ALLOWED_NODES = new Set([
   'doc',
   'paragraph',
@@ -27,6 +28,10 @@ const ALLOWED_NODES = new Set([
   'horizontalRule',
   'image',
   'callout',
+  'table',
+  'tableRow',
+  'tableHeader',
+  'tableCell',
 ]);
 const ALLOWED_MARKS = new Set(['bold', 'italic', 'underline', 'link']);
 const MEDIA_SRC = /^\/media\/[A-Za-z0-9/_.-]{1,200}$/;
@@ -81,6 +86,9 @@ function cleanNode(node: unknown, depth: number, budget: { chars: number }): RtN
   } else if (n.type === 'orderedList') {
     const start = typeof n.attrs?.start === 'number' && n.attrs.start > 0 && n.attrs.start < 1000 ? n.attrs.start : 1;
     out.attrs = { start };
+  } else if (TABLE_CELLS.has(n.type)) {
+    const span = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 20 ? v : 1);
+    out.attrs = { colspan: span(n.attrs?.colspan), rowspan: span(n.attrs?.rowspan) };
   } else if (n.type === 'callout') {
     const variant = (CALLOUT_VARIANTS as readonly unknown[]).includes(n.attrs?.variant) ? n.attrs!.variant : 'important';
     out.attrs = { variant };
@@ -88,10 +96,22 @@ function cleanNode(node: unknown, depth: number, budget: { chars: number }): RtN
 
   const children = Array.isArray(n.content) ? n.content : [];
   const cleaned = children.map((c) => cleanNode(c, depth + 1, budget)).filter((c): c is RtNode => c !== null);
+  if (n.type === 'table') {
+    const rows = cleaned.filter((c) => c.type === 'tableRow');
+    if (!rows.length) return null;
+    out.content = rows;
+    return out;
+  }
+  if (n.type === 'tableRow') {
+    const cells = cleaned.filter((c) => TABLE_CELLS.has(c.type));
+    if (!cells.length) return null;
+    out.content = cells;
+    return out;
+  }
   if (BLOCK_CONTAINERS.has(n.type)) {
     // Containers hold blocks only; stray inline text is wrapped in a paragraph.
     const blocks = cleaned.map((c) => (c.type === 'text' || c.type === 'hardBreak' ? { type: 'paragraph', content: [c] } : c));
-    out.content = blocks.length ? blocks : n.type === 'listItem' || n.type === 'callout' || n.type === 'doc' ? [{ type: 'paragraph' }] : [];
+    out.content = blocks.length ? blocks : n.type === 'listItem' || n.type === 'callout' || n.type === 'doc' || TABLE_CELLS.has(n.type) ? [{ type: 'paragraph' }] : [];
     if ((n.type === 'bulletList' || n.type === 'orderedList') && !out.content.some((c) => c.type === 'listItem')) return null;
     if (n.type === 'bulletList' || n.type === 'orderedList') out.content = out.content.filter((c) => c.type === 'listItem');
   } else if (cleaned.length) {
@@ -121,6 +141,19 @@ export function docToText(doc: RtNode): string {
     }
     if (n.type === 'orderedList') {
       (n.content ?? []).forEach((li, i) => (li.content ?? []).forEach((c, j) => walk(c, j === 0 ? `${i + 1}. ` : '   ')));
+      return;
+    }
+    if (n.type === 'tableRow') {
+      const cells = (n.content ?? []).map((cell) => {
+        const sub: string[] = [];
+        const inner = (x: RtNode): void => {
+          if (x.type === 'text') sub.push(x.text ?? '');
+          else (x.content ?? []).forEach(inner);
+        };
+        inner(cell);
+        return sub.join(' ').trim();
+      });
+      lines.push(prefix + cells.join(' | '));
       return;
     }
     if (n.type === 'bulletList') {

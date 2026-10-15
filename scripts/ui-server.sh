@@ -3,6 +3,8 @@
 cd "$(dirname "$0")/.."
 S=${TMPDIR:-/tmp}
 STATE=.wrangler/state-ui
+# stop a previous UI server first — it would keep the deleted database open (SQLITE_CANTOPEN)
+pkill -x workerd 2>/dev/null; for p in $(pgrep -f "^node .*wrangler.* dev"); do kill $p 2>/dev/null; done; sleep 2
 rm -rf $STATE
 npx wrangler d1 migrations apply DB --local --persist-to $STATE >/dev/null 2>&1
 AUTH_SECRET=ui-secret OWNER_TEMP_PASSWORD=TymczasoweHaslo1 node scripts/create-owner.mjs "Egor" "Właściciel" egor.wlasciciel 2>/dev/null > $STATE/o.sql

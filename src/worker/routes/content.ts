@@ -13,6 +13,7 @@ import { ApiError, badRequest, newId, notFound, readJson, str } from '../lib/htt
 import { indexStatements, unindexStatement } from '../lib/search';
 import { loadAccess, requireOwner, requirePermission, type Access } from '../auth/access';
 import { storeUpload } from './media';
+import { CONTENT_BUNDLE_FORMAT, CONTENT_IMPORT_CHUNK } from '../../shared/contentBundle';
 
 export const contentAdminRoutes = new Hono<AppEnv>();
 // Session is enforced by the /api/admin router (index.ts).
@@ -95,7 +96,7 @@ contentAdminRoutes.get('/locations/:locId/content', async (c) => {
     .prepare(
       `SELECT ci.id, ci.location_id AS locationId, ci.kind, ci.title, ci.section, ci.status, ci.requires_ack AS requiresAck,
               ci.draft_title AS draftTitle, ci.draft_updated_at AS draftUpdatedAt, ci.updated_at AS updatedAt,
-              ci.external_url AS externalUrl, ci.attachment_name AS attachmentName,
+              ci.external_url AS externalUrl, ci.attachment_name AS attachmentName, ci.import_key IS NOT NULL AS imported,
               (SELECT version_no FROM content_versions v WHERE v.id = ci.current_version_id) AS versionNo,
               (SELECT group_concat(position) FROM content_item_positions p WHERE p.content_item_id = ci.id) AS positions
        FROM content_items ci
@@ -109,6 +110,7 @@ contentAdminRoutes.get('/locations/:locId/content', async (c) => {
     items: results.map((r) => ({
       ...r,
       requiresAck: Boolean(r.requiresAck),
+      imported: Boolean(r.imported),
       shared: r.locationId === null,
       editable: r.locationId !== null || access.role === 'owner',
       hasDraft: r.draftUpdatedAt !== null,
@@ -322,6 +324,13 @@ contentAdminRoutes.post('/content/:id/publish', async (c) => {
   else throw badRequest('change_level_required');
   const note = body.changeNote === undefined || body.changeNote === null || body.changeNote === '' ? null : str(body.changeNote, 500);
 
+  const res = await publishDraft(db, item, c.var.user.id, level, note);
+  return c.json({ ...res, changeLevel: level });
+});
+
+/** Publishes the draft of an item as a new version (shared by "Opublikuj" and the bulk publish after import). */
+async function publishDraft(db: D1Database, item: ItemRow, userId: string, level: ChangeLevel, note: string | null) {
+  const first = !item.currentVersionId;
   const title = item.draftTitle ?? item.title;
   if (!first) {
     const cur = await db
@@ -330,7 +339,7 @@ contentAdminRoutes.post('/content/:id/publish', async (c) => {
       .first<{ title: string; b: string }>();
     if (cur && cur.b === item.draftBodyJson && cur.title === title) throw new ApiError(409, 'no_changes');
   }
-  const doc = JSON.parse(item.draftBodyJson);
+  const doc = JSON.parse(item.draftBodyJson!);
   const text = docToText(doc);
   const last = await db
     .prepare(`SELECT COALESCE(MAX(version_no), 0) AS n FROM content_versions WHERE content_item_id = ?`)
@@ -346,7 +355,7 @@ contentAdminRoutes.post('/content/:id/publish', async (c) => {
         `INSERT INTO content_versions (id, content_item_id, version_no, title, body_json, body_text, change_level, change_note, author_id, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(versionId, item.id, versionNo, title, item.draftBodyJson, text, level, note, c.var.user.id, now),
+      .bind(versionId, item.id, versionNo, title, item.draftBodyJson, text, level, note, userId, now),
     db
       .prepare(
         `UPDATE content_items SET current_version_id = ?, title = ?, status = 'published', draft_title = NULL, draft_body_json = NULL,
@@ -355,7 +364,7 @@ contentAdminRoutes.post('/content/:id/publish', async (c) => {
       .bind(versionId, title, now, item.id),
     ...indexStatements(db, { type: 'content', id: item.id, locationId: item.locationId, title, body: text }),
     auditStatement(db, {
-      actorId: c.var.user.id,
+      actorId: userId,
       locationId: item.locationId,
       action: 'content.publish',
       entityType: 'content',
@@ -363,8 +372,8 @@ contentAdminRoutes.post('/content/:id/publish', async (c) => {
       after: { versionNo, changeLevel: level, changeNote: note, title },
     }),
   ]);
-  return c.json({ versionId, versionNo, changeLevel: level });
-});
+  return { versionId, versionNo };
+}
 
 /* ───────── Archive ───────── */
 
@@ -423,4 +432,72 @@ contentAdminRoutes.delete('/content/:id/attachment', async (c) => {
     auditStatement(db, { actorId: c.var.user.id, locationId: item.locationId, action: 'content.attachment_remove', entityType: 'content', entityId: item.id, before: { name: item.attachmentName } }),
   ]);
   return c.json({ ok: true });
+});
+
+/* ───────── Import of prepared materials (drafts) ───────── */
+
+contentAdminRoutes.post('/locations/:locId/content/import', async (c) => {
+  const locId = c.req.param('locId');
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  requirePermission(access, locId, 'content.edit');
+  const body = await readJson<{ format?: unknown; items?: unknown }>(c.req.raw);
+  if (body.format !== CONTENT_BUNDLE_FORMAT || !Array.isArray(body.items) || body.items.length > CONTENT_IMPORT_CHUNK) throw badRequest('bundle_invalid');
+  const created: string[] = [];
+  const skipped: string[] = [];
+  const now = Date.now();
+  for (const raw of body.items as Record<string, unknown>[]) {
+    const importKey = str(raw?.importKey, 200);
+    const kind = typeof raw?.kind === 'string' && (CONTENT_KINDS as readonly string[]).includes(raw.kind) ? raw.kind : null;
+    const title = str(raw?.title, 160);
+    if (!importKey || !kind || !title) throw badRequest('bundle_invalid');
+    const doc = sanitizeDoc(raw.body);
+    if (!doc) throw badRequest('body_invalid');
+    const json = JSON.stringify(doc);
+    if (json.length > 600_000) throw badRequest('body_too_large');
+    const exists = await db.prepare(`SELECT 1 FROM content_items WHERE location_id = ? AND import_key = ?`).bind(locId, importKey).first();
+    if (exists) {
+      skipped.push(title);
+      continue;
+    }
+    const positions = raw.positions === undefined ? [] : parsePositions(raw.positions);
+    const section = str(raw.section, 120);
+    const sortOrder = Number.isInteger(raw.sortOrder) ? Number(raw.sortOrder) : 0;
+    const isDocument = kind !== 'lesson' && kind !== 'service_book';
+    const requiresAck = raw.requiresAck === undefined ? isDocument : raw.requiresAck === true;
+    const id = newId('ci');
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO content_items (id, location_id, kind, title, slug, section, status, requires_ack, draft_title, draft_body_json,
+             draft_updated_at, draft_updated_by, import_key, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(id, locId, kind, title, await uniqueSlug(db, locId, title), section, requiresAck ? 1 : 0, title, json, now, c.var.user.id, importKey, sortOrder, now, now),
+      ...positions.map((p) => db.prepare(`INSERT INTO content_item_positions (content_item_id, position) VALUES (?, ?)`).bind(id, p)),
+    ]);
+    created.push(title);
+  }
+  if (created.length) {
+    await auditStatement(db, { actorId: c.var.user.id, locationId: locId, action: 'content.import', entityType: 'content', after: { created: created.length, skipped: skipped.length } }).run();
+  }
+  return c.json({ created, skipped });
+});
+
+/** Publishes imported items that were never published (first version = significant). */
+contentAdminRoutes.post('/locations/:locId/content/import/publish', async (c) => {
+  const locId = c.req.param('locId');
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  requirePermission(access, locId, 'content.edit');
+  const body = await readJson<{ ids?: unknown }>(c.req.raw);
+  if (!Array.isArray(body.ids) || body.ids.length > 20 || !body.ids.every((x) => typeof x === 'string')) throw badRequest('invalid_input');
+  let published = 0;
+  for (const id of body.ids as string[]) {
+    const item = await db.prepare(`SELECT ${ITEM_COLUMNS} FROM content_items WHERE id = ? AND location_id = ?`).bind(id, locId).first<ItemRow>();
+    if (!item || item.currentVersionId || !item.draftBodyJson || item.status === 'archived') continue;
+    await publishDraft(db, item, c.var.user.id, 'significant', 'Import');
+    published += 1;
+  }
+  return c.json({ published });
 });

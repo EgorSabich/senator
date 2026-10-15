@@ -15,7 +15,7 @@ Shared across locations: `users`, `allergens`, content with `location_id IS NULL
 
 Migration `0002_content_drafts_media.sql`: `content_items` gets a working copy (`draft_title`, `draft_body_json`, `draft_updated_at/by`) and `attachment_name`; new table `media` (every uploaded photo/file: key, location, type, size, original name, uploader).
 
-Rich text is TipTap JSON, sanitized on save by `src/shared/richtext.ts` (allowed: paragraph, heading 2/3, bullet/ordered list, callout important/warning/info, image from `/media/` only, hard break, rule; marks bold, italic, underline, link http(s)/mailto/tel).
+Rich text is TipTap JSON, sanitized on save by `src/shared/richtext.ts` (allowed: paragraph, heading 2/3, bullet/ordered list, callout important/warning/info, table/tableRow/tableHeader/tableCell (colspan/rowspan 1–20), image from `/media/` only, hard break, rule; marks bold, italic, underline, link http(s)/mailto/tel).
 
 Future (not created): `trusted_devices`, `time_events`, `time_corrections`.
 
@@ -26,6 +26,12 @@ Migration `0003_menu_import.sql` (stage 4, after checking the real sheets):
 - `menu_item_diets` + `source_note` (original "tak*", "?").
 - New `menu_sections` (location, section kitchen/bar, note shown above the list — e.g. the remark under the kitchen allergen sheet).
 
+Migration `0004_content_import.sql` (stage 5): `content_items.import_key` + unique index `(location_id, import_key)` — material import never duplicates.
+
+Progress (stage 5): `content_acknowledgements` (one row per user per version) = done; a later significant version → "review" (Do powtórki), a clarification → "updated"; program = default program of `user_locations.position`.
+
+Allergens (D26): kitchen "X"/"tak" → `contains` shown to waiters directly; "?" and "tak*" → `unconfirmed`, hidden; the bar has no allergens. `confirmed_by/at` now mean "last changed by/at".
+
 Menu field mapping:
 
 | Source | Field |
@@ -34,7 +40,7 @@ Menu field mapping:
 | Jak sprzedać / Warto wiedzieć / Sprzedaż dodatkowa / Pytania gości / Kluczowy składnik / Uprzedź gościa | `how_to_sell` / `good_to_know` / `upsell` / `guest_questions` / `key_ingredient` / `warn_guest` |
 | Dla kogo (first line) | diets — taken from the "Alergeny" sheet; lines after the first → `diet_note` |
 | Alkohol ("-" = none) | `alcohol_note` |
-| "Alergeny" sheet: X / ? / empty | `contains` / `unconfirmed` / `not_contains`, never confirmed on import |
+| "Alergeny" sheet: X / ? / empty | `contains` / `unconfirmed` / `not_contains` (D26: `contains` visible to waiters right away) |
 | Wege / Wegańskie / Bez glutenu / Bez nabiału: tak / nie / tak* / ? | `yes` / `no` / `unconfirmed` / `unconfirmed` |
 | Bar: Rozdział, Nazwa "CHOICE OR", Nazwa "GO POS", Skład, Opis, Sposób podania, picture in "Foto" | category, `name_guest`, `name_pos`, `ingredients_json`, `description`, `serving`, `photo_key` |
 

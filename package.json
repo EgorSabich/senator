@@ -1,6 +1,6 @@
 {
   "name": "senator-academy",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Senator Academy — wewnętrzna platforma szkoleniowa restauracji Senator",
   "type": "module",
@@ -24,6 +24,7 @@
   "dependencies": {
     "@tiptap/core": "^3.32.0",
     "@tiptap/extension-image": "^3.32.0",
+    "@tiptap/extension-table": "^3.32.0",
     "@tiptap/pm": "^3.32.0",
     "@tiptap/react": "^3.32.0",
     "@tiptap/starter-kit": "^3.32.0",

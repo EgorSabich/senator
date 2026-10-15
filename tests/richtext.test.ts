@@ -50,3 +50,28 @@ describe('docToText', () => {
     expect(docToText(doc)).toBe('Tytuł\n1. Pierwszy\n2. Drugi');
   });
 });
+
+describe('tables', () => {
+  it('keeps table structure, drops widths and junk', () => {
+    const doc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'table',
+          content: [
+            { type: 'tableRow', content: [{ type: 'tableHeader', attrs: { colspan: 1, colwidth: [200] }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Kategoria' }] }] }] },
+            { type: 'tableRow', content: [{ type: 'tableCell', attrs: { rowspan: 99 }, content: [{ type: 'text', text: 'Zupy' }] }, { type: 'script' }] },
+            { type: 'paragraph' },
+          ],
+        },
+      ],
+    };
+    const out = sanitizeDoc(doc)!;
+    const table = out.content![0]!;
+    expect(table.content).toHaveLength(2);
+    expect(table.content![0]!.content![0]!.attrs).toEqual({ colspan: 1, rowspan: 1 });
+    expect(table.content![1]!.content).toHaveLength(1);
+    expect(table.content![1]!.content![0]!.content![0]!.type).toBe('paragraph');
+    expect(docToText(out)).toBe('Kategoria\nZupy');
+  });
+});

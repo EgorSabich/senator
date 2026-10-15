@@ -384,6 +384,7 @@ function Toolbar({ editor, locationId, onError }: { editor: Editor; locationId: 
       warning: ed.isActive('callout', { variant: 'warning' }),
       info: ed.isActive('callout', { variant: 'info' }),
       link: ed.isActive('link'),
+      table: ed.isActive('table'),
     }),
   });
   const fileInput = useRef<HTMLInputElement>(null);
@@ -409,6 +410,17 @@ function Toolbar({ editor, locationId, onError }: { editor: Editor; locationId: 
       {b(e.important, state.important, () => chain().toggleCallout('important').run())}
       {b(e.warning, state.warning, () => chain().toggleCallout('warning').run())}
       {b(e.info, state.info, () => chain().toggleCallout('info').run())}
+      <span className="sep" />
+      {b(e.table, state.table, () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run())}
+      {state.table && (
+        <>
+          {b(e.addRow, false, () => chain().addRowAfter().run(), '+ ' + e.row)}
+          {b(e.addCol, false, () => chain().addColumnAfter().run(), '+ ' + e.col)}
+          {b(e.delRow, false, () => chain().deleteRow().run(), '− ' + e.row)}
+          {b(e.delCol, false, () => chain().deleteColumn().run(), '− ' + e.col)}
+          {b(e.delTable, false, () => chain().deleteTable().run())}
+        </>
+      )}
       <span className="sep" />
       {b(e.link, state.link, () => {
         if (state.link) return void chain().unsetLink().run();
