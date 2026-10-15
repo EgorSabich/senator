@@ -516,7 +516,7 @@ export const pl = {
       importIssues: 'Uwagi do danych',
       importStart: 'Importuj',
       importProgress: (done: number, all: number) => `Import: ${done} z ${all}…`,
-      importResult: (c: number, s: number, p: number) => `Dodano ${c}, pominięto ${s} (już były), zdjęć: ${p}.`,
+      importResult: (c: number, u: number, s: number, p: number) => `Dodano ${c}, uzupełniono ${u} (puste pola, skład, zdjęcie), bez zmian ${s}, zdjęć: ${p}.`,
       importAfter: '',
     },
     back: 'Wróć',

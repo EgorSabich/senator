@@ -106,6 +106,31 @@ describe('import', () => {
     expect(list.data.categories.filter((c: { name: string }) => c.name === 'Zupy')).toHaveLength(1);
   });
 
+  it('a re-import fills only empty fields (ingredients, description, photo) and never overwrites', async () => {
+    const richer = {
+      ...kitchenItem,
+      howToSell: 'INNY TEKST — nie może nadpisać',
+      ingredients: ['Zakwas żytni', 'Biała kiełbasa'],
+      description: 'Klasyczny żurek z białą kiełbasą.',
+      photo: { contentType: 'image/jpeg', data: JPEG_B64 },
+    };
+    const res = await editor.post(`/api/admin/locations/${SENATOR}/menu/import`, bundleChunk([richer, barItem]));
+    expect(res.data.updated).toEqual(['Żurek testowy']);
+    expect(res.data.skipped).toEqual(['HORTUS testowy']);
+    expect(res.data.photos).toBe(1);
+    const list = await editor.get(`/api/admin/locations/${SENATOR}/menu`);
+    const id = list.data.items.find((i: { nameGuest: string }) => i.nameGuest === 'Żurek testowy').id;
+    const item = (await editor.get(`/api/admin/menu/items/${id}`)).data.item;
+    expect(item.ingredients).toEqual(['Zakwas żytni', 'Biała kiełbasa']);
+    expect(item.texts.description).toBe('Klasyczny żurek z białą kiełbasą.');
+    expect(item.texts.howToSell).toBe('„Klasyczny żurek na zakwasie.”');
+    expect(item.photoSrc).toMatch(/^\/media\//);
+    // third time: nothing left to fill
+    const again = await editor.post(`/api/admin/locations/${SENATOR}/menu/import`, bundleChunk([richer]));
+    expect(again.data.updated).toEqual([]);
+    expect(again.data.skipped).toEqual(['Żurek testowy']);
+  });
+
   it('rejects a wrong format and oversized chunks', async () => {
     expect((await editor.post(`/api/admin/locations/${SENATOR}/menu/import`, { format: 'x', items: [] })).data.error).toBe('bundle_invalid');
     const many = Array.from({ length: 9 }, (_, i) => ({ ...kitchenItem, importKey: `k:${i}` }));
@@ -164,7 +189,8 @@ describe('allergens (kitchen, no confirmation step — D26)', () => {
     expect(z.diets).toEqual(['gluten_free']);
     expect(z.allergensComplete).toBe(true);
     const card = await editor.get(`/api/admin/menu/items/${zurek}`);
-    expect(card.data.versions[0]).toMatchObject({ versionNo: 2, changeLevel: 'significant' });
+    // version 2 = "Import — uzupełnienie" from the re-import test above
+    expect(card.data.versions[0]).toMatchObject({ versionNo: 3, changeLevel: 'significant' });
     expect(card.data.allergens.find((a: { allergenId: string }) => a.allergenId === 'eggs').confirmedByName).toBeTruthy();
     expect((await editor.put(`/api/admin/menu/items/${zurek}/allergens`, { allergens: allergenSet(['gluten', 'eggs']), diets })).data.error).toBe('no_changes');
   });

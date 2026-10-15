@@ -593,7 +593,7 @@ menuAdminRoutes.post('/locations/:locId/menu/import', async (c) => {
 
   const me = c.var.user.id;
   const now = Date.now();
-  const result = { created: [] as string[], skipped: [] as string[], photos: 0, categoriesCreated: 0 };
+  const result = { created: [] as string[], updated: [] as string[], skipped: [] as string[], photos: 0, categoriesCreated: 0 };
 
   // Section notes: set only when empty, so a re-import never overwrites what a manager edited.
   for (const s of MENU_SECTIONS) {
@@ -634,9 +634,39 @@ menuAdminRoutes.post('/locations/:locId/menu/import', async (c) => {
     const texts = parseTexts(raw, textsOf({}));
     const ingredients = parseIngredients(raw.ingredients);
 
-    const exists = await db.prepare(`SELECT id FROM menu_items WHERE location_id = ? AND import_key = ?`).bind(locId, importKey).first();
-    if (exists) {
-      result.skipped.push(texts.nameGuest!);
+    const existing = await db.prepare(`SELECT ${ITEM_SELECT} WHERE mi.location_id = ? AND mi.import_key = ?`).bind(locId, importKey).first<ItemRow>();
+    if (existing) {
+      // Re-import only fills what is still empty (text fields, ingredients, photo) — it never overwrites edits.
+      const before = textsOf(existing);
+      const filled = { ...before };
+      const fields = MENU_TEXT_FIELD_NAMES.filter((f) => f !== 'nameGuest' && !before[f] && texts[f]);
+      for (const f of fields) filled[f] = texts[f];
+      const oldIngredients = ingredientsOf(existing);
+      const addIngredients = !oldIngredients.length && ingredients.length > 0;
+      const photo = raw.photo as { contentType?: unknown; data?: unknown } | null | undefined;
+      const addPhoto = !existing.photoKey && !!photo && typeof photo.data === 'string' && typeof photo.contentType === 'string';
+      if (!fields.length && !addIngredients && !addPhoto) {
+        result.skipped.push(texts.nameGuest!);
+        continue;
+      }
+      let photoKey = existing.photoKey;
+      if (addPhoto) {
+        const stored = await storeBytes(c.env, b64ToBytes(photo!.data as string), photo!.contentType as string, `${existing.nameGuest}.jpg`, { kind: 'img', locationId: locId, userId: me });
+        photoKey = stored.key;
+        result.photos += 1;
+      }
+      const nextIngredients = addIngredients ? ingredients : oldIngredients;
+      const versionNo = existing.versionNo + 1;
+      const st = fullStatuses(await loadAllergens(db, existing.id));
+      const sets = MENU_TEXT_FIELD_NAMES.map((f) => `${MENU_TEXT_FIELDS[f].column} = ?`).join(', ');
+      await db.batch([
+        db
+          .prepare(`UPDATE menu_items SET ${sets}, ingredients_json = ?, photo_key = ?, version_no = ?, updated_at = ? WHERE id = ?`)
+          .bind(...MENU_TEXT_FIELD_NAMES.map((f) => filled[f]), nextIngredients.length ? JSON.stringify(nextIngredients) : null, photoKey, versionNo, now, existing.id),
+        versionStatement(db, existing.id, versionNo, snapshot({ ...filled, categoryId: existing.categoryId }, nextIngredients, st), 'clarification', 'Import — uzupełnienie', me, now),
+        ...(existing.isActive ? searchStatements(db, existing.id, locId, filled, nextIngredients) : []),
+      ]);
+      result.updated.push(existing.nameGuest!);
       continue;
     }
     const catId = await categoryId(section, catName);
@@ -683,13 +713,13 @@ menuAdminRoutes.post('/locations/:locId/menu/import', async (c) => {
     result.created.push(texts.nameGuest!);
   }
 
-  if (result.created.length) {
+  if (result.created.length || result.updated.length) {
     await auditStatement(db, {
       actorId: me,
       locationId: locId,
       action: 'menu.import',
       entityType: 'menu',
-      after: { created: result.created.length, skipped: result.skipped.length, photos: result.photos },
+      after: { created: result.created.length, updated: result.updated.length, skipped: result.skipped.length, photos: result.photos },
     }).run();
   }
   return c.json(result);

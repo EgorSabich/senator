@@ -685,7 +685,7 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
   const [bundle, setBundle] = useState<MenuBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<[number, number] | null>(null);
-  const [result, setResult] = useState<{ created: number; skipped: number; photos: number } | null>(null);
+  const [result, setResult] = useState<{ created: number; updated: number; skipped: number; photos: number } | null>(null);
 
   async function read(file: File | undefined) {
     setError(null);
@@ -704,15 +704,16 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
   async function run() {
     if (!bundle) return;
     setError(null);
-    const total = { created: 0, skipped: 0, photos: 0 };
+    const total = { created: 0, updated: 0, skipped: 0, photos: 0 };
     try {
       for (let i = 0; i < bundle.items.length; i += IMPORT_CHUNK) {
         setProgress([i, bundle.items.length]);
-        const res = await api<{ created: string[]; skipped: string[]; photos: number }>(`/api/admin/locations/${locationId}/menu/import`, {
+        const res = await api<{ created: string[]; updated?: string[]; skipped: string[]; photos: number }>(`/api/admin/locations/${locationId}/menu/import`, {
           method: 'POST',
           body: { format: BUNDLE_FORMAT, sections: bundle.sections, categories: bundle.categories, items: bundle.items.slice(i, i + IMPORT_CHUNK) },
         });
         total.created += res.created.length;
+        total.updated += res.updated?.length ?? 0;
         total.skipped += res.skipped.length;
         total.photos += res.photos;
       }
@@ -721,7 +722,7 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
       await onDone();
     } catch (e) {
       setProgress(null);
-      setResult(total.created || total.skipped ? total : null);
+      setResult(total.created || total.updated || total.skipped ? total : null);
       setError(errOf(e));
       await onDone();
     }
@@ -757,7 +758,7 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
       {progress && <p className="muted" role="status">{t.importProgress(progress[0], progress[1])}</p>}
       {result && (
         <div className="notice" role="status">
-          {t.importResult(result.created, result.skipped, result.photos)} {t.importAfter}
+          {t.importResult(result.created, result.updated, result.skipped, result.photos)} {t.importAfter}
         </div>
       )}
       <ErrorBox message={error} />
