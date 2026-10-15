@@ -890,3 +890,32 @@
   gap: 10px;
   align-items: flex-end;
 }
+.emp-missing > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  cursor: pointer;
+  list-style: none;
+}
+.emp-missing > summary::-webkit-details-marker {
+  display: none;
+}
+.emp-chevron {
+  margin-left: auto;
+  display: flex;
+  color: var(--text-muted);
+  transition: transform 300ms var(--ease-out, ease);
+}
+.emp-missing[open] .emp-chevron {
+  transform: rotate(180deg);
+}
+.emp-missing-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 12px 0;
+  animation: rise-in 300ms var(--ease-out, ease) both;
+}

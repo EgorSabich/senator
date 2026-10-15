@@ -522,15 +522,23 @@ function Summary({ userId, locationId }: { userId: string; locationId: string })
         {month('prevMonth')}
       </div>
       {data.mandatory.missing.length > 0 ? (
-        <div className="emp-missing">
-          <span className="label">{s.missingDocs}</span>
-          {data.mandatory.missing.map((m) => (
-            <span key={m.id} className="emp-missing-row">
-              {m.title}
-              <span className={`badge ${m.status === 'review' ? 'warn' : 'neutral'}`}>{m.status === 'review' ? s.toReconfirm : s.notRead}</span>
+        <details className="emp-missing">
+          <summary>
+            <span className="label">{s.missingDocs}</span>
+            <span className="badge neutral">{data.mandatory.missing.length}</span>
+            <span className="emp-chevron" aria-hidden="true">
+              <Icon name="down" size={16} />
             </span>
-          ))}
-        </div>
+          </summary>
+          <div className="emp-missing-list">
+            {data.mandatory.missing.map((m) => (
+              <span key={m.id} className="emp-missing-row">
+                {m.title}
+                <span className={`badge ${m.status === 'review' ? 'warn' : 'neutral'}`}>{m.status === 'review' ? s.toReconfirm : s.notRead}</span>
+              </span>
+            ))}
+          </div>
+        </details>
       ) : data.mandatory.total > 0 ? (
         <span className="muted" style={{ fontSize: 13 }}>
           {s.allConfirmed}
