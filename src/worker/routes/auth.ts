@@ -7,7 +7,6 @@ import { auditStatement } from '../lib/audit';
 import { ApiError, badRequest, newId, readJson } from '../lib/http';
 import { hashIp, hashSecret, pinLookup, verifySecret } from '../auth/crypto';
 import { assignPinLookup, burnPinStatement, pinTaken } from '../lib/pin';
-import { checkPin } from '../../shared/secret-rules';
 import { clearSessionCookie, createSession, requireSession, revokeUserSessions } from '../auth/session';
 import { loadAccess } from '../auth/access';
 
@@ -193,32 +192,3 @@ authRoutes.post('/change-secret', requireSession, async (c) => {
   return c.json({ ok: true });
 });
 
-/** Password users (managers, owner) may set a separate PIN for the time terminal (D35). */
-authRoutes.put('/terminal-pin', requireSession, async (c) => {
-  const user = c.var.user;
-  if (user.secretKind !== 'password') throw badRequest('terminal_pin_is_login_pin');
-  const body = await readJson<{ password?: unknown; pin?: unknown }>(c.req.raw);
-  const password = typeof body.password === 'string' ? body.password : '';
-  const pin = typeof body.pin === 'string' ? body.pin : '';
-  const db = c.env.DB;
-  const row = await db.prepare(`SELECT secret_hash AS hash, secret_salt AS salt FROM users WHERE id = ?`).bind(user.id).first<{ hash: string | null; salt: string | null }>();
-  if (!row?.hash || !row.salt || !(await verifySecret(password, c.env.AUTH_SECRET, row.hash, row.salt))) throw new ApiError(400, 'wrong_current_secret');
-  const problem = checkPin(pin);
-  if (problem) throw badRequest(problem);
-  const lookup = await pinLookup(pin, c.env.AUTH_SECRET);
-  const holder = await pinTaken(db, user.id, lookup);
-  if (holder) {
-    await burnPinStatement(db, holder).run();
-    throw badRequest('pin_unavailable');
-  }
-  await db.batch([
-    db.prepare(`UPDATE users SET pin_lookup = ?, updated_at = ? WHERE id = ?`).bind(lookup, Date.now(), user.id),
-    auditStatement(db, { actorId: user.id, action: 'user.terminal_pin', entityType: 'user', entityId: user.id }),
-  ]);
-  return c.json({ ok: true });
-});
-
-authRoutes.get('/terminal-pin', requireSession, async (c) => {
-  const row = await c.env.DB.prepare(`SELECT pin_lookup IS NOT NULL AS set_ FROM users WHERE id = ?`).bind(c.var.user.id).first<{ set_: number }>();
-  return c.json({ set: Boolean(row?.set_) });
-});

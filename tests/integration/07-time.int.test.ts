@@ -96,12 +96,40 @@ describe('punches', () => {
     expect((await punch('702618')).data).toMatchObject({ outcome: 'in', firstName: 'Anna' });
   });
 
-  it('a manager with a password sets a separate terminal PIN', async () => {
+  it('managers are not timed: no terminal PIN, not in the calendar (D37)', async () => {
     const m = await owner.post('/api/admin/managers', { firstName: 'Marta', lastName: 'Zegar', locationId: SENATOR });
     const mgr = await activateClient(m.data.login, m.data.tempSecret, 'HasloMenedzeraZegar1');
-    expect((await mgr.req('PUT', '/api/auth/terminal-pin', { password: 'zle-haslo', pin: '914837' })).data.error).toBe('wrong_current_secret');
-    expect((await mgr.req('PUT', '/api/auth/terminal-pin', { password: 'HasloMenedzeraZegar1', pin: '914837' })).status).toBe(200);
-    expect((await punch('914837')).data).toMatchObject({ outcome: 'in', firstName: 'Marta' });
+    expect((await mgr.req('PUT', '/api/auth/terminal-pin', { password: 'HasloMenedzeraZegar1', pin: '914837' })).status).toBe(404);
+    const today = new Date().toISOString().slice(0, 10);
+    const cal = await owner.get(`/api/admin/locations/${SENATOR}/time?from=${today}&to=${today}`);
+    expect(cal.data.people.every((p: { role: string }) => p.role === 'employee')).toBe(true);
+    expect((await owner.post(`/api/admin/locations/${SENATOR}/time/entries`, { userId: m.data.id, clockInAt: Date.now() - 7200_000, clockOutAt: Date.now() - 3600_000 })).status).toBe(404);
+  });
+});
+
+describe('hourly rates and the employee card', () => {
+  it('cost uses the rate valid on the day; only wages.manage sees money', async () => {
+    const day = (n: number) => new Date(Date.now() - n * 86400_000).toISOString().slice(0, 10);
+    expect((await owner.req('PUT', `/api/admin/locations/${SENATOR}/users/${annaId}/rate`, { rate: '30,50', validFrom: '2026-01-01' })).status).toBe(200);
+    expect((await owner.req('PUT', `/api/admin/locations/${SENATOR}/users/${annaId}/rate`, { rate: -1 })).data.error).toBe('rate_invalid');
+    const cal = await owner.get(`/api/admin/locations/${SENATOR}/time?from=${day(1)}&to=${day(0)}`);
+    expect(cal.data.wages).toBe(true);
+    expect(cal.data.rates).toEqual(expect.arrayContaining([{ userId: annaId, rateGrosze: 3050, validFrom: '2026-01-01' }]));
+    const sum = await owner.get(`/api/admin/locations/${SENATOR}/users/${annaId}/summary`);
+    expect(sum.status).toBe(200);
+    expect(sum.data.rate.current).toBe(3050);
+    expect(sum.data.hours.thisMonth.minutes).toBeGreaterThanOrEqual(180);
+    expect(sum.data.hours.thisMonth.costGrosze).toBeGreaterThan(0);
+    expect(sum.data.lessons).toMatchObject({ total: expect.any(Number) });
+
+    const m = await owner.post('/api/admin/managers', { firstName: 'Ewa', lastName: 'Bezstawek', locationId: SENATOR, permissions: ['employees.view', 'time.manage'] });
+    const mgr = await activateClient(m.data.login, m.data.tempSecret, 'HasloMenedzeraBez1');
+    const c2 = await mgr.get(`/api/admin/locations/${SENATOR}/time?from=${day(1)}&to=${day(0)}`);
+    expect(c2.data).toMatchObject({ wages: false, rates: [] });
+    const s2 = await mgr.get(`/api/admin/locations/${SENATOR}/users/${annaId}/summary`);
+    expect(s2.data.rate).toBeNull();
+    expect(s2.data.hours.thisMonth.costGrosze).toBeUndefined();
+    expect((await mgr.req('PUT', `/api/admin/locations/${SENATOR}/users/${annaId}/rate`, { rate: 99 })).status).toBe(403);
   });
 });
 

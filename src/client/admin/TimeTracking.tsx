@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { addDays, businessDate, formatClock, formatDuration, warsawToMs } from '../../shared/time';
 import { comparePl } from '../../shared/text';
 import { api, ApiFailure } from '../api';
@@ -9,6 +9,13 @@ import { usePanel } from './Panel';
 
 const t = pl.admin.time;
 const MODE_KEY = 'sa.panel.timeMode';
+const GROUPS_KEY = 'sa.panel.timeGroups';
+/** Divisions of the table, in this order (D37). */
+export const DIVISIONS = ['waiter', 'host', 'bartender', 'kitchen', 'hookah_master', 'shift_manager'] as const;
+const money0 = new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN', maximumFractionDigits: 0 });
+const money2 = new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** "250 zł" for whole złoty, "32,50 zł" otherwise. */
+export const formatMoney = (grosze: number) => (grosze % 100 === 0 ? money0 : money2).format(grosze / 100);
 
 interface Person {
   id: string;
@@ -30,10 +37,17 @@ interface Entry {
   editedAt: number | null;
   editedByName: string | null;
 }
+interface Rate {
+  userId: string;
+  rateGrosze: number;
+  validFrom: string;
+}
 interface TimeData {
   days: string[];
   now: number;
   staleHours: number;
+  wages: boolean;
+  rates: Rate[];
   people: Person[];
   entries: Entry[];
   openBefore: Entry[];
@@ -68,6 +82,19 @@ export function TimeTracking() {
   const [data, setData] = useState<TimeData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cell, setCell] = useState<{ person: Person; date: string } | null>(null);
+  const [groups, setGroups] = useState<string[]>(() => {
+    try {
+      const v = JSON.parse(storageGet(GROUPS_KEY) ?? '[]') as string[];
+      return Array.isArray(v) ? v.filter((g) => (DIVISIONS as readonly string[]).includes(g)) : [];
+    } catch {
+      return [];
+    }
+  });
+  const toggleGroup = (g: string | null) => {
+    const next = g === null ? [] : groups.includes(g) ? groups.filter((x) => x !== g) : [...groups, g];
+    setGroups(next);
+    storageSet(GROUPS_KEY, JSON.stringify(next));
+  };
 
   const [from, to] = useMemo<[string, string]>(() => (mode === 'week' ? [mondayOf(anchor), addDays(mondayOf(anchor), 6)] : monthRange(anchor)), [mode, anchor]);
 
@@ -85,6 +112,17 @@ export function TimeTracking() {
   }, [load]);
 
   const people = useMemo(() => [...(data?.people ?? [])].sort((a, b) => comparePl(`${a.lastName} ${a.firstName}`, `${b.lastName} ${b.firstName}`)), [data]);
+  const divisionOf = (p: Person) => ((DIVISIONS as readonly string[]).includes(p.position ?? '') ? p.position! : 'waiter');
+  const present = DIVISIONS.filter((d) => people.some((p) => divisionOf(p) === d));
+  const visibleGroups = present.filter((d) => !groups.length || groups.includes(d));
+  const costOf = (e: Entry): number | null => {
+    if (!data?.wages || !e.clockOutAt) return null;
+    let r: number | null = null;
+    for (const x of data.rates) if (x.userId === e.userId && x.validFrom <= e.businessDate) r = x.rateGrosze;
+    return r === null ? null : Math.round((minutesOf(e) / 60) * r);
+  };
+  const sumCost = (es: Entry[]) => es.reduce((s, e) => s + (costOf(e) ?? 0), 0);
+  const noRate = (es: Entry[]) => Boolean(data?.wages) && es.some((e) => e.clockOutAt && costOf(e) === null);
   const staleMs = (data?.staleHours ?? 16) * 3600_000;
   const isLive = (e: Entry) => !e.clockOutAt && data !== null && data.now - e.clockInAt <= staleMs;
   const isMissing = (e: Entry) => !e.clockOutAt && data !== null && data.now - e.clockInAt > staleMs;
@@ -107,23 +145,27 @@ export function TimeTracking() {
 
   function exportCsv() {
     if (!data) return;
-    const rows: string[][] = [[...t.csvHeader]];
-    const sorted = [...data.entries].sort((a, b) => comparePl(nameOf(a.userId), nameOf(b.userId)) || a.clockInAt - b.clockInAt);
+    const rows: string[][] = [[...t.csvHeader, ...(data.wages ? [t.csvCost] : [])]];
+    const shownIds = new Set(people.filter((p) => visibleGroups.includes(divisionOf(p) as (typeof DIVISIONS)[number])).map((p) => p.id));
+    const sorted = [...data.entries.filter((e) => shownIds.has(e.userId))].sort((a, b) => comparePl(nameOf(a.userId), nameOf(b.userId)) || a.clockInAt - b.clockInAt);
     for (const e of sorted) {
       rows.push([
         nameOf(e.userId),
+        pl.admin.divisions[divisionOf(data.people.find((p) => p.id === e.userId) ?? ({ position: null } as Person))] ?? '',
         e.businessDate,
         formatDateTime(e.clockInAt),
         e.clockOutAt ? formatDateTime(e.clockOutAt) : t.missingShort,
         e.clockOutAt ? formatDuration(minutesOf(e)) : '',
         t.sources[e.inSource] ?? e.inSource,
         e.note ?? '',
+        ...(data.wages ? [costOf(e) === null ? '' : (costOf(e)! / 100).toFixed(2).replace('.', ',')] : []),
       ]);
     }
     rows.push([]);
     for (const p of people) {
       const mins = data.entries.filter((e) => e.userId === p.id).reduce((s, e) => s + minutesOf(e), 0);
-      if (mins) rows.push([`${p.firstName} ${p.lastName}`, `${from} – ${to}`, '', '', formatDuration(mins), t.total, '']);
+      if (mins && shownIds.has(p.id))
+        rows.push([`${p.firstName} ${p.lastName}`, '', `${from} – ${to}`, '', '', formatDuration(mins), t.total, '', ...(data.wages ? [(sumCost(data.entries.filter((e) => e.userId === p.id)) / 100).toFixed(2).replace('.', ',')] : [])]);
     }
     const csv = '﻿' + rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
     const a = document.createElement('a');
@@ -190,6 +232,18 @@ export function TimeTracking() {
 
       {!data && !error && <LogoLoader />}
       {data && people.length === 0 && <p className="muted">{t.empty}</p>}
+      {data && present.length > 1 && (
+        <div className="btn-row" role="group" aria-label={t.divisions}>
+          <button className="chip" aria-pressed={groups.length === 0} onClick={() => toggleGroup(null)}>
+            {t.allDivisions}
+          </button>
+          {present.map((d) => (
+            <button key={d} className="chip" aria-pressed={groups.includes(d)} onClick={() => toggleGroup(d)}>
+              {pl.admin.divisions[d] ?? d} · {people.filter((p) => divisionOf(p) === d).length}
+            </button>
+          ))}
+        </div>
+      )}
       {data && people.length > 0 && (
         <div className="time-grid-wrap">
           <table className="time-grid">
@@ -204,36 +258,81 @@ export function TimeTracking() {
                 <th>{t.total}</th>
               </tr>
             </thead>
-            <tbody>
-              {people.map((p) => {
-                const mine = data.entries.filter((e) => e.userId === p.id);
-                const total = mine.reduce((s, e) => s + minutesOf(e), 0);
-                return (
-                  <tr key={p.id}>
-                    <th className="sticky" scope="row">
-                      <span className="name">
-                        {p.firstName} {p.lastName}
-                      </span>
-                      <span className="pos">{p.position ? pl.admin.positions[p.position] ?? p.position : p.role === 'owner' ? pl.home.roleOwner : pl.home.roleManager}</span>
+            {visibleGroups.map((g) => {
+              const members = people.filter((p) => divisionOf(p) === g);
+              const groupEntries = data.entries.filter((e) => members.some((m) => m.id === e.userId));
+              const groupMinutes = groupEntries.reduce((s, e) => s + minutesOf(e), 0);
+              return (
+                <tbody key={g}>
+                  <tr className="group-row">
+                    <th className="sticky" scope="rowgroup">
+                      {pl.admin.divisions[g] ?? g}
                     </th>
                     {data.days.map((d) => {
-                      const es = mine.filter((e) => e.businessDate === d);
+                      const es = groupEntries.filter((e) => e.businessDate === d);
                       const mins = es.reduce((s, e) => s + minutesOf(e), 0);
-                      const miss = es.some(isMissing);
-                      const on = es.some(isLive);
                       return (
                         <td key={d} className={d === businessDate(data.now) ? 'today' : ''}>
-                          <button type="button" className={`cell${es.length ? ' has' : ''}${miss ? ' miss' : ''}${on ? ' live' : ''}`} onClick={() => setCell({ person: p, date: d })} aria-label={`${p.firstName} ${p.lastName}, ${d}`}>
-                            {miss ? '!' : on ? '●' : mins ? formatDuration(mins) : es.length ? '—' : ''}
-                          </button>
+                          {mins ? (
+                            <span className="group-sum">
+                              {formatDuration(mins)}
+                              {data.wages && sumCost(es) > 0 && <small>{formatMoney(sumCost(es))}</small>}
+                            </span>
+                          ) : null}
                         </td>
                       );
                     })}
-                    <td className="total">{total ? formatDuration(total) : '—'}</td>
+                    <td className="total">
+                      <span className="group-sum">
+                        {groupMinutes ? formatDuration(groupMinutes) : '—'}
+                        {data.wages && sumCost(groupEntries) > 0 && <small>{formatMoney(sumCost(groupEntries))}</small>}
+                      </span>
+                    </td>
                   </tr>
-                );
-              })}
-            </tbody>
+                  {members.map((p) => {
+                    const mine = data.entries.filter((e) => e.userId === p.id);
+                    const total = mine.reduce((s, e) => s + minutesOf(e), 0);
+                    return (
+                      <tr key={p.id}>
+                        <th className="sticky" scope="row">
+                          <span className="name">
+                            {p.firstName} {p.lastName}
+                          </span>
+                          <span className="pos">{p.position ? pl.admin.positions[p.position] ?? p.position : ''}</span>
+                        </th>
+                        {data.days.map((d) => {
+                          const es = mine.filter((e) => e.businessDate === d);
+                          return (
+                            <td key={d} className={d === businessDate(data.now) ? 'today' : ''}>
+                              <button type="button" className={`cell${es.length ? ' has' : ''}`} onClick={() => setCell({ person: p, date: d })} aria-label={`${p.firstName} ${p.lastName}, ${d}`}>
+                                {es.map((e) => {
+                                  const cost = costOf(e);
+                                  return (
+                                    <span key={e.id} className={`shift${isMissing(e) ? ' miss' : isLive(e) ? ' live' : ''}`}>
+                                      <span className="range">
+                                        {formatClock(e.clockInAt)}–{e.clockOutAt ? formatClock(e.clockOutAt) : isMissing(e) ? '?' : '…'}
+                                      </span>
+                                      {data.wages && cost !== null && <small>{formatMoney(cost)}</small>}
+                                      {isMissing(e) && <small>{t.missingShort}</small>}
+                                    </span>
+                                  );
+                                })}
+                              </button>
+                            </td>
+                          );
+                        })}
+                        <td className="total">
+                          <span className="group-sum">
+                            {total ? formatDuration(total) : '—'}
+                            {data.wages && total > 0 && <small>{noRate(mine) ? t.noRate : formatMoney(sumCost(mine))}</small>}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              );
+            })}
           </table>
         </div>
       )}
@@ -257,6 +356,35 @@ export function TimeTracking() {
   );
 }
 
+const VALID_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** "HH:MM" typed as digits (the colon comes by itself); calls onComplete when four valid digits are in. */
+const TimeField = forwardRef<HTMLInputElement, { id: string; value: string; onChange: (v: string) => void; onComplete?: () => void; required?: boolean; autoFocus?: boolean }>(
+  function TimeField({ id, value, onChange, onComplete, required, autoFocus }, ref) {
+    return (
+      <input
+        id={id}
+        ref={ref}
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder="GG:MM"
+        maxLength={5}
+        required={required}
+        autoFocus={autoFocus}
+        pattern="([01][0-9]|2[0-3]):[0-5][0-9]"
+        value={value}
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/\D/g, '').slice(0, 4);
+          const next = digits.length > 2 ? `${digits.slice(0, 2)}:${digits.slice(2)}` : digits;
+          onChange(next);
+          if (digits.length === 4 && VALID_TIME.test(next)) onComplete?.();
+        }}
+      />
+    );
+  },
+);
+
 function EntryEditor({ entry, date, onSave, onDelete }: { entry: Entry | null; date: string; onSave: (inAt: number, outAt: number | null, note: string) => Promise<string | null>; onDelete?: () => Promise<void> }) {
   const toHHMM = (ms: number) => formatClock(ms);
   const [inT, setIn] = useState(entry ? toHHMM(entry.clockInAt) : '');
@@ -266,6 +394,10 @@ function EntryEditor({ entry, date, onSave, onDelete }: { entry: Entry | null; d
   const [busy, setBusy] = useState(false);
   // the original entry may start on another business day (open shift from earlier): keep its own date
   const day = entry ? entry.businessDate : date;
+  const outRef = useRef<HTMLInputElement>(null);
+  const noteRef = useRef<HTMLInputElement>(null);
+  const uid = entry?.id ?? 'new';
+  const valid = VALID_TIME.test(inT) && (!outT || VALID_TIME.test(outT));
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -280,17 +412,17 @@ function EntryEditor({ entry, date, onSave, onDelete }: { entry: Entry | null; d
     <form onSubmit={submit} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <div className="field">
-          <label>{t.in}</label>
-          <input type="time" value={inT} onChange={(e) => setIn(e.target.value)} required />
+          <label htmlFor={`${uid}-in`}>{t.in}</label>
+          <TimeField id={`${uid}-in`} value={inT} onChange={setIn} onComplete={() => outRef.current?.focus()} required autoFocus={!entry} />
         </div>
         <div className="field">
-          <label>{t.out}</label>
-          <input type="time" value={outT} onChange={(e) => setOut(e.target.value)} />
+          <label htmlFor={`${uid}-out`}>{t.out}</label>
+          <TimeField id={`${uid}-out`} ref={outRef} value={outT} onChange={setOut} onComplete={() => noteRef.current?.focus()} />
         </div>
       </div>
       <div className="field">
         <label>{t.note}</label>
-        <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} />
+        <input ref={noteRef} value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} />
       </div>
       {entry && (
         <span className="muted" style={{ fontSize: 12 }}>
@@ -301,7 +433,7 @@ function EntryEditor({ entry, date, onSave, onDelete }: { entry: Entry | null; d
       )}
       {error && <div className="notice warn-notice">{error}</div>}
       <div className="btn-row">
-        <Btn kind="primary" type="submit" disabled={!inT || busy}>
+        <Btn kind="primary" type="submit" disabled={!valid || busy}>
           {entry ? t.save : t.addEntry}
         </Btn>
         {onDelete && (

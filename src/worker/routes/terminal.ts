@@ -106,12 +106,10 @@ terminalRoutes.post('/punch', async (c) => {
   const person = await db
     .prepare(
       `SELECT u.id, u.first_name AS firstName FROM users u
-       WHERE u.pin_lookup = ? AND u.status = 'active' AND u.role <> 'terminal'
-         AND (u.role = 'owner'
-              OR EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ? AND ul.is_active = 1)
-              OR EXISTS (SELECT 1 FROM manager_permissions mp WHERE mp.user_id = u.id AND mp.location_id = ?))`,
+       WHERE u.pin_lookup = ? AND u.status = 'active' AND u.role = 'employee'
+         AND EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ? AND ul.is_active = 1)`,
     )
-    .bind(lookup, t.locationId, t.locationId)
+    .bind(lookup, t.locationId)
     .first<{ id: string; firstName: string }>();
   if (!person) {
     await record(db, t.id, clientId, null, at, offline, 'unknown_pin', null);

@@ -11,6 +11,7 @@ import { ApiError, badRequest, newId, notFound, readJson, str } from '../lib/htt
 import { generateTempPassword, hashSecret } from '../auth/crypto';
 import { revokeUserSessions } from '../auth/session';
 import { loadAccess, requireOwner, requirePermission } from '../auth/access';
+import { DOCUMENT_KINDS, progressFor, visibleContent } from '../lib/learning';
 
 export const timeAdminRoutes = new Hono<AppEnv>();
 
@@ -51,9 +52,8 @@ timeAdminRoutes.get('/locations/:locId/time', async (c) => {
         `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName, u.role, u.status,
                 (SELECT ul.position FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?1 ORDER BY ul.is_active DESC LIMIT 1) AS position
          FROM users u
-         WHERE u.role <> 'terminal' AND u.status <> 'anonymized' AND (
-           (u.status = 'active' AND (EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?1 AND ul.is_active = 1)
-                                     OR EXISTS (SELECT 1 FROM manager_permissions mp WHERE mp.user_id = u.id AND mp.location_id = ?1)))
+         WHERE u.role = 'employee' AND u.status <> 'anonymized' AND (
+           (u.status = 'active' AND EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?1 AND ul.is_active = 1))
            OR EXISTS (SELECT 1 FROM time_entries e WHERE e.user_id = u.id AND e.location_id = ?1 AND e.business_date BETWEEN ?2 AND ?3))`,
       )
       .bind(locId, from, last),
@@ -64,9 +64,20 @@ timeAdminRoutes.get('/locations/:locId/time', async (c) => {
     .prepare(`${ENTRY_SELECT} WHERE e.location_id = ? AND e.clock_out_at IS NULL AND e.business_date < ? ORDER BY e.clock_in_at`)
     .bind(locId, from)
     .all<EntryRow>();
+  const wages = Boolean(access.locations.get(locId)?.has('wages.manage'));
+  const rates = wages
+    ? (
+        await db
+          .prepare(`SELECT user_id AS userId, rate_grosze AS rateGrosze, valid_from AS validFrom FROM pay_rates WHERE location_id = ? ORDER BY valid_from`)
+          .bind(locId)
+          .all<{ userId: string; rateGrosze: number; validFrom: string }>()
+      ).results
+    : [];
   return c.json({
     days,
     now: Date.now(),
+    wages,
+    rates,
     staleHours: OPEN_SHIFT_STALE_HOURS,
     people: people!.results,
     entries: entries!.results,
@@ -109,11 +120,10 @@ timeAdminRoutes.post('/locations/:locId/time/entries', async (c) => {
   if (!userId) throw badRequest('invalid_input');
   const person = await db
     .prepare(
-      `SELECT u.id FROM users u WHERE u.id = ? AND u.role <> 'terminal' AND u.status <> 'anonymized'
-         AND (u.role = 'owner' OR EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?)
-              OR EXISTS (SELECT 1 FROM manager_permissions mp WHERE mp.user_id = u.id AND mp.location_id = ?))`,
+      `SELECT u.id FROM users u WHERE u.id = ? AND u.role = 'employee' AND u.status <> 'anonymized'
+         AND EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?)`,
     )
-    .bind(userId, locId, locId)
+    .bind(userId, locId)
     .first();
   if (!person) throw notFound();
   const { inAt, outAt } = parseTimes(body);
@@ -290,4 +300,120 @@ timeAdminRoutes.post('/terminals/:id/disable', async (c) => {
     auditStatement(db, { actorId: c.var.user.id, locationId: t.locationId, action: 'terminal.disable', entityType: 'terminal', entityId: t.id }),
   ]);
   return c.json({ ok: true });
+});
+
+/* ───────── Hourly rates (D37) and the employee summary ───────── */
+
+/** Rate valid on a business date: the latest one with valid_from ≤ date. */
+export function rateOn(rates: { validFrom: string; rateGrosze: number }[], date: string): number | null {
+  let r: number | null = null;
+  for (const x of rates) if (x.validFrom <= date) r = x.rateGrosze;
+  return r;
+}
+
+async function employeeOf(db: D1Database, userId: string, locId: string) {
+  return db
+    .prepare(
+      `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName,
+              (SELECT ul.position FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ? ORDER BY ul.is_active DESC LIMIT 1) AS position
+       FROM users u WHERE u.id = ? AND u.status <> 'anonymized'
+         AND EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?)`,
+    )
+    .bind(locId, userId, locId)
+    .first<{ id: string; firstName: string; lastName: string; position: string | null }>();
+}
+
+timeAdminRoutes.put('/locations/:locId/users/:id/rate', async (c) => {
+  const locId = c.req.param('locId');
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  requirePermission(access, locId, 'wages.manage');
+  const person = await employeeOf(db, c.req.param('id'), locId);
+  if (!person) throw notFound();
+  const body = await readJson<{ rate?: unknown; validFrom?: unknown }>(c.req.raw);
+  const rate = typeof body.rate === 'number' ? body.rate : typeof body.rate === 'string' ? Number(body.rate.replace(',', '.')) : NaN;
+  if (!Number.isFinite(rate) || rate < 0 || rate > 10_000) throw badRequest('rate_invalid');
+  const validFrom = body.validFrom === undefined ? businessDate(Date.now()) : body.validFrom;
+  if (!isIsoDate(validFrom)) throw badRequest('invalid_input');
+  const grosze = Math.round(rate * 100);
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO pay_rates (id, user_id, location_id, rate_grosze, valid_from, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (user_id, location_id, valid_from) DO UPDATE SET rate_grosze = excluded.rate_grosze, created_by = excluded.created_by, created_at = excluded.created_at`,
+      )
+      .bind(newId('rate'), person.id, locId, grosze, validFrom, c.var.user.id, Date.now()),
+    auditStatement(db, { actorId: c.var.user.id, locationId: locId, action: 'user.rate', entityType: 'user', entityId: person.id, after: { rateGrosze: grosze, validFrom } }),
+  ]);
+  return c.json({ ok: true });
+});
+
+/** Card of a person in "Pracownicy": materials read, mandatory documents, hours this and last month (+ cost and rate with wages.manage). */
+timeAdminRoutes.get('/locations/:locId/users/:id/summary', async (c) => {
+  const locId = c.req.param('locId');
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  requirePermission(access, locId, 'employees.view');
+  const person = await employeeOf(db, c.req.param('id'), locId);
+  if (!person) throw notFound();
+  const { results: posRows } = await db
+    .prepare(`SELECT position FROM user_locations WHERE user_id = ? AND location_id = ?`)
+    .bind(person.id, locId)
+    .all<{ position: string }>();
+  const positions = posRows.map((r) => r.position);
+
+  const items = await visibleContent(db, locId, positions);
+  const lessons = items.filter((i) => i.kind === 'lesson');
+  const mandatory = items.filter((i) => Boolean(i.requiresAck) && !i.externalUrl && (DOCUMENT_KINDS as readonly string[]).includes(i.kind));
+  const progress = await progressFor(db, person.id, [...lessons, ...mandatory].map((i) => i.id));
+  const done = (id: string) => progress.get(id)?.status === 'done';
+
+  const today = businessDate(Date.now());
+  const thisMonth = today.slice(0, 7);
+  const d = new Date(Date.parse(thisMonth + '-15T12:00:00Z'));
+  d.setUTCMonth(d.getUTCMonth() - 1);
+  const prevMonth = d.toISOString().slice(0, 7);
+  const { results: entries } = await db
+    .prepare(
+      `SELECT business_date AS date, clock_in_at AS inAt, clock_out_at AS outAt FROM time_entries
+       WHERE user_id = ? AND location_id = ? AND business_date >= ? ORDER BY clock_in_at`,
+    )
+    .bind(person.id, locId, prevMonth + '-01')
+    .all<{ date: string; inAt: number; outAt: number | null }>();
+  const wages = Boolean(access.locations.get(locId)?.has('wages.manage'));
+  const rates = wages
+    ? (
+        await db
+          .prepare(`SELECT rate_grosze AS rateGrosze, valid_from AS validFrom FROM pay_rates WHERE user_id = ? AND location_id = ? ORDER BY valid_from`)
+          .bind(person.id, locId)
+          .all<{ rateGrosze: number; validFrom: string }>()
+      ).results
+    : [];
+  const month = (m: string) => {
+    const es = entries.filter((e) => e.date.startsWith(m));
+    let minutes = 0;
+    let cost = 0;
+    let missingRate = false;
+    for (const e of es) {
+      if (!e.outAt) continue;
+      const mins = (e.outAt - e.inAt) / 60000;
+      minutes += mins;
+      const r = rateOn(rates, e.date);
+      if (r === null) missingRate = true;
+      else cost += (mins / 60) * r;
+    }
+    return { month: m, minutes: Math.round(minutes), shifts: es.length, open: es.filter((e) => !e.outAt).length, ...(wages ? { costGrosze: Math.round(cost), missingRate } : {}) };
+  };
+
+  return c.json({
+    lessons: { done: lessons.filter((l) => done(l.id)).length, total: lessons.length },
+    mandatory: {
+      done: mandatory.filter((m) => done(m.id)).length,
+      total: mandatory.length,
+      missing: mandatory.filter((m) => !done(m.id)).map((m) => ({ id: m.id, title: m.title, status: progress.get(m.id)?.status ?? 'new' })),
+    },
+    hours: { thisMonth: month(thisMonth), prevMonth: month(prevMonth) },
+    wages,
+    rate: wages ? { current: rateOn(rates, today), history: rates } : null,
+  });
 });

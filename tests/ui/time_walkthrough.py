@@ -64,9 +64,21 @@ with sync_playwright() as pw:
     z.once("dialog", lambda d: d.accept()); z.get_by_role("button", name="Zamknij listę na dziś").click(); z.get_by_text("Lista zamknięta").wait_for(); z.screenshot(path=f"{OUT}/12-closed.png")
     # panel
     o.goto(BASE+"/panel/czas"); o.get_by_text("Teraz na zmianie").wait_for(); o.wait_for_timeout(900); o.screenshot(path=f"{OUT}/13-panel-time.png", full_page=True)
-    o.locator(".time-grid tbody tr").first.locator("td.today button").click(); o.get_by_role("dialog").wait_for(); o.wait_for_timeout(500); o.screenshot(path=f"{OUT}/14-panel-day.png")
-    o.get_by_role("dialog").locator('input[type="time"]').nth(1).fill("23:45"); o.get_by_role("dialog").get_by_role("button", name="Zapisz").first.click(); o.wait_for_timeout(900)
-    o.keyboard.press("Escape"); o.wait_for_timeout(500); o.screenshot(path=f"{OUT}/15-panel-after-edit.png", full_page=True)
+    o.locator(".time-grid td.today button.cell").first.click(); o.get_by_role("dialog").wait_for(); o.wait_for_timeout(500); o.screenshot(path=f"{OUT}/14-panel-day.png")
+    o.get_by_role("dialog").get_by_label("Wyjście").first.fill("0130"); o.get_by_role("dialog").get_by_role("button", name="Zapisz").first.click(); o.wait_for_timeout(900)
+    o.keyboard.press("Escape"); o.wait_for_timeout(300)
+    # manual shift: typing 4 digits moves on to "Wyjście"
+    o.locator(".time-grid td:not(.today) button.cell").first.click(); o.get_by_role("dialog").wait_for()
+    o.keyboard.type("1000"); focused=o.evaluate("document.activeElement.id")
+    if not focused.endswith("-out"): errors.append("focus did not move to exit: " + focused)
+    o.keyboard.type("1830"); o.get_by_role("dialog").get_by_role("button", name="Dodaj zmianę").click(); o.wait_for_timeout(900)
+    o.goto(BASE+"/panel/czas"); o.get_by_text("Teraz na zmianie").wait_for(); o.wait_for_timeout(900); o.screenshot(path=f"{OUT}/15-panel-after-edit.png", full_page=True)
+    # rate in the employee card (opens under the name)
+    zid=emps[0][0]["id"]
+    o.goto(BASE+f"/panel/pracownicy/{zid}"); o.get_by_text("Lekcje przeczytane").wait_for(); o.wait_for_timeout(600)
+    o.get_by_label("Nowa stawka (zł/h)").fill("32,50"); o.get_by_label("Obowiązuje od").fill("2026-01-01"); o.get_by_role("button", name="Zapisz stawkę").click()
+    o.get_by_text("32,50 zł / h").wait_for(); o.wait_for_timeout(500); o.screenshot(path=f"{OUT}/15b-employee-card.png", full_page=True)
+    o.goto(BASE+"/panel/czas"); o.get_by_text("Teraz na zmianie").wait_for(); o.wait_for_timeout(900); o.screenshot(path=f"{OUT}/15c-panel-costs.png", full_page=True)
     o.goto(BASE+"/panel/listy"); o.get_by_text("Lista kontrolna zamknięcia").first.wait_for(); o.wait_for_timeout(700); o.screenshot(path=f"{OUT}/16-panel-checklists.png", full_page=True)
     o.get_by_role("tab", name="Statystyka").click(); o.get_by_text("Kto ile zadań").wait_for(); o.wait_for_timeout(700); o.screenshot(path=f"{OUT}/17-panel-stats.png", full_page=True)
     # phone panel

@@ -569,3 +569,19 @@ export const checklistDays = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.contentItemId, t.businessDate] }), index('checklist_days_loc_idx').on(t.locationId, t.businessDate)],
 );
+
+/** Hourly rate of a person in a location, from a date (D37). Shift cost = hours × rate valid on its business day. */
+export const payRates = sqliteTable(
+  'pay_rates',
+  {
+    id: id(),
+    userId: text('user_id').notNull().references(() => users.id),
+    locationId: text('location_id').notNull().references(() => locations.id),
+    /** grosze per hour (PLN × 100) */
+    rateGrosze: integer('rate_grosze').notNull(),
+    validFrom: text('valid_from').notNull(),
+    createdBy: text('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('pay_rates_uq').on(t.userId, t.locationId, t.validFrom), index('pay_rates_loc_idx').on(t.locationId)],
+);

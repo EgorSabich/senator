@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1 — 2026-10-15 — Divisions, rates, employee card
+
+- D37: only employees are timed (managers/owner not; their terminal PIN removed). Czas pracy split by division with a multi-select filter; cells show "10:00–18:30" and the shift cost; division and person totals; CSV with division and cost.
+- Hourly rates with valid-from dates (migration 0006 `pay_rates`), permission `wages.manage`.
+- Manual shift: times typed as four digits, the cursor moves on to "Wyjście" and then "Uwaga".
+- Pracownicy: the card opens under the name with an animation; lessons read, mandatory documents, hours this/last month, rate history and new rate.
+
 ## 0.6.0 — 2026-10-15 — Time clock and daily checklists
 
 - D35 time clock: terminal accounts (panel → Czas pracy → Terminale), terminal mode on the phone (PIN pad, clock, who is on shift, connection state, Wake Lock, offline queue with idempotent re-send, self-restart after errors, exit only with the terminal password); unique PINs (`users.pin_lookup` = HMAC with AUTH_SECRET, linked at the next sign-in or PIN change); terminal PIN for managers/owner in Konto.

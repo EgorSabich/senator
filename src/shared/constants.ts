@@ -14,6 +14,7 @@ export const PERMISSIONS = [
   'tests.edit',
   'time.manage',
   'checklists.view',
+  'wages.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
