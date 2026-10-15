@@ -11,7 +11,7 @@
 
 | Stage | Scope | Status |
 | --- | --- | --- |
-| 1 | Foundation: project, Cloudflare config, schema, migrations, backups, docs | Done — in GitHub; not deployed (waiting for Cloudflare account) |
+| 1 | Foundation: project, Cloudflare config, schema, migrations, backups, docs | Done — production live on https://senator-academy.egor-sabich.workers.dev (2026-10-15), Workers Builds from `main`, migrations applied by `npm run deploy:cf` |
 | 2 | Users & access | Done — 19/19 integration tests |
 | 3 | Admin panel & content | Done — 34/34 integration, UI walkthrough |
 | 4 | Menu catalog & import | Done — 55/55 integration, real import 81 items |
