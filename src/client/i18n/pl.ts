@@ -267,6 +267,7 @@ export const pl = {
       statusInactive: 'Nieaktywny',
       statusLocked: 'Zablokowany',
       resetPin: 'Nowy PIN',
+      resetPassword: 'Nowe hasło',
       unlock: 'Odblokuj',
       logoutAll: 'Wyloguj ze wszystkich urządzeń',
       deactivate: 'Dezaktywuj',
@@ -274,6 +275,7 @@ export const pl = {
       confirmDeactivate: (name: string) =>
         `Dezaktywować: ${name}? Dostęp zostanie odebrany od razu, historia szkoleń zostaje. Po 2 latach dane zostaną zanonimizowane.`,
       confirmReset: (name: string) => `Wygenerować nowy PIN dla: ${name}? Obecny PIN przestanie działać.`,
+      confirmResetPassword: (name: string) => `Wygenerować nowe hasło tymczasowe dla: ${name}? Obecne hasło przestanie działać.`,
       done: 'Gotowe.',
       created: 'Pracownik dodany.',
       deleted: 'Pracownik usunięty na zawsze.',

@@ -25,7 +25,7 @@ type Filter = 'all' | 'active' | 'locked' | 'inactive';
 const t = pl.admin.employees;
 
 export function Employees({ selectedId }: { selectedId: string | null }) {
-  const { locationId, can } = usePanel();
+  const { locationId, can, isOwner, me } = usePanel();
   const [list, setList] = useState<Employee[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -150,19 +150,19 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                 <Stat label={t.login} value={selected.login} />
                 <Stat label={t.lastLogin} value={selected.lastLoginAt ? formatDateTime(selected.lastLoginAt) : t.never} />
               </dl>
-              {canManage && selected.role === 'employee' && (
+              {canManage && selected.id !== me.user.id && (selected.role === 'employee' || (isOwner && selected.role === 'manager')) && (
                 <div className="btn-row">
                   {selected.status === 'active' && (
                     <>
                       <Btn
                         onClick={() =>
-                          confirm(t.confirmReset(`${selected.firstName} ${selected.lastName}`)) &&
+                          confirm((selected.role === 'manager' ? t.confirmResetPassword : t.confirmReset)(`${selected.firstName} ${selected.lastName}`)) &&
                           void act(`/api/admin/users/${selected.id}/reset-secret`, t.done, (d) =>
                             setSecret({ name: `${selected.firstName} ${selected.lastName}`, login: d.login, tempSecret: d.tempSecret, secretKind: d.secretKind }),
                           )
                         }
                       >
-                        {t.resetPin}
+                        {selected.role === 'manager' ? t.resetPassword : t.resetPin}
                       </Btn>
                       {selected.locked === 1 && <Btn onClick={() => void act(`/api/admin/users/${selected.id}/unlock`, t.done)}>{t.unlock}</Btn>}
                       <Btn onClick={() => void act(`/api/admin/users/${selected.id}/logout-all`, t.done)}>{t.logoutAll}</Btn>
