@@ -72,6 +72,25 @@ export function Menu({ selectedId }: { selectedId: string | null }) {
       .filter((i) => !q || foldPolish(`${i.nameGuest} ${i.namePos ?? ''}`).includes(q));
   }, [data, section, category, query, showArchived]);
   const selected = data?.items.find((i) => i.id === selectedId) ?? null;
+  const archived = useMemo(() => (data?.items ?? []).filter((i) => i.section === section && !i.isActive), [data, section]);
+  const [restoring, setRestoring] = useState<number | null>(null);
+
+  async function restoreAll() {
+    if (!window.confirm(t.restoreAllConfirm(archived.length))) return;
+    setError(null);
+    setRestoring(0);
+    try {
+      for (const [n, i] of archived.entries()) {
+        await api(`/api/admin/menu/items/${i.id}/restore`, { method: 'POST' });
+        setRestoring(n + 1);
+      }
+    } catch (e) {
+      setError(errOf(e));
+    } finally {
+      setRestoring(null);
+      await load();
+    }
+  }
 
   function pickSection(s: MenuSection) {
     setSection(s);
@@ -123,6 +142,11 @@ export function Menu({ selectedId }: { selectedId: string | null }) {
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
             <span>{t.showArchived}</span>
           </label>
+          {showArchived && data?.canEdit && archived.length > 0 && (
+            <Btn onClick={() => void restoreAll()} disabled={restoring !== null}>
+              {restoring !== null ? t.restoringAll(restoring, archived.length) : t.restoreAll(archived.length)}
+            </Btn>
+          )}
           {data === null && <p className="muted">{pl.app.loading}</p>}
           {data !== null && shown.length === 0 && <p className="muted">{data.items.some((i) => i.section === section) ? t.empty : t.emptySection}</p>}
           {cats
