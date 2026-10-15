@@ -83,7 +83,7 @@ with sync_playwright() as p:
     page.get_by_role("heading", name=re.compile("Złote zasady")).first.wait_for()
     shot(page, "imp-05-service-book-chapter")
     page.goto(BASE + "/wiedza/regulaminy")
-    page.get_by_text("Sytuacje kryzysowe").first.click()
+    page.get_by_text("Sytuacje niestandardowe").first.click()
     page.locator(".rt-table").first.wait_for()
     shot(page, "imp-06-crisis-doc")
 
@@ -92,15 +92,15 @@ with sync_playwright() as p:
     pp = ph.new_page()
     watch(pp)
     pp.goto(BASE + "/wiedza/regulaminy")
-    pp.get_by_text("Pierwsza pomoc").first.click()
-    pp.get_by_text("Zatrzymanie krążenia").first.wait_for()
+    pp.get_by_text("Zasady dla gości").first.click()
+    pp.get_by_text("Metoda LAST").first.wait_for()
     shot(pp, "imp-07-phone-first-aid")
     pp.goto(BASE + "/szukaj")
-    pp.get_by_role("searchbox").fill("gaśnica")
+    pp.get_by_role("searchbox").fill("policzek")
     pp.wait_for_timeout(1200)
     shot(pp, "imp-08-phone-search")
     if pp.locator("mark").count() == 0:
-        errors.append("search: no highlighted hits for 'gaśnica'")
+        errors.append("search: no highlighted hits for 'policzek'")
     b.close()
 
 if errors:
