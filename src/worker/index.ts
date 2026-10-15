@@ -28,7 +28,9 @@ app.get('/api/health', async (c) => {
   } catch {
     db = false;
   }
-  return c.json({ ok: db, db, env: c.env.APP_ENV }, db ? 200 : 503);
+  // `secret` only says whether AUTH_SECRET is configured (never its value) — without it every login fails.
+  const secret = typeof c.env.AUTH_SECRET === 'string' && c.env.AUTH_SECRET.length >= 32;
+  return c.json({ ok: db, db, secret, env: c.env.APP_ENV }, db ? 200 : 503);
 });
 
 app.route('/api/auth', authRoutes);
