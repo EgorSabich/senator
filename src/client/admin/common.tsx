@@ -1,5 +1,6 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import { pl } from '../i18n/pl';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { api, ApiFailure } from '../api';
+import { errorText, pl } from '../i18n/pl';
 
 /* ───────── Icons (inline stroke SVG, decorative) ───────── */
 
@@ -122,6 +123,74 @@ export function Modal({ title, children, onClose }: { title: string; children: R
         {children}
       </div>
     </div>
+  );
+}
+
+/* ───────── Permanent deletion (D30) ───────── */
+
+/**
+ * "Usuń na zawsze": the user sees what goes with it and must type the name (login / title) exactly.
+ * `impactPath` returns { confirmText, ...counts }; `lines` turns the counts into sentences.
+ */
+export function DeleteForeverModal(props: {
+  title: string;
+  impactPath: string | null;
+  confirmText?: string;
+  lines?: (impact: Record<string, number>) => string[];
+  deletePath: string;
+  onDeleted: () => void | Promise<void>;
+  onClose: () => void;
+}) {
+  const d = pl.admin.deleteForever;
+  const [impact, setImpact] = useState<Record<string, any> | null>(props.impactPath ? null : {});
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!props.impactPath) return;
+    api<Record<string, any>>(props.impactPath)
+      .then(setImpact)
+      .catch((e) => setError(errorText(e instanceof ApiFailure ? e.code : 'generic')));
+  }, [props.impactPath]);
+  const expected: string = (impact?.confirmText as string | undefined) ?? props.confirmText ?? '';
+  const norm = (v: string) => v.normalize('NFC').replace(/\s+/g, ' ').trim().toLocaleLowerCase('pl');
+  const ok = expected !== '' && norm(typed) === norm(expected);
+
+  async function run() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(props.deletePath, { method: 'DELETE', body: { confirm: typed } });
+      await props.onDeleted();
+    } catch (e) {
+      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title={props.title} onClose={props.onClose}>
+      <p style={{ margin: 0 }}>{d.intro}</p>
+      {impact && props.lines && props.lines(impact as Record<string, number>).length > 0 && (
+        <ul style={{ margin: 0, paddingLeft: 20 }}>
+          {props.lines(impact as Record<string, number>).map((l) => (
+            <li key={l}>{l}</li>
+          ))}
+        </ul>
+      )}
+      <p className="muted" style={{ margin: 0, fontSize: 13 }}>{d.backups}</p>
+      <div className="field">
+        <label htmlFor="delete-confirm">{d.typeToConfirm(expected)}</label>
+        <input id="delete-confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" spellCheck={false} disabled={!impact} />
+      </div>
+      {error && <div className="notice warn-notice" role="alert">{error}</div>}
+      <div className="btn-row">
+        <Btn kind="danger" onClick={() => void run()} disabled={!ok || busy}>
+          {busy ? d.deleting : d.button}
+        </Btn>
+        <Btn onClick={props.onClose}>{d.cancel}</Btn>
+      </div>
+    </Modal>
   );
 }
 

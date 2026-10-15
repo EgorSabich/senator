@@ -15,6 +15,7 @@ import { ApiError, badRequest, newId, readJson, str } from '../lib/http';
 import { generateTempPassword, generateTempPin, hashSecret } from '../auth/crypto';
 import { revokeUserSessions } from '../auth/session';
 import { loadAccess, requireManageableUser, requireOwner, requirePermission } from '../auth/access';
+import { confirmMatches, purgeUserStatements } from '../lib/purge';
 
 export const adminRoutes = new Hono<AppEnv>();
 // Session is enforced by the /api/admin router (index.ts).
@@ -207,6 +208,38 @@ adminRoutes.post('/users/:id/reactivate', async (c) => {
     auditStatement(db, { actorId: c.var.user.id, locationId: target.sharedLocationId, action: 'user.reactivate', entityType: 'user', entityId: target.id, before: { status: 'inactive' }, after: { status: 'active' } }),
   ]);
   return c.json({ login: target.login, tempSecret, secretKind: target.secretKind });
+});
+
+/** What a permanent deletion removes — shown in the confirmation dialog. */
+adminRoutes.get('/users/:id/deletion', async (c) => {
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  const target = await requireManageableUser(db, access, c.req.param('id'), 'employees.manage');
+  const row = await db
+    .prepare(
+      `SELECT (SELECT COUNT(*) FROM test_attempts WHERE user_id = ?1) AS attempts,
+              (SELECT COUNT(*) FROM content_acknowledgements WHERE user_id = ?1) AS acknowledgements`,
+    )
+    .bind(target.id)
+    .first<{ attempts: number; acknowledgements: number }>();
+  return c.json({ confirmText: target.login, attempts: row?.attempts ?? 0, acknowledgements: row?.acknowledgements ?? 0 });
+});
+
+/** Permanent deletion (D30): only a deactivated person, never yourself or the owner; the login must be typed. */
+adminRoutes.delete('/users/:id', async (c) => {
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  const target = await requireManageableUser(db, access, c.req.param('id'), 'employees.manage');
+  if (target.id === c.var.user.id) throw new ApiError(409, 'cannot_delete_self');
+  if (target.role === 'owner') throw new ApiError(409, 'cannot_delete_owner');
+  if (target.status !== 'inactive') throw new ApiError(409, 'delete_needs_inactive');
+  const body = await readJson<{ confirm?: unknown }>(c.req.raw);
+  if (!confirmMatches(body.confirm, target.login)) throw badRequest('delete_confirm_mismatch');
+  await db.batch([
+    ...purgeUserStatements(db, target.id, target.login),
+    auditStatement(db, { actorId: c.var.user.id, locationId: target.sharedLocationId, action: 'user.delete', entityType: 'user', entityId: target.id }),
+  ]);
+  return c.json({ ok: true });
 });
 
 /* ───────── Managers & permissions (owner only) ───────── */

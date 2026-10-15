@@ -13,6 +13,7 @@ import { ApiError, badRequest, newId, notFound, readJson, str } from '../lib/htt
 import { indexStatements, unindexStatement } from '../lib/search';
 import { loadAccess, requireOwner, requirePermission, type Access } from '../auth/access';
 import { storeUpload } from './media';
+import { confirmMatches, purgeContentStatements } from '../lib/purge';
 import { CONTENT_BUNDLE_FORMAT, CONTENT_IMPORT_CHUNK } from '../../shared/contentBundle';
 
 export const contentAdminRoutes = new Hono<AppEnv>();
@@ -405,6 +406,39 @@ contentAdminRoutes.post('/content/:id/restore', async (c) => {
   }
   await db.batch(statements);
   return c.json({ ok: true, status });
+});
+
+/* ───────── Permanent deletion (D30) ───────── */
+
+/** What a permanent deletion removes — shown in the confirmation dialog. */
+contentAdminRoutes.get('/content/:id/deletion', async (c) => {
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  const item = await loadItem(db, access, c.req.param('id'));
+  const row = await db
+    .prepare(
+      `SELECT (SELECT COUNT(*) FROM content_acknowledgements WHERE content_item_id = ?1) AS acknowledgements,
+              (SELECT COUNT(DISTINCT m.program_id) FROM module_items mi JOIN modules m ON m.id = mi.module_id WHERE mi.content_item_id = ?1) AS programs,
+              (SELECT COUNT(*) FROM content_versions WHERE content_item_id = ?1) AS versions`,
+    )
+    .bind(item.id)
+    .first<{ acknowledgements: number; programs: number; versions: number }>();
+  return c.json({ confirmText: item.title, acknowledgements: row?.acknowledgements ?? 0, programs: row?.programs ?? 0, versions: row?.versions ?? 0 });
+});
+
+/** Only an archived material; its title must be typed. Removed from programs, acknowledgements deleted. */
+contentAdminRoutes.delete('/content/:id', async (c) => {
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  const item = await loadItem(db, access, c.req.param('id'));
+  if (item.status !== 'archived') throw new ApiError(409, 'delete_needs_archive');
+  const body = await readJson<{ confirm?: unknown }>(c.req.raw);
+  if (!confirmMatches(body.confirm, item.title)) throw badRequest('delete_confirm_mismatch');
+  await db.batch([
+    ...purgeContentStatements(db, item.id),
+    auditStatement(db, { actorId: c.var.user.id, locationId: item.locationId, action: 'content.delete', entityType: 'content', entityId: item.id, before: { title: item.title, kind: item.kind } }),
+  ]);
+  return c.json({ ok: true });
 });
 
 /* ───────── Attachment (original PDF / DOCX) ───────── */

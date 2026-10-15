@@ -34,6 +34,7 @@ import { ApiError, badRequest, newId, notFound, readJson, str } from '../lib/htt
 import { indexStatements, unindexStatement } from '../lib/search';
 import { loadAccess, requireLocation, requirePermission, type Access } from '../auth/access';
 import { storeBytes, storeUpload } from './media';
+import { confirmMatches, purgeMenuItemStatements } from '../lib/purge';
 
 /* ───────── Shared helpers ───────── */
 
@@ -566,6 +567,22 @@ for (const [path, active] of [['archive', false], ['restore', true]] as const) {
     return c.json({ ok: true });
   });
 }
+
+/** Permanent deletion (D30): only an archived item; its guest name must be typed. */
+menuAdminRoutes.delete('/menu/items/:id', async (c) => {
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  const row = await loadItem(db, access, c.req.param('id'));
+  requirePermission(access, row.locationId, 'menu.edit');
+  if (row.isActive) throw new ApiError(409, 'delete_needs_archive');
+  const body = await readJson<{ confirm?: unknown }>(c.req.raw);
+  if (!confirmMatches(body.confirm, row.nameGuest ?? '')) throw badRequest('delete_confirm_mismatch');
+  await db.batch([
+    ...purgeMenuItemStatements(db, row.id),
+    auditStatement(db, { actorId: c.var.user.id, locationId: row.locationId, action: 'menu.item_delete', entityType: 'menu_item', entityId: row.id, before: { nameGuest: row.nameGuest, importKey: row.importKey ?? null } }),
+  ]);
+  return c.json({ ok: true });
+});
 
 /* ───────── Import (bundle in chunks of IMPORT_CHUNK items) ───────── */
 

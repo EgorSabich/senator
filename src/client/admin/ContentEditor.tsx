@@ -7,9 +7,9 @@ import { diffLines } from '../editor/diff';
 import { editorExtensions } from '../editor/extensions';
 import { resizeImage, uploadFile } from '../editor/image';
 import { errorText, pl } from '../i18n/pl';
-import { onNav } from '../router';
+import { navigate, onNav } from '../router';
 import { ErrorBox } from '../ui';
-import { Btn, formatDateTime, formatTime, Icon, Modal } from './common';
+import { Btn, DeleteForeverModal, formatDateTime, formatTime, Icon, Modal } from './common';
 import { usePanel } from './Panel';
 
 const t = pl.admin.content;
@@ -48,6 +48,7 @@ export function ContentEditor({ id }: { id: string }) {
   const { locationId } = usePanel();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -83,7 +84,7 @@ export function ContentEditor({ id }: { id: string }) {
 
   useEffect(() => {
     void load().then((d) => {
-      if (d && editor) editor.commands.setContent((d.draft?.body ?? d.current?.body ?? { type: 'doc', content: [{ type: 'paragraph' }] }) as never, { emitUpdate: false });
+      if (d && editor && !editor.isDestroyed) editor.commands.setContent((d.draft?.body ?? d.current?.body ?? { type: 'doc', content: [{ type: 'paragraph' }] }) as never, { emitUpdate: false });
     });
   }, [load, editor]);
 
@@ -129,7 +130,7 @@ export function ContentEditor({ id }: { id: string }) {
       setNotice(success);
       if (reload) {
         const d = await load();
-        if (d && editor) editor.commands.setContent((d.draft?.body ?? d.current?.body) as never, { emitUpdate: false });
+        if (d && editor && !editor.isDestroyed) editor.commands.setContent((d.draft?.body ?? d.current?.body) as never, { emitUpdate: false });
       }
     } catch (e) {
       setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
@@ -257,9 +258,24 @@ export function ContentEditor({ id }: { id: string }) {
                   {t.archive}
                 </Btn>
               ) : (
-                <Btn onClick={() => void post(`/api/admin/content/${id}/restore`, pl.admin.employees.done)}>{t.restore}</Btn>
+                <>
+                  <Btn onClick={() => void post(`/api/admin/content/${id}/restore`, pl.admin.employees.done)}>{t.restore}</Btn>
+                  <Btn kind="danger" onClick={() => setDeleting(true)}>
+                    {pl.admin.deleteForever.button}
+                  </Btn>
+                </>
               )}
             </div>
+            {deleting && (
+              <DeleteForeverModal
+                title={pl.admin.deleteForever.itemTitle(item.title)}
+                impactPath={`/api/admin/content/${id}/deletion`}
+                lines={pl.admin.deleteForever.contentLines}
+                deletePath={`/api/admin/content/${id}`}
+                onClose={() => setDeleting(false)}
+                onDeleted={() => navigate('/panel/materialy')}
+              />
+            )}
           </div>
 
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -300,7 +316,7 @@ export function ContentEditor({ id }: { id: string }) {
               setPublishing(false);
               setNotice(`${t.published_ok} ${t.version(res.versionNo)}.`);
               const d = await load();
-              if (d && editor) editor.commands.setContent((d.draft?.body ?? d.current?.body) as never, { emitUpdate: false });
+              if (d && editor && !editor.isDestroyed) editor.commands.setContent((d.draft?.body ?? d.current?.body) as never, { emitUpdate: false });
             } catch (e) {
               return errorText(e instanceof ApiFailure ? e.code : 'generic');
             }

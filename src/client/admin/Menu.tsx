@@ -7,7 +7,7 @@ import { errorText, pl } from '../i18n/pl';
 import { navigate } from '../router';
 import { ErrorBox } from '../ui';
 import { resizeImage, uploadFile } from '../editor/image';
-import { Btn, formatDateTime, Icon, Modal, storageGet, storageSet } from './common';
+import { Btn, DeleteForeverModal, formatDateTime, Icon, Modal, storageGet, storageSet } from './common';
 import { usePanel } from './Panel';
 
 const t = pl.admin.menu;
@@ -279,6 +279,7 @@ function ItemDetail({ id, categories, onChanged }: { id: string; categories: Cat
   const [saving, setSaving] = useState(false);
   const [viewVersion, setViewVersion] = useState<string | null>(null);
   const [busyPhoto, setBusyPhoto] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -363,11 +364,33 @@ function ItemDetail({ id, categories, onChanged }: { id: string; categories: Cat
           </span>
         </div>
         {d.canEdit && (
-          <Btn kind={d.item.isActive ? 'danger' : 'secondary'} onClick={() => void act(d.item.isActive ? 'archive' : 'restore')}>
-            {d.item.isActive ? t.archive : t.restore}
-          </Btn>
+          <div className="btn-row">
+            <Btn kind={d.item.isActive ? 'danger' : 'secondary'} onClick={() => void act(d.item.isActive ? 'archive' : 'restore')}>
+              {d.item.isActive ? t.archive : t.restore}
+            </Btn>
+            {!d.item.isActive && (
+              <Btn kind="danger" onClick={() => setDeleting(true)}>
+                {pl.admin.deleteForever.button}
+              </Btn>
+            )}
+          </div>
         )}
       </div>
+      {deleting && (
+        <DeleteForeverModal
+          title={pl.admin.deleteForever.itemTitle(d.item.texts.nameGuest ?? '')}
+          impactPath={null}
+          confirmText={d.item.texts.nameGuest ?? ''}
+          lines={pl.admin.deleteForever.menuLines}
+          deletePath={`/api/admin/menu/items/${id}`}
+          onClose={() => setDeleting(false)}
+          onDeleted={async () => {
+            setDeleting(false);
+            await onChanged();
+            navigate('/panel/menu');
+          }}
+        />
+      )}
       {!d.item.isActive && <div className="notice warn-notice">{t.archivedNote}</div>}
       <ErrorBox message={error} />
       {notice && (

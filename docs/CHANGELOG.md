@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1 — 2026-10-15 — Full kitchen card, permanent deletion
+
+- D33: menu builder reads the Menu_Kuchnia workbook (`--kitchen-cards`): 93 dishes with composition, description, taste, photos; re-import fills empty fields of existing items without overwriting.
+- Menu panel: "Przywróć wszystkie archiwalne" restores every archived item of a section.
+- D34: "Usuń na zawsze" for deactivated employees, archived menu items and archived materials — impact shown first, name typed to confirm, one transaction, audited without personal data.
+- Content editor: no error when the page is left before the text loads.
+- Tests: 78 integration (new: 06-delete), UI walkthrough of the three deletions.
+
 ## 0.5.0 — 2026-10-15 — Stage 5: employee app, documents, import of materials
 
 - Employee app (phone first): Start (program progress, next step, documents to confirm, "Do powtórki", "Zaktualizowano"), Nauka (program → modules → lessons with unlock rules), Menu (cards, kitchen allergens per D26, reminder), Wiedza (Service Book, Regulaminy i SOP), Szukaj (FTS5 with Polish folding, highlighted snippets), Konto (PIN change, logout).

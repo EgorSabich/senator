@@ -5,7 +5,7 @@ import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { navigate } from '../router';
 import { ErrorBox } from '../ui';
-import { Btn, formatDateTime, Icon, Modal, SecretCardModal, type SecretInfo } from './common';
+import { Btn, DeleteForeverModal, formatDateTime, Icon, Modal, SecretCardModal, type SecretInfo } from './common';
 import { usePanel } from './Panel';
 
 interface Employee {
@@ -33,6 +33,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
   const [adding, setAdding] = useState(false);
   const [secret, setSecret] = useState<SecretInfo | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const canManage = can('employees.manage');
 
   const load = useCallback(async () => {
@@ -187,6 +188,11 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                       {t.reactivate}
                     </Btn>
                   )}
+                  {selected.status === 'inactive' && (
+                    <Btn kind="danger" onClick={() => setDeleting(true)}>
+                      {pl.admin.deleteForever.button}
+                    </Btn>
+                  )}
                 </div>
               )}
             </div>
@@ -207,6 +213,21 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
         />
       )}
       {secret && <SecretCardModal info={secret} onClose={() => setSecret(null)} />}
+      {deleting && selected && (
+        <DeleteForeverModal
+          title={pl.admin.deleteForever.userTitle(`${selected.firstName} ${selected.lastName}`)}
+          impactPath={`/api/admin/users/${selected.id}/deletion`}
+          lines={pl.admin.deleteForever.userLines}
+          deletePath={`/api/admin/users/${selected.id}`}
+          onClose={() => setDeleting(false)}
+          onDeleted={async () => {
+            setDeleting(false);
+            setNotice(t.deleted);
+            await load();
+            navigate('/panel/pracownicy');
+          }}
+        />
+      )}
     </>
   );
 }

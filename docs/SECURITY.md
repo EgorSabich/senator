@@ -8,6 +8,7 @@
 | API responses `Cache-Control: no-store` | Stage 1 |
 | Secrets only in Cloudflare variables, `.dev.vars` git-ignored | Stage 1 |
 | Nightly backup to separate R2 bucket, 30-day retention, tested restore | Stage 1 — verified locally |
+| Permanent deletion (D34): only deactivated / archived records, typed confirmation, one D1 batch, audit entry without personal data; backups keep the data until they expire (30 days) | 0.5.1 — tested (06-delete, UI walkthrough) |
 | Anonymization 2 years after deactivation; login attempts deleted after 90 days | Stage 1 — verified locally |
 | Login + 6-digit PIN (staff) / 10+ char password (managers, owner) | Stage 2 — done |
 | Hash: HMAC-SHA256 with server secret `AUTH_SECRET`, then PBKDF2-SHA256 100 000 iterations, per-user salt | Stage 2 — done |
