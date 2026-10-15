@@ -1,3 +1,4 @@
+import { LogoLoader } from '../ui';
 import { useCallback, useEffect, useState } from 'react';
 import { POSITIONS } from '../../shared/constants';
 import { comparePl } from '../../shared/text';
@@ -78,7 +79,7 @@ export function Programs({ selectedId }: { selectedId: string | null }) {
       <ErrorBox message={error} />
       <div className={`split${selectedId ? ' has-selection' : ''}`}>
         <section className="list" aria-label={t.title}>
-          {list === null && <p className="muted">{pl.app.loading}</p>}
+          {list === null && <LogoLoader />}
           {list?.length === 0 && <p className="muted">{t.empty}</p>}
           {list?.map((p) => (
             <button key={p.id} className="row-btn" aria-current={p.id === selectedId} onClick={() => navigate(`/panel/programy/${p.id}`)}>
@@ -199,7 +200,7 @@ function ProgramDetail({ id, onChanged }: { id: string; onChanged: () => Promise
     }
   }
 
-  if (!d) return error ? <ErrorBox message={error} /> : <p className="muted">{pl.app.loading}</p>;
+  if (!d) return error ? <ErrorBox message={error} /> : <LogoLoader />;
 
   const moveModule = (i: number, dir: -1 | 1) => {
     const ids = d.modules.map((m) => m.id);

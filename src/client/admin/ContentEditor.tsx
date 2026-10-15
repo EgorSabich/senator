@@ -1,3 +1,4 @@
+import { LogoLoader } from '../ui';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { POSITIONS } from '../../shared/constants';
@@ -141,7 +142,7 @@ export function ContentEditor({ id }: { id: string }) {
     return (
       <>
         <ErrorBox message={error} />
-        {!error && <p className="muted">{pl.app.loading}</p>}
+        {!error && <LogoLoader />}
       </>
     );
   }
@@ -541,7 +542,7 @@ function CompareDialog({ itemId, versions, versionId, onClose }: { itemId: strin
         <span className="badge ok">{t.added}</span>
         <span className="badge bad">{t.removed}</span>
       </div>
-      {!lines && <p className="muted">{pl.app.loading}</p>}
+      {!lines && <LogoLoader />}
       {lines && (
         <div className="diff">
           {lines.map((l, i) => (

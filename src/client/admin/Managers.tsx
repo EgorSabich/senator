@@ -1,3 +1,4 @@
+import { LogoLoader } from '../ui';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { PERMISSIONS } from '../../shared/constants';
 import { api, ApiFailure } from '../api';
@@ -51,7 +52,7 @@ export function Managers() {
           {notice}
         </div>
       )}
-      {list === null && <p className="muted">{pl.app.loading}</p>}
+      {list === null && <LogoLoader />}
       {list?.length === 0 && <p className="muted">{t.empty}</p>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
         {list?.map((m) => (

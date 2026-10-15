@@ -1,5 +1,6 @@
 import { pl } from '../i18n/pl';
 import { onNav } from '../router';
+import { ModuleList, type ProgramView } from './Program';
 import { contentHref, Icon, Loading, Problem, useAcademy, useApi } from './shared';
 
 interface Home {
@@ -16,6 +17,7 @@ const t = pl.academy;
 export function Start() {
   const { locationId, me } = useAcademy();
   const { data, error } = useApi<Home>(`/api/locations/${locationId}/home`);
+  const prog = useApi<ProgramView>(`/api/locations/${locationId}/program`);
 
   const tasks = data
     ? [
@@ -56,6 +58,13 @@ export function Start() {
             </section>
           ) : (
             <div className="a-note">{t.noProgram}</div>
+          )}
+
+          {data.program && prog.data?.program && prog.data.modules.length > 0 && (
+            <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <h2 className="a-label">{t.modulesTitle}</h2>
+              <ModuleList modules={prog.data.modules} />
+            </section>
           )}
 
           <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

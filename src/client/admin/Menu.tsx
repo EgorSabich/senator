@@ -1,3 +1,4 @@
+import { LogoLoader } from '../ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EU_ALLERGENS } from '../../shared/constants';
 import { BUNDLE_FORMAT, checkBundle, IMPORT_CHUNK, MENU_TEXT_FIELD_NAMES, type MenuBundle, type MenuSection, type MenuTextField } from '../../shared/menu';
@@ -147,7 +148,7 @@ export function Menu({ selectedId }: { selectedId: string | null }) {
               {restoring !== null ? t.restoringAll(restoring, archived.length) : t.restoreAll(archived.length)}
             </Btn>
           )}
-          {data === null && <p className="muted">{pl.app.loading}</p>}
+          {data === null && <LogoLoader />}
           {data !== null && shown.length === 0 && <p className="muted">{data.items.some((i) => i.section === section) ? t.empty : t.emptySection}</p>}
           {cats
             .filter((c) => shown.some((i) => i.categoryId === c.id))
@@ -296,7 +297,7 @@ function ItemDetail({ id, categories, onChanged }: { id: string; categories: Cat
     void load();
   }, [load]);
 
-  if (!d) return error ? <ErrorBox message={error} /> : <p className="muted">{pl.app.loading}</p>;
+  if (!d) return error ? <ErrorBox message={error} /> : <LogoLoader />;
 
   const dirty =
     MENU_TEXT_FIELD_NAMES.some((f) => (texts[f] ?? '').trim() !== (d.item.texts[f] ?? '')) ||

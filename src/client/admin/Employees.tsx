@@ -1,3 +1,4 @@
+import { LogoLoader } from '../ui';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { POSITIONS } from '../../shared/constants';
 import { comparePl, foldPolish } from '../../shared/text';
@@ -114,7 +115,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
               </button>
             ))}
           </div>
-          {list === null && <p className="muted">{pl.app.loading}</p>}
+          {list === null && <LogoLoader />}
           {list !== null && shown.length === 0 && <p className="muted">{list.length ? t.empty : t.emptyAll}</p>}
           {shown.map((e) => (
             <button key={e.id} className="row-btn" aria-current={e.id === selectedId} onClick={() => navigate(`/panel/pracownicy/${e.id}`)}>

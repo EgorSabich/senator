@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api, ApiFailure, type Me } from '../api';
 import { errorText, pl } from '../i18n/pl';
+import { LogoLoader } from '../ui';
 
 export interface AcademyCtx {
   me: Me;
@@ -87,6 +88,7 @@ const ICONS: Record<string, ReactNode> = {
   ),
   back: <path d="M15 6l-6 6 6 6" />,
   next: <path d="M9 6l6 6-6 6" />,
+  down: <path d="M6 9l6 6 6-6" />,
   lock: (
     <>
       <rect x="5" y="11" width="14" height="10" rx="2" />
@@ -133,11 +135,7 @@ export function StatusPill({ status, updated }: { status: 'new' | 'done' | 'revi
 }
 
 export function Loading() {
-  return (
-    <p className="a-sub" aria-busy="true">
-      {pl.app.loading}
-    </p>
-  );
+  return <LogoLoader />;
 }
 
 export function Problem({ message }: { message: string | null }) {

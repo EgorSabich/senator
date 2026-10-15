@@ -94,6 +94,7 @@ export const pl = {
     always: 'zawsze dostępne',
     shortcuts: 'Service Book i menu',
     module: 'Moduł',
+    modulesTitle: 'Moduły',
     locked: 'Zablokowany',
     lockedAfter: (title: string) => `Odblokuje się po module „${title}”.`,
     lockedAfterAll: 'Odblokuje się po ukończeniu wszystkich modułów obowiązkowych.',

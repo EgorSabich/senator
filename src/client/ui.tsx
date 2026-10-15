@@ -12,6 +12,29 @@ export function Brand({ size = 'm' }: { size?: 'm' | 'l' }) {
   );
 }
 
+/** Loading state with the Senator mark: a ring drawn around the "S", the word lighting up letter by letter. */
+export function LogoLoader({ full = false, label }: { full?: boolean; label?: string }) {
+  return (
+    <div className={`logo-loader${full ? ' full' : ''}`} role="status" aria-live="polite">
+      <svg className="logo-mark" viewBox="0 0 64 64" aria-hidden="true">
+        <circle className="track" cx="32" cy="32" r="29" />
+        <circle className="arc" cx="32" cy="32" r="29" />
+        <text x="32" y="43" textAnchor="middle">
+          S
+        </text>
+      </svg>
+      <span className="logo-word" aria-hidden="true">
+        {'SENATOR'.split('').map((ch, i) => (
+          <span key={i} style={{ animationDelay: `${i * 90}ms` }}>
+            {ch}
+          </span>
+        ))}
+      </span>
+      <span className="sr-only">{label ?? 'Ładowanie…'}</span>
+    </div>
+  );
+}
+
 export function Field(props: {
   id: string;
   label: string;

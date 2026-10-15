@@ -1,3 +1,4 @@
+import { LogoLoader } from '../ui';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { CONTENT_KINDS } from '../../shared/constants';
 import { comparePl } from '../../shared/text';
@@ -140,7 +141,7 @@ export function ContentList() {
         </button>
       </div>
       <ErrorBox message={error} />
-      {items === null && <p className="muted">{pl.app.loading}</p>}
+      {items === null && <LogoLoader />}
       {items !== null && visible.length === 0 && <p className="muted">{t.empty}</p>}
       {sections.map((s) => (
         <section key={s} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

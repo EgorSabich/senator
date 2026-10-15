@@ -1,0 +1,275 @@
+/* Motion: calm and short (150–450 ms), never blocking. Everything is switched off for "reduce motion". */
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* ───────── Logo loader ───────── */
+.logo-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 40px 0;
+  color: var(--text);
+  animation: fade-in 400ms var(--ease-out) both;
+}
+.logo-loader.full {
+  min-height: 60vh;
+  gap: 20px;
+}
+.logo-mark {
+  width: 56px;
+  height: 56px;
+  overflow: visible;
+}
+.logo-loader.full .logo-mark {
+  width: 84px;
+  height: 84px;
+}
+.logo-mark circle {
+  fill: none;
+  stroke-width: 1.6;
+}
+.logo-mark .track {
+  stroke: var(--border);
+}
+.logo-mark .arc {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-dasharray: 46 136;
+  transform-origin: 32px 32px;
+  animation: logo-spin 1.4s var(--ease-in-out) infinite;
+}
+.logo-mark text {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 600;
+  fill: var(--accent);
+  animation: logo-breathe 1.8s ease-in-out infinite;
+  transform-origin: 32px 32px;
+}
+.logo-word {
+  display: flex;
+  gap: 0.18em;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+.logo-loader.full .logo-word {
+  font-size: 22px;
+}
+.logo-word span {
+  opacity: 0.25;
+  animation: logo-letter 1.8s ease-in-out infinite;
+}
+@keyframes logo-spin {
+  0% {
+    transform: rotate(-90deg);
+    stroke-dasharray: 10 172;
+  }
+  50% {
+    stroke-dasharray: 90 92;
+  }
+  100% {
+    transform: rotate(270deg);
+    stroke-dasharray: 10 172;
+  }
+}
+@keyframes logo-breathe {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes logo-letter {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  35% {
+    opacity: 1;
+  }
+  60% {
+    opacity: 0.6;
+  }
+}
+
+/* ───────── Page and content entrance ───────── */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+.a-main > *,
+.a-reader > *,
+.page-enter > * {
+  animation: rise-in 420ms var(--ease-out) both;
+}
+.a-main > :nth-child(2),
+.page-enter > :nth-child(2) {
+  animation-delay: 50ms;
+}
+.a-main > :nth-child(3),
+.page-enter > :nth-child(3) {
+  animation-delay: 100ms;
+}
+.a-main > :nth-child(4),
+.page-enter > :nth-child(4) {
+  animation-delay: 150ms;
+}
+.a-main > :nth-child(n + 5),
+.page-enter > :nth-child(n + 5) {
+  animation-delay: 200ms;
+}
+.a-hero img,
+.a-dish img,
+.menu-row img {
+  animation: fade-in 500ms var(--ease-out) both;
+}
+
+/* rows of a list arrive one after another */
+.a-list > .a-row,
+.a-menu-grid > *,
+.a-modules > .a-module {
+  animation: rise-in 380ms var(--ease-out) both;
+}
+.a-list > :nth-child(2),
+.a-menu-grid > :nth-child(2),
+.a-modules > :nth-child(2) {
+  animation-delay: 40ms;
+}
+.a-list > :nth-child(3),
+.a-menu-grid > :nth-child(3),
+.a-modules > :nth-child(3) {
+  animation-delay: 80ms;
+}
+.a-list > :nth-child(4),
+.a-menu-grid > :nth-child(4),
+.a-modules > :nth-child(4) {
+  animation-delay: 120ms;
+}
+.a-list > :nth-child(5),
+.a-menu-grid > :nth-child(5),
+.a-modules > :nth-child(5) {
+  animation-delay: 160ms;
+}
+.a-list > :nth-child(n + 6),
+.a-menu-grid > :nth-child(n + 6),
+.a-modules > :nth-child(n + 6) {
+  animation-delay: 200ms;
+}
+
+/* ───────── Touch feedback ───────── */
+.a-btn,
+.a-row,
+.a-dish,
+.a-chip,
+.a-icon-btn,
+.a-module-head,
+.a-tabbar a,
+.row-btn,
+.chip,
+button {
+  transition:
+    transform 160ms var(--ease-out),
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease,
+    opacity 200ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.a-btn:active:not(:disabled),
+.a-chip:active,
+.a-icon-btn:active,
+.chip:active,
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.a-row:active,
+.a-dish:active,
+.a-module-head:active,
+.row-btn:active {
+  transform: scale(0.985);
+}
+.a-tabbar a svg {
+  transition: transform 260ms var(--ease-out);
+}
+.a-tabbar a[aria-current='page'] svg {
+  transform: translateY(-1px) scale(1.08);
+}
+.a-tabbar a:active svg {
+  transform: scale(0.9);
+}
+
+/* ───────── Progress ───────── */
+.a-progress > div {
+  transition: width 700ms var(--ease-out);
+  animation: progress-grow 900ms var(--ease-out) both;
+  transform-origin: left center;
+}
+@keyframes progress-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* ───────── Modals (panel) ───────── */
+.modal-backdrop {
+  animation: fade-in 200ms ease both;
+}
+.modal {
+  animation: pop-in 260ms var(--ease-out) both;
+}
+
+/* panel content */
+.split > *,
+.page-title {
+  animation: rise-in 360ms var(--ease-out) both;
+}
+.notice {
+  animation: rise-in 300ms var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
+  .logo-mark .arc {
+    animation: none;
+    stroke-dasharray: none;
+  }
+}
+
+.logo-loader .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

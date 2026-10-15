@@ -7,6 +7,8 @@
 - D34: "Usuń na zawsze" for deactivated employees, archived menu items and archived materials — impact shown first, name typed to confirm, one transaction, audited without personal data.
 - Content editor: no error when the page is left before the text loads.
 - Tests: 78 integration (new: 06-delete), UI walkthrough of the three deletions.
+- Staff app: modules as an accordion — all modules on Start and in Nauka at once, the current one open; thinner translucent top bar, lower bottom bar (iPhone home indicator), iOS status bar blends in.
+- Loading: Senator mark (drawn ring around the "S", letters lighting up) in the app, panel and before the app starts; calm entrance and touch animations; all motion off with "reduce motion".
 
 ## 0.5.0 — 2026-10-15 — Stage 5: employee app, documents, import of materials
 

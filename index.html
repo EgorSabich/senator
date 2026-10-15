@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="robots" content="noindex, nofollow, noarchive" />
     <meta name="theme-color" content="#1C1513" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Senator" />
     <title>Senator Academy</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
@@ -16,7 +20,22 @@
     />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- shown until the app starts (replaced by React) -->
+      <div class="boot" role="status" aria-label="Ładowanie…">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="29" class="t" /><circle cx="32" cy="32" r="29" class="a" /><text x="32" y="43" text-anchor="middle">S</text></svg>
+      </div>
+    </div>
+    <style>
+      html, body { margin: 0; background: #1c1513; }
+      .boot { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; }
+      .boot svg { width: 84px; height: 84px; overflow: visible; }
+      .boot circle { fill: none; stroke-width: 1.6; }
+      .boot .t { stroke: #3a2d27; }
+      .boot .a { stroke: #e07b32; stroke-linecap: round; stroke-dasharray: 46 136; transform-origin: 32px 32px; animation: boot-spin 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+      .boot text { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 34px; font-weight: 600; fill: #e07b32; }
+      @keyframes boot-spin { from { transform: rotate(-90deg); } to { transform: rotate(270deg); } }
+    </style>
     <script type="module" src="/src/client/main.tsx"></script>
   </body>
 </html>

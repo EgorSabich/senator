@@ -4,7 +4,7 @@ import { errorText, pl } from './i18n/pl';
 import { Redirect, usePath } from './router';
 import { ChangeSecret } from './screens/ChangeSecret';
 import { Login } from './screens/Login';
-import { Brand, ErrorBox, SecondaryButton, screen } from './ui';
+import { Brand, ErrorBox, LogoLoader, SecondaryButton, screen } from './ui';
 import { clearPersonalCache } from './pwa';
 
 // The panel (editor, admin screens) is loaded only for managers and the owner.
@@ -16,8 +16,7 @@ type State = { kind: 'loading' } | { kind: 'anonymous' } | { kind: 'error'; mess
 function Loading() {
   return (
     <main style={{ ...screen, justifyContent: 'center', alignItems: 'center' }} aria-busy="true">
-      <Brand size="l" />
-      <p style={{ color: 'var(--text-muted)' }}>{pl.app.loading}</p>
+      <LogoLoader full label={pl.app.loading} />
     </main>
   );
 }
