@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "npm run build && vite preview",
     "deploy": "npm run build && wrangler deploy",
+    "deploy:cf": "wrangler d1 migrations apply DB --remote && wrangler deploy",
     "deploy:staging": "CLOUDFLARE_ENV=staging npm run build && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

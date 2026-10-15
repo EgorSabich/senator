@@ -1,5 +1,17 @@
 # Deployment
 
+## First launch (production only, dashboard + GitHub, no tokens or secrets in chat)
+
+1. Cloudflare account → Workers & Pages → **Workers Paid** ($5/month; PBKDF2 hashing needs the paid CPU limit).
+2. Storage & Databases → D1 → Create `senator-academy-prod` (location: Western Europe). Copy the **Database ID** (not a secret) into `wrangler.jsonc` → push.
+3. R2 → enable → create buckets `senator-academy-photos` and `senator-academy-backups`.
+4. Workers & Pages → Create → **Import a repository** → GitHub `EgorSabich/senator`. Project name `senator-academy`, build command `npm run build`, deploy command `npm run deploy:cf` (applies D1 migrations, then deploys). Branch `main`.
+5. The build token created by Workers Builds has no D1 permission: Manage account → Account API Tokens → the Workers Builds token for `senator-academy` → Edit → add **Account · D1 · Edit** → Save. Retry the build.
+6. Open `tools/start.html` locally in a browser (works offline, nothing is sent anywhere): "Wylosuj" → copy AUTH_SECRET → Worker → Settings → Variables and Secrets → Add → Secret `AUTH_SECRET`. Keep it in a password manager.
+7. Same page, step 2 → owner SQL → D1 → `senator-academy-prod` → Console → Execute. Note the login and temporary password; change it at first login.
+8. Open `https://senator-academy.<subdomain>.workers.dev`, log in, set the password, import menu and materials (Panel → Menu / Materiały → Import).
+9. Later: own `.pl` domain → Worker → Settings → Domains & Routes → Custom domain; staging environment (below).
+
 ## One-time setup (owner's accounts)
 
 1. Cloudflare account → Workers & Pages → enable **Workers Paid** ($5/month).

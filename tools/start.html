@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Senator Academy — start</title>
+<!--
+  Narzędzie startowe dla właściciela (bez instalacji, działa offline, otwórz plik w przeglądarce).
+  1) losuje AUTH_SECRET — wklejasz go w Cloudflare jako sekret Workera,
+  2) tworzy konto właściciela: polecenie SQL do konsoli D1 + hasło tymczasowe.
+  Nic nie jest nigdzie wysyłane: wszystko liczy się w tej karcie przeglądarki (WebCrypto).
+  Algorytm jest taki sam jak w scripts/create-owner.mjs i src/worker/auth/crypto.ts.
+-->
+<style>
+  :root { --bg:#fff; --fg:#111; --muted:#666; --line:#ccc; --box:#f4f4f4; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#151515; --fg:#eee; --muted:#aaa; --line:#444; --box:#222; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:24px; margin:0 0 4px; } h2 { font-size:18px; margin:32px 0 8px; }
+  p.muted { color:var(--muted); margin-top:0; }
+  label { display:block; font-weight:600; margin:12px 0 4px; }
+  input { width:100%; box-sizing:border-box; padding:10px; font:inherit; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); }
+  button { margin-top:12px; padding:10px 16px; font:inherit; font-weight:600; border:1px solid var(--fg); border-radius:6px; background:var(--fg); color:var(--bg); cursor:pointer; }
+  button.secondary { background:transparent; color:var(--fg); }
+  textarea { width:100%; box-sizing:border-box; min-height:90px; padding:10px; font:13px/1.4 ui-monospace, monospace; border:1px solid var(--line); border-radius:6px; background:var(--box); color:var(--fg); word-break:break-all; }
+  .warn { border-left:3px solid var(--fg); padding:8px 12px; background:var(--box); margin:12px 0; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  .row > div { flex:1 1 200px; }
+  code { background:var(--box); padding:1px 4px; border-radius:4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Senator Academy — start</h1>
+  <p class="muted">Wszystko liczy się w tej karcie przeglądarki. Nic nie jest wysyłane do internetu.</p>
+
+  <h2>Krok 1. Sekret AUTH_SECRET</h2>
+  <p>Kliknij „Wylosuj”, skopiuj wartość i wklej ją w Cloudflare: Worker <code>senator-academy</code> → Settings → Variables and Secrets → Add → typ <b>Secret</b>, nazwa <code>AUTH_SECRET</code>.</p>
+  <div class="warn">Zapisz sekret w bezpiecznym miejscu (np. menedżer haseł). Nie wysyłaj go nikomu, także w czacie. Zmiana sekretu później unieważnia wszystkie PIN-y i hasła.</div>
+  <label for="secret">AUTH_SECRET</label>
+  <textarea id="secret" spellcheck="false" placeholder="Kliknij „Wylosuj” albo wklej istniejący sekret"></textarea>
+  <div class="row">
+    <button id="gen" type="button">Wylosuj</button>
+    <button id="copySecret" type="button" class="secondary">Kopiuj</button>
+  </div>
+
+  <h2>Krok 2. Konto właściciela</h2>
+  <div class="row">
+    <div><label for="first">Imię</label><input id="first" autocomplete="off"></div>
+    <div><label for="last">Nazwisko</label><input id="last" autocomplete="off"></div>
+  </div>
+  <label for="login">Login (opcjonalnie)</label>
+  <input id="login" autocomplete="off" placeholder="np. egor.wlasciciel">
+  <button id="make" type="button">Utwórz polecenie</button>
+  <p id="err" role="alert"></p>
+
+  <div id="out" hidden>
+    <label for="sql">Polecenie SQL — wklej w Cloudflare: Storage &amp; Databases → D1 → senator-academy-prod → Console → Execute</label>
+    <textarea id="sql" readonly spellcheck="false"></textarea>
+    <button id="copySql" type="button" class="secondary">Kopiuj SQL</button>
+    <label>Dane do pierwszego logowania</label>
+    <div class="warn">Login: <b id="outLogin"></b><br>Hasło tymczasowe: <b id="outTemp"></b><br>Przy pierwszym logowaniu aplikacja poprosi o nowe hasło (min. 10 znaków).</div>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const enc = new TextEncoder();
+const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const fold = (s) => s.replace(/[łŁ]/g, 'l').normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase();
+const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+
+function randomSecret() {
+  return b64url(crypto.getRandomValues(new Uint8Array(48)));
+}
+
+async function makeOwner(secret, firstName, lastName, loginArg, tempArg) {
+  const norm = (v) => fold(v.trim()).replace(/\s+/g, '.').replace(/[^a-z0-9._-]/g, '');
+  const login = loginArg && loginArg.trim() ? norm(loginArg) : norm(`${firstName}.${lastName}`).replace(/\.{2,}/g, '.').replace(/^\.|\.$/g, '');
+  const temp = tempArg || Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => alphabet[b % alphabet.length]).join('');
+  const hmacKey = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const peppered = await crypto.subtle.sign('HMAC', hmacKey, enc.encode(temp));
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey('raw', peppered, 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 100000 }, key, 256);
+  const id = 'usr_' + crypto.randomUUID().replaceAll('-', '');
+  const q = (s) => "'" + String(s).replaceAll("'", "''") + "'";
+  const sql =
+    'INSERT INTO users (id, first_name, last_name, login, role, status, secret_hash, secret_salt, secret_kind, must_change_secret) ' +
+    `VALUES (${q(id)}, ${q(firstName)}, ${q(lastName)}, ${q(login)}, 'owner', 'active', ${q(b64url(bits))}, ${q(b64url(salt))}, 'password', 1);`;
+  return { sql, login, temp };
+}
+window.makeOwner = makeOwner;
+
+async function copy(id) {
+  const el = $(id); el.select();
+  try { await navigator.clipboard.writeText(el.value); } catch { document.execCommand('copy'); }
+}
+$('gen').onclick = () => { $('secret').value = randomSecret(); };
+$('copySecret').onclick = () => copy('secret');
+$('copySql').onclick = () => copy('sql');
+$('make').onclick = async () => {
+  $('err').textContent = '';
+  const secret = $('secret').value.trim(), first = $('first').value.trim(), last = $('last').value.trim();
+  if (secret.length < 32) { $('err').textContent = 'Najpierw wylosuj albo wklej AUTH_SECRET (krok 1).'; return; }
+  if (!first || !last) { $('err').textContent = 'Wpisz imię i nazwisko.'; return; }
+  const r = await makeOwner(secret, first, last, $('login').value);
+  $('sql').value = r.sql; $('outLogin').textContent = r.login; $('outTemp').textContent = r.temp;
+  $('out').hidden = false;
+};
+</script>
+</body>
+</html>
