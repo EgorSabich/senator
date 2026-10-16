@@ -152,7 +152,8 @@ describe('daily checklists', () => {
   beforeAll(async () => {
     const created = await owner.post(`/api/admin/locations/${SENATOR}/content`, { kind: 'checklist', title: 'Lista testowa zamknięcia' });
     checklistId = created.data.id;
-    await owner.put(`/api/admin/content/${checklistId}`, { body: doc, positions: ['waiter'] });
+    expect((await owner.get(`/api/admin/content/${checklistId}`)).data.item.checklistMode).toBe('individual'); // D42 default
+    await owner.put(`/api/admin/content/${checklistId}`, { body: doc, positions: ['waiter'], checklistMode: 'shared' });
     expect((await owner.post(`/api/admin/content/${checklistId}/publish`, {})).status).toBe(200);
   });
 

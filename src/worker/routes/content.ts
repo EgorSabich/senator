@@ -20,6 +20,7 @@ export const contentAdminRoutes = new Hono<AppEnv>();
 // Session is enforced by the /api/admin router (index.ts).
 
 interface ItemRow {
+  checklistMode: string;
   id: string;
   locationId: string | null;
   kind: string;
@@ -42,7 +43,7 @@ interface ItemRow {
 const ITEM_COLUMNS = `id, location_id AS locationId, kind, title, slug, section, status, current_version_id AS currentVersionId,
   requires_ack AS requiresAck, external_url AS externalUrl, attachment_key AS attachmentKey, attachment_name AS attachmentName,
   draft_title AS draftTitle, draft_body_json AS draftBodyJson, draft_updated_at AS draftUpdatedAt, sort_order AS sortOrder,
-  updated_at AS updatedAt`;
+  updated_at AS updatedAt, checklist_mode AS checklistMode`;
 
 function requireEdit(access: Access, locationId: string | null): void {
   if (locationId === null) requireOwner(access);
@@ -194,6 +195,7 @@ contentAdminRoutes.get('/content/:id', async (c) => {
       attachment: item.attachmentKey ? { src: `/media/${item.attachmentKey}`, name: item.attachmentName } : null,
       positions: positions.map((p) => p.position),
       sortOrder: item.sortOrder,
+      checklistMode: item.kind === 'checklist' ? item.checklistMode : null,
       currentAcknowledgements: ackCount?.n ?? 0,
     },
     draft: item.draftBodyJson
@@ -235,6 +237,7 @@ contentAdminRoutes.put('/content/:id', async (c) => {
     positions?: unknown;
     externalUrl?: unknown;
     sortOrder?: unknown;
+    checklistMode?: unknown;
   }>(c.req.raw);
   const now = Date.now();
   const statements: D1PreparedStatement[] = [];
@@ -278,6 +281,11 @@ contentAdminRoutes.put('/content/:id', async (c) => {
   if (body.sortOrder !== undefined) {
     if (!Number.isInteger(body.sortOrder)) throw badRequest('sort_order_invalid');
     statements.push(db.prepare(`UPDATE content_items SET sort_order = ? WHERE id = ?`).bind(body.sortOrder, item.id));
+  }
+  if (body.checklistMode !== undefined) {
+    if (item.kind !== 'checklist' || (body.checklistMode !== 'individual' && body.checklistMode !== 'shared')) throw badRequest('checklist_mode_invalid');
+    statements.push(db.prepare(`UPDATE content_items SET checklist_mode = ?, updated_at = ? WHERE id = ?`).bind(body.checklistMode, now, item.id));
+    settingsChange.checklistMode = body.checklistMode;
   }
   if (body.positions !== undefined) {
     const positions = parsePositions(body.positions);
@@ -518,15 +526,17 @@ contentAdminRoutes.post('/locations/:locId/content/import', async (c) => {
     const sortOrder = Number.isInteger(raw.sortOrder) ? Number(raw.sortOrder) : 0;
     const isDocument = kind !== 'lesson'; // Service Book is mandatory to read too (D38)
     const requiresAck = raw.requiresAck === undefined ? isDocument : raw.requiresAck === true;
+    if (raw.checklistMode !== undefined && raw.checklistMode !== 'individual' && raw.checklistMode !== 'shared') throw badRequest('checklist_mode_invalid');
+    const checklistMode = raw.checklistMode === 'shared' ? 'shared' : 'individual';
     const id = newId('ci');
     await db.batch([
       db
         .prepare(
           `INSERT INTO content_items (id, location_id, kind, title, slug, section, status, requires_ack, draft_title, draft_body_json,
-             draft_updated_at, draft_updated_by, import_key, sort_order, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             draft_updated_at, draft_updated_by, import_key, sort_order, checklist_mode, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .bind(id, locId, kind, title, await uniqueSlug(db, locId, title), section, requiresAck ? 1 : 0, title, json, now, c.var.user.id, importKey, sortOrder, now, now),
+        .bind(id, locId, kind, title, await uniqueSlug(db, locId, title), section, requiresAck ? 1 : 0, title, json, now, c.var.user.id, importKey, sortOrder, checklistMode, now, now),
       ...positions.map((p) => db.prepare(`INSERT INTO content_item_positions (content_item_id, position) VALUES (?, ?)`).bind(id, p)),
     ]);
     created.push(title);

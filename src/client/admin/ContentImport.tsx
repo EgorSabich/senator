@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { checkContentBundle, CONTENT_BUNDLE_FORMAT, CONTENT_IMPORT_CHUNK, type ContentBundle } from '../../shared/contentBundle';
+import { checkContentBundle, checklistsToBundle, CONTENT_BUNDLE_FORMAT, CONTENT_IMPORT_CHUNK, type ContentBundle } from '../../shared/contentBundle';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { ErrorBox } from '../ui';
@@ -8,20 +8,44 @@ import { usePanel } from './Panel';
 
 const t = pl.admin.content;
 
+const CHECKLIST_SAMPLE = `{
+  "format": "senator-checklists",
+  "checklists": [
+    {
+      "title": "Zamknięcie zmiany — kelnerzy",
+      "positions": ["waiter"],
+      "mode": "individual",
+      "sections": [
+        { "title": "Sala", "items": ["Wytrzyj stoły", "Ustaw krzesła"] },
+        { "title": "Stacja", "items": ["Uzupełnij serwetki"] }
+      ]
+    }
+  ]
+}`;
+
 export function ContentImport({ onClose, onDone }: { onClose: () => void; onDone: () => Promise<void> }) {
   const { locationId } = usePanel();
   const [bundle, setBundle] = useState<ContentBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<[number, number] | null>(null);
   const [result, setResult] = useState<{ created: number; skipped: number } | null>(null);
+  const [problems, setProblems] = useState<string[]>([]);
 
   async function read(file: File | undefined) {
     setError(null);
     setBundle(null);
     setResult(null);
+    setProblems([]);
     if (!file) return;
     try {
-      const b = checkContentBundle(JSON.parse(await file.text()));
+      const json = JSON.parse(await file.text()) as unknown;
+      const lists = checklistsToBundle(json);
+      if (lists) {
+        setProblems(lists.errors);
+        if (!lists.errors.length) setBundle(lists.bundle);
+        return;
+      }
+      const b = checkContentBundle(json);
       if (!b) throw new Error('bad');
       setBundle(b);
     } catch {
@@ -59,6 +83,13 @@ export function ContentImport({ onClose, onDone }: { onClose: () => void; onDone
   return (
     <Modal title={t.importTitle} onClose={progress ? () => undefined : onClose}>
       <p style={{ margin: 0, lineHeight: 1.5, fontSize: 14 }}>{t.importIntro}</p>
+      <details>
+        <summary style={{ cursor: 'pointer', fontSize: 14 }}>{t.importChecklistHelp}</summary>
+        <pre className="code-sample">{CHECKLIST_SAMPLE}</pre>
+        <p className="muted" style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>
+          {t.importChecklistHint}
+        </p>
+      </details>
       <label className="file-btn">
         <input type="file" accept="application/json,.json" disabled={Boolean(progress)} onChange={(e) => void read(e.target.files?.[0])} />
         <span>{t.importChoose}</span>
@@ -91,6 +122,16 @@ export function ContentImport({ onClose, onDone }: { onClose: () => void; onDone
       {result && (
         <div className="notice" role="status">
           {t.importResult(result.created, result.skipped)}
+        </div>
+      )}
+      {problems.length > 0 && (
+        <div className="error-box" role="alert">
+          <strong>{t.importChecklistErrors}</strong>
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 13, lineHeight: 1.5 }}>
+            {problems.map((x, i) => (
+              <li key={i}>{x}</li>
+            ))}
+          </ul>
         </div>
       )}
       <ErrorBox message={error} />

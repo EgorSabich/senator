@@ -176,6 +176,8 @@ export const contentItems = sqliteTable(
     draftUpdatedBy: text('draft_updated_by').references(() => users.id),
     importKey: text('import_key'), // set by the material import; re-import skips existing items
     sortOrder: integer('sort_order').notNull().default(0),
+    /** Checklists only (D42): "individual" = everyone on shift does every item; "shared" = one item, one person (D36). */
+    checklistMode: text('checklist_mode').notNull().default('individual'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -562,9 +564,11 @@ export const checklistMarks = sqliteTable(
     section: text('section'),
     userId: text('user_id').notNull().references(() => users.id),
     markedAt: integer('marked_at').notNull(),
+    /** '' for shared lists (one mark per item), the user id for individual ones (one mark per item and person). */
+    ownerKey: text('owner_key').notNull().default(''),
   },
   (t) => [
-    uniqueIndex('checklist_marks_uq').on(t.contentItemId, t.businessDate, t.itemKey),
+    uniqueIndex('checklist_marks_owner_uq').on(t.contentItemId, t.businessDate, t.itemKey, t.ownerKey),
     index('checklist_marks_loc_date_idx').on(t.locationId, t.businessDate),
     index('checklist_marks_user_idx').on(t.userId, t.businessDate),
   ],

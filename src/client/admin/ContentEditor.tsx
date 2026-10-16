@@ -29,6 +29,7 @@ interface Detail {
     externalUrl: string | null;
     attachment: { src: string; name: string } | null;
     positions: string[];
+    checklistMode: 'individual' | 'shared' | null;
     currentAcknowledgements: number;
   };
   draft: { title: string; body: RtNode; updatedAt: number } | null;
@@ -217,30 +218,43 @@ export function ContentEditor({ id }: { id: string }) {
               {t.settings}
             </h2>
             <SettingText label={t.section} value={item.section ?? ''} onSave={(v) => void saveSettings({ section: v || null })} />
+            {item.kind === 'checklist' && item.checklistMode && (
+              <div className="field">
+                <label htmlFor="cl-mode">{t.checklistMode}</label>
+                <select id="cl-mode" value={item.checklistMode} onChange={(e) => void saveSettings({ checklistMode: e.target.value })}>
+                  <option value="individual">{t.checklistModes.individual}</option>
+                  <option value="shared">{t.checklistModes.shared}</option>
+                </select>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {item.checklistMode === 'individual' ? t.checklistModeHint.individual : t.checklistModeHint.shared}
+                </span>
+              </div>
+            )}
+            <fieldset style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <legend style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-soft)', marginBottom: 6 }}>{t.positions}</legend>
+              {POSITIONS.map((p) => (
+                <label key={p} className="check">
+                  <input
+                    type="checkbox"
+                    checked={item.positions.includes(p)}
+                    onChange={(e) =>
+                      void saveSettings({ positions: e.target.checked ? [...item.positions, p] : item.positions.filter((x) => x !== p) })
+                    }
+                  />
+                  <span>{pl.admin.positions[p]}</span>
+                </label>
+              ))}
+              <span className="muted" style={{ fontSize: 12 }}>
+                {t.positionsHint}
+              </span>
+            </fieldset>
             {isDocument && (
               <>
                 <label className="check">
                   <input type="checkbox" checked={item.requiresAck} onChange={(e) => void saveSettings({ requiresAck: e.target.checked })} />
                   <span>{t.requiresAck}</span>
                 </label>
-                <fieldset style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <legend style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-soft)', marginBottom: 6 }}>{t.positions}</legend>
-                  {POSITIONS.map((p) => (
-                    <label key={p} className="check">
-                      <input
-                        type="checkbox"
-                        checked={item.positions.includes(p)}
-                        onChange={(e) =>
-                          void saveSettings({ positions: e.target.checked ? [...item.positions, p] : item.positions.filter((x) => x !== p) })
-                        }
-                      />
-                      <span>{pl.admin.positions[p]}</span>
-                    </label>
-                  ))}
-                  <span className="muted" style={{ fontSize: 12 }}>
-                    {t.positionsHint}
-                  </span>
-                </fieldset>
+
                 <SettingText label={t.externalUrl} value={item.externalUrl ?? ''} onSave={(v) => void saveSettings({ externalUrl: v || null })} />
                 <Attachment id={item.id} attachment={item.attachment} onChange={() => void load()} onError={setError} />
               </>

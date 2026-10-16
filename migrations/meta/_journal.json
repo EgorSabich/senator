@@ -64,6 +64,13 @@
       "when": 1792140300784,
       "tag": "0008_punch_photo",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1792141610711,
+      "tag": "0009_checklist_mode",
+      "breakpoints": true
     }
   ]
 }

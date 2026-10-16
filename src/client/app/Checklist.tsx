@@ -10,13 +10,14 @@ const t = pl.checklists;
 export interface TodayView {
   date: string;
   onShift: { since: number } | null;
-  checklists: { id: string; title: string; done: number; total: number; closed: boolean; mine: number }[];
+  checklists: { id: string; title: string; mode?: 'individual' | 'shared'; done: number; total: number; closed: boolean; mine: number }[];
 }
 
 interface DayView {
   id: string;
   title: string;
   date: string;
+  mode: 'individual' | 'shared';
   me: string;
   onShift: { since: number } | null;
   items: { key: string; section: string | null; text: string; mark: { userId: string; name: string; at: number } | null }[];
@@ -44,8 +45,8 @@ export function TodayCard() {
               <span className="grow">
                 <span className="t">{c.title}</span>
                 <span className="s">
-                  {t.progress(c.done, c.total)}
-                  {t.mine(c.mine)}
+                  {c.mode === 'individual' ? t.progressMine(c.done, c.total) : t.progress(c.done, c.total)}
+                  {c.mode === 'individual' ? '' : t.mine(c.mine)}
                 </span>
               </span>
               {c.closed ? <span className="a-pill ok">{t.closed}</span> : <span className="a-ring" style={{ ['--p' as string]: Math.round((c.done / c.total) * 100) }} aria-hidden="true" />}
@@ -141,8 +142,13 @@ export function ChecklistDay({ id }: { id: string }) {
                 <Icon name="info" size={18} />
                 <span>{t.offShift}</span>
               </div>
+            ) : data.mode === 'individual' && data.done === data.total && data.total > 0 ? (
+              <div className="a-note">
+                <Icon name="check" size={18} />
+                <span>{t.allDone}</span>
+              </div>
             ) : (
-              <p className="a-sub">{t.intro}</p>
+              <p className="a-sub">{data.mode === 'individual' ? t.introIndividual : t.intro}</p>
             )}
             <Problem message={problem} />
             {sections.map((s, si) => (
@@ -174,7 +180,7 @@ export function ChecklistDay({ id }: { id: string }) {
                 </div>
               </section>
             ))}
-            {data.onShift && !data.closed && (
+            {data.onShift && !data.closed && data.mode !== 'individual' && (
               <button type="button" className="a-btn" onClick={() => void close()}>
                 {t.close}
               </button>

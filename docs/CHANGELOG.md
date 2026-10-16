@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.6 — 2026-10-16 — Individual and shared checklists, checklist import
+
+- D42: checklist mode in the material settings — "Indywidualna" (default for new lists: everyone on shift does every item, own progress, nothing to close) or "Wspólna" (D36: one item, one person, close the day). Lists that existed before stay "Wspólna" (migration 0009). Panel → Listy shows each person's progress for individual lists (people who worked that day and fit the list's positions, also those who did nothing) and how many people did each item; statistics count individual lists against the people on shift.
+- Import: "Import materiałów" also takes `{"format":"senator-checklists", ...}` with a sample in the dialog; lists arrive as drafts with positions, mode and without the read-and-confirm step; mistakes are listed in Polish before anything is saved.
+- Material editor: positions can be set for every kind (lessons and Service Book too), not only documents.
+- Tests: 101 integration (new 12-checklist-modes), unit tests for the checklist converter, UI walkthrough `tests/ui/checklist_modes_walkthrough.py`.
+
 ## 0.6.5 — 2026-10-16 — Moje godziny, materials per position
 
 - D41 "Moje godziny" for employees: card on Start, page `/godziny` (month switch, total, previous month, shifts with from–to and hours, "trwa", "brak wyjścia", "poprawione przez menedżera") and the person's own PIN punches; link in Konto. Hours only — no rates or money.

@@ -13,6 +13,8 @@ interface DayItem {
   section: string | null;
   text: string;
   mark: { userId: string; name: string; at: number } | null;
+  count?: number;
+  by?: { name: string; at: number }[];
 }
 interface DayChecklist {
   id: string;
@@ -20,15 +22,24 @@ interface DayChecklist {
   items: DayItem[];
   done: number;
   total: number;
+  mode: 'individual' | 'shared';
+  itemCount: number;
+  people?: { userId: string; name: string; done: number; total: number; lastAt: number | null }[];
   closed: { closedAt: number; closedByName: string | null; doneCount: number; totalCount: number } | null;
 }
 interface Stats {
   days: string[];
-  checklists: { id: string; title: string; total: number }[];
-  perDay: { id: string; date: string; done: number }[];
+  checklists: { id: string; title: string; total: number; mode: 'individual' | 'shared' }[];
+  perDay: { id: string; date: string; done: number; people?: number }[];
   closed: { id: string; date: string; done: number; total: number; closedBy: string | null }[];
   people: { userId: string; name: string; items: number; days: number }[];
 }
+
+const short = (name: string) => {
+  const [first, ...rest] = name.split(' ');
+  const last = rest.join(' ').trim();
+  return last ? `${first} ${last.charAt(0)}.` : name;
+};
 
 const dayFmt = new Intl.DateTimeFormat('pl-PL', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
 
@@ -101,13 +112,42 @@ export function ChecklistStats() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
                   <strong style={{ fontSize: 17 }}>{cl.title}</strong>
                   <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontWeight: 700 }}>{t.done(cl.done, cl.total)}</span>
-                    {cl.closed ? <span className="badge ok">{t.closedBy(cl.closed.closedByName ?? '—', formatClock(cl.closed.closedAt))}</span> : <span className="badge neutral">{t.open}</span>}
+                    <span style={{ fontWeight: 700 }}>{cl.mode === 'individual' ? t.average(pct) : t.done(cl.done, cl.total)}</span>
+                    {cl.mode === 'individual' ? (
+                      <span className="badge neutral">{t.individual}</span>
+                    ) : cl.closed ? (
+                      <span className="badge ok">{t.closedBy(cl.closed.closedByName ?? '—', formatClock(cl.closed.closedAt))}</span>
+                    ) : (
+                      <span className="badge neutral">{t.open}</span>
+                    )}
                   </span>
                 </div>
                 <div className="cl-bar" aria-hidden="true">
                   <div style={{ width: `${pct}%` }} />
                 </div>
+                {cl.mode === 'individual' && (
+                  <div className="cl-people">
+                    <div className="label">{t.peopleToday}</div>
+                    {(cl.people ?? []).length === 0 ? (
+                      <p className="muted" style={{ margin: 0 }}>
+                        {t.nobodyToday}
+                      </p>
+                    ) : (
+                      (cl.people ?? []).map((p) => (
+                        <div key={p.userId} className="cl-person">
+                          <span className="cl-person-name">{short(p.name)}</span>
+                          <span className="cl-person-bar">
+                            <span style={{ width: `${p.total ? Math.round((p.done / p.total) * 100) : 0}%` }} />
+                          </span>
+                          <span className="cl-person-num">
+                            {t.done(p.done, p.total)}
+                            {p.done === p.total && p.total > 0 ? ' ✓' : ''}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
                 <div className="cl-items">
                   {cl.items.map((it) => {
                     const head = it.section !== section ? it.section : undefined;
@@ -115,11 +155,22 @@ export function ChecklistStats() {
                     return (
                       <div key={it.key}>
                         {head && <div className="label" style={{ margin: '10px 0 4px' }}>{head}</div>}
-                        <div className={`cl-item${it.mark ? ' done' : ''}`}>
-                          <span className="cl-dot" aria-hidden="true" />
-                          <span className="cl-text">{it.text}</span>
-                          <span className="cl-who">{it.mark ? `${it.mark.name} · ${formatClock(it.mark.at)}` : t.notDone}</span>
-                        </div>
+                        {cl.mode === 'individual' ? (
+                          <div className={`cl-item${it.count && it.count >= (cl.people?.length ?? 0) && it.count > 0 ? ' done' : ''}`}>
+                            <span className="cl-dot" aria-hidden="true" />
+                            <span className="cl-text">{it.text}</span>
+                            <span className="cl-who" title={(it.by ?? []).map((b) => `${b.name} · ${formatClock(b.at)}`).join('\n')}>
+                              {t.peopleDid(it.count ?? 0, cl.people?.length ?? 0)}
+                              {(it.by ?? []).length > 0 && ` · ${(it.by ?? []).map((b) => short(b.name)).join(', ')}`}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className={`cl-item${it.mark ? ' done' : ''}`}>
+                            <span className="cl-dot" aria-hidden="true" />
+                            <span className="cl-text">{it.text}</span>
+                            <span className="cl-who">{it.mark ? `${it.mark.name} · ${formatClock(it.mark.at)}` : t.notDone}</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -194,7 +245,9 @@ export function ChecklistStats() {
                             <span className="name" style={{ whiteSpace: 'normal' }}>{c.title}</span>
                           </th>
                           {stats.days.map((d) => {
-                            const done = stats.perDay.find((x) => x.id === c.id && x.date === d)?.done ?? 0;
+                            const row = stats.perDay.find((x) => x.id === c.id && x.date === d);
+                            const done = row?.done ?? 0;
+                            const base = c.mode === 'individual' ? c.total * Math.max(row?.people ?? 1, 1) : c.total;
                             const closed = stats.closed.find((x) => x.id === c.id && x.date === d);
                             return (
                               <td key={d}>
@@ -207,7 +260,7 @@ export function ChecklistStats() {
                                     setTab('day');
                                   }}
                                 >
-                                  {done ? `${Math.round((done / c.total) * 100)}%` : '—'}
+                                  {done ? `${Math.round((done / base) * 100)}%` : '—'}
                                 </button>
                               </td>
                             );

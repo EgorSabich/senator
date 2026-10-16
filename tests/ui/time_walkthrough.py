@@ -25,7 +25,7 @@ with sync_playwright() as pw:
     o.get_by_role("button", name="Zapisz").click(); o.get_by_role("heading", name="Pracownicy").wait_for()
     r=o.request; loc=r.get(BASE+"/api/admin/locations").json()["locations"][0]["id"]
     cid=r.post(BASE+f"/api/admin/locations/{loc}/content", data={"kind":"checklist","title":"Lista kontrolna zamknięcia zmiany — kelnerzy"}, headers=H).json()["id"]
-    r.put(BASE+f"/api/admin/content/{cid}", data={"body":doc,"positions":["waiter"]}, headers=H); r.post(BASE+f"/api/admin/content/{cid}/publish", data={}, headers=H)
+    r.put(BASE+f"/api/admin/content/{cid}", data={"body":doc,"positions":["waiter"],"checklistMode":"shared"}, headers=H); r.post(BASE+f"/api/admin/content/{cid}/publish", data={}, headers=H)
     emps=[]
     for fn,ln,pin in [("Zofia","Nowak","481937"),("Adam","Wiśniewski","592048"),("Ola","Kowalska","603159")]:
         e=r.post(BASE+f"/api/admin/locations/{loc}/employees", data={"firstName":fn,"lastName":ln,"position":"waiter"}, headers=H).json(); emps.append((e,pin))
