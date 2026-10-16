@@ -203,6 +203,9 @@ export const pl = {
     next: 'Następny miesiąc',
   },
   checklists: {
+    expandAll: 'Rozwiń wszystko',
+    collapseAll: 'Zwiń wszystko',
+    otherItems: 'Zadania',
     todayTitle: 'Dziś',
     onShift: (time: string) => `Jesteś na zmianie od ${time}.`,
     offShift: 'Nie jesteś na zmianie. Zarejestruj wejście PIN-em na telefonie służbowym — wtedy odhaczysz zadania z list.',
@@ -545,6 +548,7 @@ export const pl = {
       used: (n: number) => `użyty ${n}×`,
     },
     checklists: {
+      sectionLeft: (left: number, done: number, total: number) => `brakuje ${left} · ${done}/${total}`,
       title: 'Listy kontrolne',
       day: 'Dzień',
       stats: 'Statystyka',

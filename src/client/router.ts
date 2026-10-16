@@ -42,12 +42,19 @@ function notify(direction: 'forward' | 'back') {
   } else run();
 }
 
-export function navigate(path: string, replace = false): void {
+/** keepScroll: the page stays where it is and changes without a page transition (cards opening in a list). */
+export function navigate(path: string, opts: boolean | { replace?: boolean; keepScroll?: boolean } = false): void {
+  const { replace = false, keepScroll = false } = typeof opts === 'boolean' ? { replace: opts } : opts;
   if (path === location.pathname + location.search) return;
   scrolls.set(entryKey, window.scrollY);
   if (!replace) entryKey = newKey();
   if (replace) history.replaceState({ k: entryKey }, '', path);
   else history.pushState({ k: entryKey }, '', path);
+  if (keepScroll) {
+    pendingRestore = null;
+    listeners.forEach((l) => l());
+    return;
+  }
   pendingRestore = 0;
   notify('forward');
   window.scrollTo(0, 0);

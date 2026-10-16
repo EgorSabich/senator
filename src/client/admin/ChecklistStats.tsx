@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { addDays, businessDate, formatClock } from '../../shared/time';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
-import { ErrorBox, LogoLoader } from '../ui';
+import { ErrorBox, Fold, LogoLoader } from '../ui';
 import { Btn } from './common';
 import { usePanel } from './Panel';
 
@@ -41,6 +41,17 @@ const short = (name: string) => {
   return last ? `${first} ${last.charAt(0)}.` : name;
 };
 
+/** Consecutive items with the same section heading form one foldable section. */
+function sectionsOf(items: DayItem[]) {
+  const out: { name: string | null; items: DayItem[] }[] = [];
+  for (const it of items) {
+    const last = out[out.length - 1];
+    if (last && last.name === it.section) last.items.push(it);
+    else out.push({ name: it.section, items: [it] });
+  }
+  return out;
+}
+
 const dayFmt = new Intl.DateTimeFormat('pl-PL', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
 
 export function ChecklistStats() {
@@ -51,6 +62,8 @@ export function ChecklistStats() {
   const [day, setDay] = useState<DayChecklist[] | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Sections: unfinished ones open, finished ones folded — until the leader toggles them.
+  const [foldState, setFoldState] = useState<Record<string, boolean>>({});
 
   const loadDay = useCallback(async () => {
     try {
@@ -73,6 +86,7 @@ export function ChecklistStats() {
   useEffect(() => {
     if (tab === 'day') {
       setDay(null);
+      setFoldState({});
       void loadDay();
     } else {
       setStats(null);
@@ -106,7 +120,6 @@ export function ChecklistStats() {
           {day && day.length === 0 && <p className="muted">{t.none}</p>}
           {day?.map((cl) => {
             const pct = cl.total ? Math.round((cl.done / cl.total) * 100) : 0;
-            let section: string | null | undefined;
             return (
               <section key={cl.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
@@ -148,33 +161,46 @@ export function ChecklistStats() {
                     )}
                   </div>
                 )}
-                <div className="cl-items">
-                  {cl.items.map((it) => {
-                    const head = it.section !== section ? it.section : undefined;
-                    section = it.section;
-                    return (
-                      <div key={it.key}>
-                        {head && <div className="label" style={{ margin: '10px 0 4px' }}>{head}</div>}
-                        {cl.mode === 'individual' ? (
-                          <div className={`cl-item${it.count && it.count >= (cl.people?.length ?? 0) && it.count > 0 ? ' done' : ''}`}>
-                            <span className="cl-dot" aria-hidden="true" />
-                            <span className="cl-text">{it.text}</span>
-                            <span className="cl-who" title={(it.by ?? []).map((b) => `${b.name} · ${formatClock(b.at)}`).join('\n')}>
-                              {t.peopleDid(it.count ?? 0, cl.people?.length ?? 0)}
-                              {(it.by ?? []).length > 0 && ` · ${(it.by ?? []).map((b) => short(b.name)).join(', ')}`}
-                            </span>
-                          </div>
-                        ) : (
-                          <div className={`cl-item${it.mark ? ' done' : ''}`}>
-                            <span className="cl-dot" aria-hidden="true" />
-                            <span className="cl-text">{it.text}</span>
-                            <span className="cl-who">{it.mark ? `${it.mark.name} · ${formatClock(it.mark.at)}` : t.notDone}</span>
-                          </div>
+                {sectionsOf(cl.items).map((sec, si) => {
+                  const key = `${cl.id}:${si}`;
+                  const crowd = cl.people?.length ?? 0;
+                  const isDone = (it: DayItem) => (cl.mode === 'individual' ? crowd > 0 && (it.count ?? 0) >= crowd : Boolean(it.mark));
+                  const done = sec.items.filter(isDone).length;
+                  const all = done === sec.items.length;
+                  const open = foldState[key] ?? !all;
+                  return (
+                    <Fold
+                      key={key}
+                      id={`cls-${key}`}
+                      className="cl-fold"
+                      open={open}
+                      onToggle={() => setFoldState((f) => ({ ...f, [key]: !open }))}
+                      head={sec.name ?? pl.checklists.otherItems}
+                      aside={<span className={all ? 'ok' : undefined}>{all ? `✓ ${done}/${sec.items.length}` : t.sectionLeft(sec.items.length - done, done, sec.items.length)}</span>}
+                    >
+                      <div className="cl-items">
+                        {sec.items.map((it) =>
+                          cl.mode === 'individual' ? (
+                            <div key={it.key} className={`cl-item${isDone(it) ? ' done' : ''}`}>
+                              <span className="cl-dot" aria-hidden="true" />
+                              <span className="cl-text">{it.text}</span>
+                              <span className="cl-who" title={(it.by ?? []).map((b) => `${b.name} · ${formatClock(b.at)}`).join('\n')}>
+                                {t.peopleDid(it.count ?? 0, crowd)}
+                                {(it.by ?? []).length > 0 && ` · ${(it.by ?? []).map((b) => short(b.name)).join(', ')}`}
+                              </span>
+                            </div>
+                          ) : (
+                            <div key={it.key} className={`cl-item${it.mark ? ' done' : ''}`}>
+                              <span className="cl-dot" aria-hidden="true" />
+                              <span className="cl-text">{it.text}</span>
+                              <span className="cl-who">{it.mark ? `${it.mark.name} · ${formatClock(it.mark.at)}` : t.notDone}</span>
+                            </div>
+                          ),
                         )}
                       </div>
-                    );
-                  })}
-                </div>
+                    </Fold>
+                  );
+                })}
                 {cl.closed && (
                   <div>
                     <Btn

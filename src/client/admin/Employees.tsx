@@ -73,6 +73,17 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
 
   const selected = list?.find((e) => e.id === selectedId) ?? null;
   useScrollIntoView(list ? selectedId : null);
+  // A card that is folding keeps its content until the animation ends, so it closes smoothly.
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const prevSelected = useRef(selectedId);
+  useEffect(() => {
+    const prev = prevSelected.current;
+    prevSelected.current = selectedId;
+    if (!prev || prev === selectedId) return;
+    setClosingId(prev);
+    const t = window.setTimeout(() => setClosingId(null), 600);
+    return () => clearTimeout(t);
+  }, [selectedId]);
 
   async function act(path: string, success: string, after?: (data: any) => void) {
     setError(null);
@@ -216,7 +227,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                   className="row-btn"
                   aria-current={e.id === selectedId}
                   aria-expanded={e.id === selectedId}
-                  onClick={() => navigate(e.id === selectedId ? '/panel/pracownicy' : `/panel/pracownicy/${e.id}`)}
+                  onClick={() => navigate(e.id === selectedId ? '/panel/pracownicy' : `/panel/pracownicy/${e.id}`, { keepScroll: true })}
                 >
                   <span
                     style={{
@@ -237,7 +248,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                 </button>
                 <div className="emp-detail" inert={e.id !== selectedId}>
                   <div className="emp-detail-inner">
-                    {e.id === selectedId && selected && (
+                    {(e.id === selectedId || e.id === closingId) && (
                       <div
                         style={{
                           display: 'flex',
@@ -256,8 +267,8 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                         >
                           <div>
                             <span className="muted" style={{ fontSize: 13 }}>
-                              {pl.admin.positions[selected.position] ?? selected.position}
-                              {selected.startDate ? ` · ${t.startDate.toLowerCase()}: ${selected.startDate}` : ''}
+                              {pl.admin.positions[e.position] ?? e.position}
+                              {e.startDate ? ` · ${t.startDate.toLowerCase()}: ${e.startDate}` : ''}
                             </span>
                           </div>
                         </div>
@@ -269,22 +280,22 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                             margin: 0,
                           }}
                         >
-                          <Stat label={t.login} value={selected.login} />
-                          <Stat label={t.lastLogin} value={selected.lastLoginAt ? formatDateTime(selected.lastLoginAt) : t.never} />
+                          <Stat label={t.login} value={e.login} />
+                          <Stat label={t.lastLogin} value={e.lastLoginAt ? formatDateTime(e.lastLoginAt) : t.never} />
                         </dl>
-                        {selected.role === 'employee' && <Summary key={selected.id} userId={selected.id} locationId={locationId} />}
-                        {canManage && selected.id !== me.user.id && (selected.role === 'employee' || (isOwner && selected.role === 'manager')) && (
+                        {e.role === 'employee' && <Summary key={e.id} userId={e.id} locationId={locationId} />}
+                        {canManage && e.id !== me.user.id && (e.role === 'employee' || (isOwner && e.role === 'manager')) && (
                           <div className="btn-row">
-                            {selected.status === 'active' && (
+                            {e.status === 'active' && (
                               <>
                                 <Btn
                                   onClick={() =>
                                     confirm(
-                                      (selected.role === 'manager' ? t.confirmResetPassword : t.confirmReset)(`${selected.firstName} ${selected.lastName}`),
+                                      (e.role === 'manager' ? t.confirmResetPassword : t.confirmReset)(`${e.firstName} ${e.lastName}`),
                                     ) &&
-                                    void act(`/api/admin/users/${selected.id}/reset-secret`, t.done, (d) =>
+                                    void act(`/api/admin/users/${e.id}/reset-secret`, t.done, (d) =>
                                       setSecret({
-                                        name: `${selected.firstName} ${selected.lastName}`,
+                                        name: `${e.firstName} ${e.lastName}`,
                                         login: d.login,
                                         tempSecret: d.tempSecret,
                                         secretKind: d.secretKind,
@@ -292,27 +303,27 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                                     )
                                   }
                                 >
-                                  {selected.role === 'manager' ? t.resetPassword : t.resetPin}
+                                  {e.role === 'manager' ? t.resetPassword : t.resetPin}
                                 </Btn>
-                                {selected.locked === 1 && <Btn onClick={() => void act(`/api/admin/users/${selected.id}/unlock`, t.done)}>{t.unlock}</Btn>}
-                                <Btn onClick={() => void act(`/api/admin/users/${selected.id}/logout-all`, t.done)}>{t.logoutAll}</Btn>
+                                {e.locked === 1 && <Btn onClick={() => void act(`/api/admin/users/${e.id}/unlock`, t.done)}>{t.unlock}</Btn>}
+                                <Btn onClick={() => void act(`/api/admin/users/${e.id}/logout-all`, t.done)}>{t.logoutAll}</Btn>
                                 <Btn
                                   kind="danger"
                                   onClick={() =>
-                                    confirm(t.confirmDeactivate(`${selected.firstName} ${selected.lastName}`)) &&
-                                    void act(`/api/admin/users/${selected.id}/deactivate`, t.done)
+                                    confirm(t.confirmDeactivate(`${e.firstName} ${e.lastName}`)) &&
+                                    void act(`/api/admin/users/${e.id}/deactivate`, t.done)
                                   }
                                 >
                                   {t.deactivate}
                                 </Btn>
                               </>
                             )}
-                            {selected.status === 'inactive' && (
+                            {e.status === 'inactive' && (
                               <Btn
                                 onClick={() =>
-                                  void act(`/api/admin/users/${selected.id}/reactivate`, t.done, (d) =>
+                                  void act(`/api/admin/users/${e.id}/reactivate`, t.done, (d) =>
                                     setSecret({
-                                      name: `${selected.firstName} ${selected.lastName}`,
+                                      name: `${e.firstName} ${e.lastName}`,
                                       login: d.login,
                                       tempSecret: d.tempSecret,
                                       secretKind: d.secretKind,
@@ -323,7 +334,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                                 {t.reactivate}
                               </Btn>
                             )}
-                            {selected.status === 'inactive' && (
+                            {e.status === 'inactive' && (
                               <Btn kind="danger" onClick={() => setDeleting(true)}>
                                 {pl.admin.deleteForever.button}
                               </Btn>
@@ -645,15 +656,24 @@ function Summary({ userId, locationId }: { userId: string; locationId: string })
   );
 }
 
-/** Opens a person's card under the name and keeps it in view. */
+/** Opens a person's card under the name and keeps it in view — scrolls only when the name is off screen. */
 export function useScrollIntoView(id: string | null) {
   const done = useRef<string | null>(null);
   useEffect(() => {
     if (!id || done.current === id) return;
     done.current = id;
-    const t = window.setTimeout(() => {
-      document.querySelector(`[data-emp="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 60);
-    return () => clearTimeout(t);
+    const check = () => {
+      const el = document.querySelector(`[data-emp="${id}"]`);
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      if (top < 56 || top > window.innerHeight * 0.55) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    // Once now, and again after a card above has finished folding.
+    const a = window.setTimeout(check, 60);
+    const b = window.setTimeout(check, 620);
+    return () => {
+      clearTimeout(a);
+      clearTimeout(b);
+    };
   }, [id]);
 }

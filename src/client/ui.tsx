@@ -163,3 +163,24 @@ export const screen: CSSProperties = {
   flexDirection: 'column',
   gap: 24,
 };
+
+/**
+ * A section that folds and unfolds smoothly (checklist sections, long lists).
+ * The header is a button; the body keeps its content while folded so the height animates evenly.
+ */
+export function Fold(props: { open: boolean; onToggle: () => void; head: ReactNode; aside?: ReactNode; children: ReactNode; className?: string; id: string }) {
+  return (
+    <section className={`fold${props.open ? ' open' : ''}${props.className ? ` ${props.className}` : ''}`}>
+      <button type="button" className="fold-head" aria-expanded={props.open} aria-controls={props.id} onClick={props.onToggle}>
+        <span className="fold-title">{props.head}</span>
+        {props.aside && <span className="fold-aside">{props.aside}</span>}
+        <svg className="fold-chev" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      <div className="fold-body" id={props.id} inert={!props.open}>
+        <div className="fold-inner">{props.children}</div>
+      </div>
+    </section>
+  );
+}

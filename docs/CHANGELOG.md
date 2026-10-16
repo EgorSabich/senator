@@ -1,5 +1,11 @@
 # Changelog
 
+
+## 0.9.1 — 2026-10-17
+
+- Checklists fold by sections — on the phone (finished sections fold, a section folds by itself a moment after its last task; „Zwiń / Rozwiń wszystko”) and in the panel day view (unfinished sections open, finished folded, „brakuje N” in the header).
+- Employee and Kadra cards open and close slower and evenly (content stays while folding); closing a card keeps the page where it is, opening scrolls only when the name is off screen. `navigate(path, { keepScroll })`.
+
 ## 0.9.0 — 2026-10-17 — Owner's feedback, iteration 1 of 3
 
 - Fixes: content no longer hides under the iPhone status bar (safe areas in the panel); "Brak stawki" for shifts before the first rate (the first rate now also covers earlier shifts); the shift dialog in Czas pracy closes after saving.

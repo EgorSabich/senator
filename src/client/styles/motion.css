@@ -446,3 +446,76 @@ button.a-row:active:not(:disabled),
 a.today-tile:active {
   transform: scale(0.98);
 }
+
+/* Fold: sections that open and close smoothly (checklists). */
+.fold {
+  display: flex;
+  flex-direction: column;
+}
+.fold-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 2px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fold-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.fold-aside {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.fold-aside .ok {
+  color: var(--ok-fg);
+}
+.fold-chev {
+  flex: none;
+  color: var(--text-muted);
+  transform: rotate(-90deg);
+  transition: transform 420ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.fold.open .fold-chev {
+  transform: none;
+}
+.fold-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 480ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.fold.open > .fold-body {
+  grid-template-rows: 1fr;
+}
+.fold-inner {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.fold.open .fold-inner {
+  opacity: 1;
+  transition: opacity 380ms ease 60ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fold-body,
+  .fold-inner,
+  .fold-chev {
+    transition: none !important;
+  }
+}

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Fold } from '../ui';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { goBack, onNav } from '../router';
@@ -111,6 +112,34 @@ export function ChecklistDay({ id }: { id: string }) {
     else sections.push({ name: it.section, items: [it] });
   }
   const pct = data && data.total ? Math.round((data.done / data.total) * 100) : 0;
+  const foldable = sections.length > 1 || Boolean(sections[0]?.name);
+  const sectionDone = (s: (typeof sections)[number]) => s.items.every((i) => i.mark);
+  // Sections fold: finished ones start folded, and a section folds by itself a moment after its last task is ticked.
+  const [folded, setFolded] = useState<Set<number> | null>(null);
+  const doneBefore = useRef<boolean[]>([]);
+  useEffect(() => {
+    if (!data) return;
+    const done = sections.map(sectionDone);
+    if (folded === null) {
+      setFolded(new Set(done.flatMap((d, i) => (d ? [i] : []))));
+      doneBefore.current = done;
+      return;
+    }
+    const justDone = done.flatMap((d, i) => (d && doneBefore.current[i] === false ? [i] : []));
+    doneBefore.current = done;
+    if (!justDone.length) return;
+    // Not cancelled by the reload that follows a tick; skipped if the task was unticked meanwhile.
+    window.setTimeout(() => setFolded((f) => new Set([...(f ?? []), ...justDone.filter((i) => doneBefore.current[i])])), 700);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+  const toggleFold = (i: number) =>
+    setFolded((f) => {
+      const n = new Set(f ?? []);
+      if (n.has(i)) n.delete(i);
+      else n.add(i);
+      return n;
+    });
+  const allFolded = folded !== null && sections.every((_, i) => folded.has(i));
   const locked = !data?.onShift || Boolean(data?.closed);
 
   return (
@@ -151,9 +180,15 @@ export function ChecklistDay({ id }: { id: string }) {
               <p className="a-sub">{data.mode === 'individual' ? t.introIndividual : t.intro}</p>
             )}
             <Problem message={problem} />
-            {sections.map((s, si) => (
-              <section key={si} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {s.name && <h2 className="a-label">{s.name}</h2>}
+            {foldable && sections.length > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: -8 }}>
+                <button type="button" className="a-link-btn" onClick={() => setFolded(allFolded ? new Set() : new Set(sections.map((_, i) => i)))}>
+                  {allFolded ? t.expandAll : t.collapseAll}
+                </button>
+              </div>
+            )}
+            {sections.map((s, si) => {
+              const list = (
                 <div className="a-list">
                   {s.items.map((it) => {
                     const mine = it.mark?.userId === data.me;
@@ -178,8 +213,22 @@ export function ChecklistDay({ id }: { id: string }) {
                     );
                   })}
                 </div>
-              </section>
-            ))}
+              );
+              if (!foldable) return <section key={si}>{list}</section>;
+              const done = s.items.filter((i) => i.mark).length;
+              return (
+                <Fold
+                  key={si}
+                  id={`cl-sec-${si}`}
+                  open={!folded?.has(si)}
+                  onToggle={() => toggleFold(si)}
+                  head={s.name ?? t.otherItems}
+                  aside={<span className={done === s.items.length ? 'ok' : undefined}>{done === s.items.length ? `✓ ${done}/${s.items.length}` : `${done}/${s.items.length}`}</span>}
+                >
+                  <div style={{ paddingBottom: 6 }}>{list}</div>
+                </Fold>
+              );
+            })}
             {data.onShift && !data.closed && data.mode !== 'individual' && (
               <button type="button" className="a-btn" onClick={() => void close()}>
                 {t.close}

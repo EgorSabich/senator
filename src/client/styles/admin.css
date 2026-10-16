@@ -815,7 +815,7 @@
 .emp-detail {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 380ms var(--ease-out, ease);
+  transition: grid-template-rows 560ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .emp.open > .emp-detail {
   grid-template-rows: 1fr;
@@ -824,17 +824,37 @@
   min-height: 0;
   overflow: hidden;
   opacity: 0;
-  transform: translateY(-8px);
-  transition: opacity 280ms ease, transform 380ms var(--ease-out, ease);
+  transform: translateY(-6px);
+  transition:
+    opacity 240ms ease,
+    transform 560ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .emp.open .emp-detail-inner {
   opacity: 1;
   transform: none;
+  transition:
+    opacity 420ms ease 80ms,
+    transform 560ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+/* Padding and frame live on the child, so the folded row really is 0 high and the height animates evenly. */
+.emp-detail-inner > * {
   padding: 18px;
   border: 1px solid var(--accent);
   border-top: none;
   border-radius: 0 0 var(--radius-m) var(--radius-m);
   background: var(--surface);
+}
+.emp > .row-btn {
+  transition:
+    border-color 300ms ease,
+    background-color 300ms ease,
+    border-radius 300ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .emp-detail,
+  .emp-detail-inner {
+    transition: none !important;
+  }
 }
 .emp-summary {
   display: flex;
@@ -1797,4 +1817,18 @@ a.sch-person:hover {
 }
 .sch-offlink:hover {
   color: var(--accent);
+}
+
+/* Checklist sections fold (2026-10-17, iteration 2) */
+.cl-fold {
+  border-top: 1px solid var(--border);
+}
+.cl-fold .fold-head {
+  min-height: 46px;
+}
+.cl-fold .cl-items {
+  padding-bottom: 8px;
+}
+.cl-fold:not(.open) .fold-aside .ok {
+  color: var(--ok-fg);
 }
