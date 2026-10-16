@@ -160,7 +160,7 @@ export const contentItems = sqliteTable(
     /** null = shared standard visible in every location. */
     locationId: text('location_id').references(() => locations.id),
     kind: text('kind', {
-      enum: ['lesson', 'service_book', 'regulation', 'sop', 'job_description', 'checklist'],
+      enum: ['lesson', 'service_book', 'regulation', 'sop', 'job_description', 'checklist'], // job_description: retired 2026-10-17, rows archived
     }).notNull(),
     title: text('title').notNull(),
     slug: text('slug').notNull(),
@@ -663,6 +663,11 @@ export const unavailability = sqliteTable(
     locationId: text('location_id').notNull().references(() => locations.id),
     date: text('date').notNull(),
     note: text('note'),
+    /** part of the day only (minutes from 00:00); both null = the whole day */
+    fromMin: integer('from_min'),
+    toMin: integer('to_min'),
+    /** a leader who entered it (heard about it in person); null = the person themselves */
+    setBy: text('set_by').references(() => users.id),
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.locationId, t.date] }), index('unavailability_loc_date_idx').on(t.locationId, t.date)],

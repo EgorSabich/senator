@@ -1,6 +1,6 @@
 import { LogoLoader } from '../ui';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { DIVISION_SCOPE_PREFIX, MANAGER_ROLES, PERMISSIONS, POSITIONS, ROLE_PREFIX, type ManagerRole } from '../../shared/constants';
+import { DIVISION_SCOPE_PREFIX, divisionOf, MANAGER_ROLES, PERMISSIONS, POSITIONS, ROLE_PREFIX, type ManagerRole } from '../../shared/constants';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { ErrorBox } from '../ui';
@@ -63,7 +63,7 @@ export function Managers() {
       )}
       {list === null && <LogoLoader />}
       {list?.length === 0 && <p className="muted">{t.empty}</p>}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 920 }}>
         {list?.map((m) => (
           <ManagerCard
             key={m.id}
@@ -98,6 +98,7 @@ function ManagerCard(props: { m: Manager; locationId: string; locName: string; o
   const { m } = props;
   const [perms, setPerms] = useState<string[]>(m.permissions[props.locationId] ?? []);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
   const dirty = JSON.stringify([...perms].sort()) !== JSON.stringify([...(m.permissions[props.locationId] ?? [])].sort());
 
   async function save() {
@@ -112,87 +113,103 @@ function ManagerCard(props: { m: Manager; locationId: string; locName: string; o
     }
   }
 
+  const savedRole = roleOf(m.permissions[props.locationId] ?? []);
   return (
-    <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }} aria-label={`${m.firstName} ${m.lastName}`}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
-          {m.firstName} {m.lastName}
-        </h2>
+    <div className={`emp${open ? ' open' : ''}`} aria-label={`${m.firstName} ${m.lastName}`}>
+      <button type="button" className="row-btn" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8, width: '100%', alignItems: 'center' }}>
+          <span style={{ fontSize: 16, fontWeight: 700 }}>
+            {m.firstName} {m.lastName}
+          </span>
+          <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span className="badge neutral">{savedRole ? t.roles[savedRole] : t.customRole}</span>
+            <span className={`chev${open ? ' up' : ''}`} aria-hidden="true">
+              ▾
+            </span>
+          </span>
+        </span>
         <span className="muted" style={{ fontSize: 12 }}>
           {m.login} · {pl.admin.employees.lastLogin.toLowerCase()}: {m.lastLoginAt ? formatDateTime(m.lastLoginAt) : pl.admin.employees.never}
         </span>
-      </div>
-      {m.self ? (
-        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-          {t.selfInfo}
-        </p>
-      ) : null}
-      <div className="field">
-        <label htmlFor={`role-${m.id}`}>{t.role}</label>
-        <select
-          id={`role-${m.id}`}
-          disabled={m.self}
-          value={roleOf(perms) ?? ''}
-          onChange={(e) => setPerms(e.target.value ? rolePermissions(e.target.value as ManagerRole) : perms.filter((p) => !p.startsWith(ROLE_PREFIX)))}
-        >
-          <option value="">{t.customRole}</option>
-          {(Object.keys(MANAGER_ROLES) as ManagerRole[]).map((r) => (
-            <option key={r} value={r}>
-              {t.roles[r]}
-            </option>
-          ))}
-        </select>
-        <span className="muted" style={{ fontSize: 12 }}>
-          {roleOf(perms) ? t.roleHints[roleOf(perms)!] : t.customHint}
-        </span>
-      </div>
-      <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <legend className="label" style={{ marginBottom: 8 }}>
-          {t.permissionsIn(props.locName)}
-        </legend>
-        {PERMISSIONS.map((p) => (
-          <label key={p} className="check">
-            <input
-              type="checkbox"
-              disabled={m.self}
-              checked={perms.includes(p)}
-              onChange={(e) => setPerms((e.target.checked ? [...perms, p] : perms.filter((x) => x !== p)).filter((x) => !x.startsWith(ROLE_PREFIX)))}
-            />
-            <span>{pl.admin.permissions[p]}</span>
-          </label>
-        ))}
-      </fieldset>
-      <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <legend className="label" style={{ marginBottom: 4 }}>
-          {t.divisions}
-        </legend>
-        <span className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
-          {t.divisionsHint}
-        </span>
-        <div className="btn-row">
-          {POSITIONS.map((d) => {
-            const key = DIVISION_SCOPE_PREFIX + d;
-            return (
-              <button
-                key={d}
-                type="button"
-                className="chip"
+      </button>
+      <div className="emp-detail">
+        <div className="emp-detail-inner" inert={!open}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {m.self ? (
+              <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+                {t.selfInfo}
+              </p>
+            ) : null}
+            <div className="field">
+              <label htmlFor={`role-${m.id}`}>{t.role}</label>
+              <select
+                id={`role-${m.id}`}
                 disabled={m.self}
-                aria-pressed={perms.includes(key)}
-                onClick={() => setPerms((perms.includes(key) ? perms.filter((x) => x !== key) : [...perms, key]).filter((x) => !x.startsWith(ROLE_PREFIX)))}
+                value={roleOf(perms) ?? ''}
+                onChange={(e) => setPerms(e.target.value ? rolePermissions(e.target.value as ManagerRole) : perms.filter((p) => !p.startsWith(ROLE_PREFIX)))}
+                /* changing single permissions below keeps the role name (owner, 2026-10-17) */
               >
-                {pl.admin.divisions[d] ?? d}
-              </button>
-            );
-          })}
+                <option value="">{t.customRole}</option>
+                {(Object.keys(MANAGER_ROLES) as ManagerRole[]).map((r) => (
+                  <option key={r} value={r}>
+                    {t.roles[r]}
+                  </option>
+                ))}
+              </select>
+              <span className="muted" style={{ fontSize: 12 }}>
+                {roleOf(perms) ? t.roleHints[roleOf(perms)!] : t.customHint}
+              </span>
+            </div>
+            <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <legend className="label" style={{ marginBottom: 8 }}>
+                {t.permissionsIn(props.locName)}
+              </legend>
+              {PERMISSIONS.map((p) => (
+                <label key={p} className="check">
+                  <input
+                    type="checkbox"
+                    disabled={m.self}
+                    checked={perms.includes(p)}
+                    onChange={(e) => setPerms(e.target.checked ? [...perms, p] : perms.filter((x) => x !== p))}
+                  />
+                  <span>{pl.admin.permissions[p]}</span>
+                </label>
+              ))}
+            </fieldset>
+            <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <legend className="label" style={{ marginBottom: 4 }}>
+                {t.divisions}
+              </legend>
+              <span className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+                {t.divisionsHint}
+              </span>
+              <div className="btn-row">
+                {POSITIONS.filter((d) => divisionOf(d) === d).map((d) => {
+                  const key = DIVISION_SCOPE_PREFIX + d;
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      className="chip"
+                      disabled={m.self}
+                      aria-pressed={perms.includes(key)}
+                      onClick={() => setPerms(perms.includes(key) ? perms.filter((x) => x !== key) : [...perms, key])}
+                    >
+                      {pl.admin.divisions[d] ?? d}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+            <div>
+              <Btn kind="primary" disabled={!dirty || busy || m.self} onClick={() => void save()}>
+                {t.save}
+              </Btn>
+            </div>
+          </div>
         </div>
-      </fieldset>
-      <div>
-        <Btn kind="primary" disabled={!dirty || busy || m.self} onClick={() => void save()}>
-          {t.save}
-        </Btn>
       </div>
-    </section>
+    </div>
   );
 }
 

@@ -6,10 +6,11 @@
 import { Hono } from 'hono';
 import { addDays, isIsoDate } from '../../shared/time';
 import { shiftMinutes, unavailabilityDeadline, weekDays, weekStart } from '../../shared/schedule';
+import { divisionOf } from '../../shared/constants';
 import type { AppEnv } from '../env';
 import { auditStatement } from '../lib/audit';
 import { ApiError, badRequest, newId, notFound, readJson, str } from '../lib/http';
-import { allowedDivisions, isDivision, loadAccess, requireDivision, requireLocation, requirePermission, type Access } from '../auth/access';
+import { allowedDivisions, isDivision, loadAccess, requireDivision, requireLocation, requirePermission, userInScope, type Access } from '../auth/access';
 
 export const scheduleAdminRoutes = new Hono<AppEnv>();
 export const scheduleRoutes = new Hono<AppEnv>();
@@ -82,7 +83,7 @@ async function people(db: D1Database, locId: string) {
     )
     .bind(locId)
     .all<{ id: string; firstName: string; lastName: string; positions: string }>();
-  return results.map((r) => ({ id: r.id, firstName: r.firstName, lastName: r.lastName, divisions: r.positions.split(',') }));
+  return results.map((r) => ({ id: r.id, firstName: r.firstName, lastName: r.lastName, divisions: [...new Set(r.positions.split(',').map(divisionOf))] }));
 }
 
 const view = (s: ShiftRow) => ({
@@ -110,7 +111,11 @@ scheduleAdminRoutes.get('/locations/:locId/schedule', async (c) => {
   const [shifts, unav, templates, entries] = await db.batch([
     db.prepare(`${SHIFT_SELECT} WHERE location_id = ? AND date BETWEEN ? AND ? ORDER BY date, start_min`).bind(locId, days[0], last),
     db
-      .prepare(`SELECT user_id AS userId, date, note FROM unavailability WHERE location_id = ? AND date BETWEEN ? AND ?`)
+      .prepare(
+        `SELECT n.user_id AS userId, n.date, n.note, n.from_min AS fromMin, n.to_min AS toMin,
+                CASE WHEN m.id IS NULL THEN NULL ELSE m.first_name || ' ' || m.last_name END AS setByName
+         FROM unavailability n LEFT JOIN users m ON m.id = n.set_by WHERE n.location_id = ? AND n.date BETWEEN ? AND ?`,
+      )
       .bind(locId, days[0], last),
     db
       .prepare(
@@ -325,6 +330,54 @@ scheduleAdminRoutes.delete('/schedule/templates/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+/** { date, fromMin?, toMin? } → validated; both null = whole day. */
+function parsePart(x: unknown, days: string[]): { date: string; fromMin: number | null; toMin: number | null } {
+  const o = (x ?? {}) as { date?: unknown; fromMin?: unknown; toMin?: unknown };
+  if (typeof o.date !== 'string' || !days.includes(o.date)) throw badRequest('invalid_input');
+  const num = (v: unknown) => (v === undefined || v === null ? null : Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 1440 ? (v as number) : NaN);
+  const fromMin = num(o.fromMin);
+  const toMin = num(o.toMin);
+  if (Number.isNaN(fromMin) || Number.isNaN(toMin)) throw badRequest('invalid_input');
+  if (fromMin === null && toMin === null) return { date: o.date, fromMin: null, toMin: null };
+  const f = fromMin ?? 0;
+  const t = toMin ?? 1440;
+  if (f >= t || (f === 0 && t === 1440)) return { date: o.date, fromMin: null, toMin: null };
+  return { date: o.date, fromMin: f, toMin: t };
+}
+
+/** A leader marks a day (or part of it) as unavailable — e.g. the person asked in person (owner, 2026-10-17). */
+scheduleAdminRoutes.put('/locations/:locId/schedule/unavailability', async (c) => {
+  const locId = c.req.param('locId');
+  const access = await guard(c, locId);
+  const db = c.env.DB;
+  const body = await readJson<{ userId?: unknown; date?: unknown; fromMin?: unknown; toMin?: unknown; note?: unknown }>(c.req.raw);
+  if (typeof body.userId !== 'string' || !isIsoDate(body.date)) throw badRequest('invalid_input');
+  if (!(await userInScope(db, access, locId, body.userId))) throw new ApiError(403, 'outside_divisions');
+  const person = (await people(db, locId)).find((p) => p.id === body.userId);
+  if (!person) throw notFound();
+  const part = parsePart(body, [body.date]);
+  await db
+    .prepare(
+      `INSERT INTO unavailability (user_id, location_id, date, note, from_min, to_min, set_by) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (user_id, location_id, date) DO UPDATE SET note = excluded.note, from_min = excluded.from_min, to_min = excluded.to_min, set_by = excluded.set_by`,
+    )
+    .bind(person.id, locId, part.date, str(body.note, 200) || null, part.fromMin, part.toMin, c.var.user.id)
+    .run();
+  return c.json({ ok: true });
+});
+
+scheduleAdminRoutes.delete('/locations/:locId/schedule/unavailability', async (c) => {
+  const locId = c.req.param('locId');
+  const access = await guard(c, locId);
+  const db = c.env.DB;
+  const userId = c.req.query('userId');
+  const date = c.req.query('date');
+  if (!userId || !isIsoDate(date)) throw badRequest('invalid_input');
+  if (!(await userInScope(db, access, locId, userId))) throw new ApiError(403, 'outside_divisions');
+  await db.prepare(`DELETE FROM unavailability WHERE user_id = ? AND location_id = ? AND date = ?`).bind(userId, locId, date).run();
+  return c.json({ ok: true });
+});
+
 /* ───────── Staff ───────── */
 
 async function staffGuard(c: Ctx, locId: string) {
@@ -384,9 +437,12 @@ scheduleRoutes.get('/locations/:locId/unavailability', async (c) => {
   const first = addDays(weekStart(today), 7);
   const weeks = Array.from({ length: 6 }, (_, i) => addDays(first, i * 7));
   const { results } = await db
-    .prepare(`SELECT date, note FROM unavailability WHERE user_id = ? AND location_id = ? AND date BETWEEN ? AND ?`)
+    .prepare(
+      `SELECT date, note, from_min AS fromMin, to_min AS toMin, (set_by IS NOT NULL) AS byManager FROM unavailability
+       WHERE user_id = ? AND location_id = ? AND date BETWEEN ? AND ?`,
+    )
     .bind(c.var.user.id, locId, weeks[0], addDays(weeks[5]!, 6))
-    .all<{ date: string; note: string | null }>();
+    .all<{ date: string; note: string | null; fromMin: number | null; toMin: number | null; byManager: number }>();
   return c.json({
     deadlineRule: { dow, hour },
     weeks: weeks.map((w) => {
@@ -402,17 +458,24 @@ scheduleRoutes.put('/locations/:locId/unavailability', async (c) => {
   await staffGuard(c, locId);
   if (c.var.user.role !== 'employee') throw new ApiError(403, 'forbidden');
   const db = c.env.DB;
-  const body = await readJson<{ week?: unknown; dates?: unknown; note?: unknown }>(c.req.raw);
+  const body = await readJson<{ week?: unknown; dates?: unknown; items?: unknown; note?: unknown }>(c.req.raw);
   const monday = mondayOf(body.week);
   const { dow, hour } = await rulesOf(db, locId);
   if (Date.now() > unavailabilityDeadline(monday, dow, hour)) throw new ApiError(409, 'unavailability_closed');
   const days = weekDays(monday);
-  if (!Array.isArray(body.dates) || !body.dates.every((d) => typeof d === 'string' && days.includes(d))) throw badRequest('invalid_input');
-  const dates = [...new Set(body.dates as string[])];
+  // items: [{ date, fromMin?, toMin? }] — part of a day (e.g. "until 17:00"); dates: whole days (older clients)
+  const raw = Array.isArray(body.items) ? body.items : Array.isArray(body.dates) ? body.dates.map((d) => ({ date: d })) : null;
+  if (!raw) throw badRequest('invalid_input');
+  const items = raw.map((x) => parsePart(x, days));
   const note = str(body.note, 200) || null;
   await db.batch([
-    db.prepare(`DELETE FROM unavailability WHERE user_id = ? AND location_id = ? AND date BETWEEN ? AND ?`).bind(c.var.user.id, locId, days[0], days[6]),
-    ...dates.map((d) => db.prepare(`INSERT INTO unavailability (user_id, location_id, date, note) VALUES (?, ?, ?, ?)`).bind(c.var.user.id, locId, d, note)),
+    // what a leader entered stays (the person talked to them); the rest of the week is replaced
+    db.prepare(`DELETE FROM unavailability WHERE user_id = ? AND location_id = ? AND date BETWEEN ? AND ? AND set_by IS NULL`).bind(c.var.user.id, locId, days[0], days[6]),
+    ...items.map((i) =>
+      db
+        .prepare(`INSERT INTO unavailability (user_id, location_id, date, note, from_min, to_min) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`)
+        .bind(c.var.user.id, locId, i.date, note, i.fromMin, i.toMin),
+    ),
   ]);
-  return c.json({ ok: true, dates });
+  return c.json({ ok: true, dates: items.map((i) => i.date) });
 });

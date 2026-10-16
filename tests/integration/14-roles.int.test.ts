@@ -106,7 +106,8 @@ describe('zarządzający', () => {
 
 describe('Dziś', () => {
   it('plan vs reality for my divisions', async () => {
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw' }).format(new Date());
+    // business day (starts 06:00) — the test may run after midnight
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw' }).format(new Date(Date.now() - 6 * 3600_000));
     expect((await owner.post(`/api/admin/locations/${SENATOR}/schedule/shifts`, { userId: cookId, date: today, start: '06:00', end: '21:00' })).status).toBe(201);
     await owner.post(`/api/admin/locations/${SENATOR}/schedule/shifts`, { userId: waiterId, date: today, start: '06:30', end: '21:30' });
     const monday = (() => {

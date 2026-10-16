@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 
@@ -135,19 +135,58 @@ export function Btn(props: {
 
 export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [closing, setClosing] = useState(false);
+  const [drag, setDrag] = useState(0);
+  const start = useRef<number | null>(null);
+  // play the closing animation, then really close (feels native instead of a hard cut)
+  const close = useCallback(() => {
+    setClosing(true);
+    window.setTimeout(onClose, 200);
+  }, [onClose]);
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
-    ref.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    // on phones do not pop the keyboard up by focusing the first field
+    if (window.matchMedia('(min-width: 721px)').matches) ref.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     document.addEventListener('keydown', onKey);
+    document.documentElement.classList.add('modal-open');
     return () => {
       document.removeEventListener('keydown', onKey);
+      document.documentElement.classList.remove('modal-open');
       prev?.focus();
     };
-  }, [onClose]);
+  }, [close]);
   return (
-    <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" ref={ref}>
+    <div className={`modal-backdrop${closing ? ' closing' : ''}`} onClick={(e) => e.target === e.currentTarget && close()}>
+      <div
+        className={`modal${closing ? ' closing' : ''}${drag ? ' dragging' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        ref={ref}
+        style={drag ? { transform: `translateY(${drag}px)` } : undefined}
+      >
+        {/* phone: a bottom sheet — pull the handle down to close */}
+        <div
+          className="modal-handle"
+          aria-hidden="true"
+          onPointerDown={(e) => {
+            start.current = e.clientY;
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => start.current !== null && setDrag(Math.max(0, e.clientY - start.current))}
+          onPointerUp={() => {
+            start.current = null;
+            if (drag > 90) close();
+            setDrag(0);
+          }}
+          onPointerCancel={() => {
+            start.current = null;
+            setDrag(0);
+          }}
+        >
+          <span />
+        </div>
         <h2 id="modal-title" style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 600 }}>
           {title}
         </h2>
@@ -239,6 +278,27 @@ export interface SecretInfo {
 
 export function SecretCardModal({ info, onClose }: { info: SecretInfo; onClose: () => void }) {
   const isPin = info.secretKind === 'pin';
+  const [copied, setCopied] = useState(false);
+  const label = info.secretLabel ?? (isPin ? pl.admin.card.pin : pl.admin.card.password);
+  async function copy() {
+    const text = pl.admin.card.copyText(info.name, location.origin, info.login, label, info.tempSecret, info.note ?? (isPin ? pl.admin.card.note : pl.admin.card.notePassword));
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // older browsers / no permission: classic copy through a hidden field
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2500);
+  }
   return (
     <Modal title={pl.admin.card.title} onClose={onClose}>
       <div className="secret-card">
@@ -261,9 +321,10 @@ export function SecretCardModal({ info, onClose }: { info: SecretInfo; onClose: 
         {info.note ?? (isPin ? pl.admin.card.note : pl.admin.card.notePassword)}
       </p>
       <div className="btn-row">
-        <Btn kind="primary" onClick={() => window.print()}>
-          {pl.admin.card.print}
+        <Btn kind="primary" onClick={() => void copy()}>
+          {copied ? pl.admin.card.copied : pl.admin.card.copy}
         </Btn>
+        <Btn onClick={() => window.print()}>{pl.admin.card.print}</Btn>
         <Btn onClick={onClose}>{pl.admin.card.close}</Btn>
       </div>
     </Modal>

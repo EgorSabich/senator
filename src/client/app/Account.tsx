@@ -59,6 +59,15 @@ export function Account({ onLoggedOut, refreshMe }: { onLoggedOut: () => void; r
           </a>
         </div>
       )}
+      <div className="a-list">
+        <a className="a-row" href="/instaluj" onClick={onNav('/instaluj')}>
+          <Icon name="download" size={20} />
+          <span className="grow">
+            <span className="t">{pl.install.accountLink}</span>
+          </span>
+          <Icon name="next" size={18} />
+        </a>
+      </div>
       <LocationInfo />
       {done && (
         <div className="a-note" role="status">

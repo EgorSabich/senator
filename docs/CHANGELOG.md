@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.0 — 2026-10-17 — Owner's feedback, iteration 1 of 3
+
+- Fixes: content no longer hides under the iPhone status bar (safe areas in the panel); "Brak stawki" for shifts before the first rate (the first rate now also covers earlier shifts); the shift dialog in Czas pracy closes after saving.
+- First sign-in: only the new PIN (twice) — the temporary one is not asked again (`change-secret` without `current` while the account must change its secret). Then employees on a phone see "Dodaj aplikację na ekran" (iPhone Safari / other iPhone browsers / Android Chrome with the system install button); a card on Start and a link in Konto stay until installed.
+- Greeting by time: Dzień dobry / Dobry wieczór (18:00) / Dobranoc (23:00). "Widok kelnera" → "Widok pracownika". No pinch or double-tap zoom; 16 px inputs on phones (no iOS zoom on focus).
+- Positions: Runner (Kelnerzy), Barback (Barmani), Pomocnik mistrza shishy (Shisha) — they see the materials and program of their division and are planned in it; leaders of the division manage them. "Instrukcje stanowiskowe" retired (existing ones archived, migration 0011).
+- Kadra kierownicza: leaders are not on the staff list; the role name stays when single permissions change; cards fold like in Pracownicy; "Kopiuj dane logowania" on the login card.
+- Grafik: leaders start with their own divisions ("Wszyscy" shows everyone); clear division separators; the name opens the person's card; a leader can mark a day or part of it as unavailable (with a reason, shown as "wpisał(a)…"); staff can report part of a day ("Nie mogę do / od"); visible hatching and centred labels; fade between week and month.
+- Feel: skeletons instead of spinners inside pages, dialogs as bottom sheets on phones (pull down to close) with closing animations, press feedback, other tabs pre-loaded while idle.
+- Tests: 117 integration (new 16-iteration-1017), UI walkthrough `tests/ui/onboarding_walkthrough.py`.
+
 ## 0.8.1 — 2026-10-16 — Old PINs on the terminal
 
 - Fix: PINs set before the time clock (0.6.0) had no terminal link until the person signed in again, and staff stay signed in — so the terminal answered "Nieznany PIN". Now, when the quick lookup finds nobody, the PIN is checked against the location's people still without a link and linked on first use. Two people with the same old PIN: nobody is clocked in and both must choose a new PIN.

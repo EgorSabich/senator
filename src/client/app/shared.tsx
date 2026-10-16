@@ -104,6 +104,12 @@ const ICONS: Record<string, ReactNode> = {
     </>
   ),
   back: <path d="M15 6l-6 6 6 6" />,
+  download: (
+    <>
+      <rect x="6" y="2.5" width="12" height="19" rx="2.5" />
+      <path d="M12 7v7M9 11l3 3 3-3M10 18.5h4" />
+    </>
+  ),
   calendar: (
     <>
       <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />

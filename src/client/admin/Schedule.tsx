@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatHm, shiftColor, weekStart } from '../../shared/schedule';
 import { addDays, businessDate, formatClock } from '../../shared/time';
 import { api, ApiFailure } from '../api';
+import { onNav } from '../router';
 import { errorText, pl } from '../i18n/pl';
 import { ErrorBox, LogoLoader } from '../ui';
 import { Btn, Modal, storageGet, storageSet } from './common';
@@ -47,7 +48,7 @@ interface WeekView {
   days: string[];
   people: Person[];
   shifts: Shift[];
-  unavailability: { userId: string; date: string; note: string | null }[];
+  unavailability: Off[];
   templates: Template[];
   actual: { userId: string; date: string; clockInAt: number; clockOutAt: number | null }[];
   unpublished: number;
@@ -56,6 +57,25 @@ interface WeekView {
   /** divisions I may plan (null = all) — everyone sees the whole team (D44) */
   editable?: string[] | null;
 }
+
+interface Off {
+  userId: string;
+  date: string;
+  note: string | null;
+  fromMin: number | null;
+  toMin: number | null;
+  setByName: string | null;
+}
+/** "cały dzień" / "do 17:00" / "od 18:00" / "12:00–15:00" */
+export const offPart = (o: { fromMin: number | null; toMin: number | null }) =>
+  o.fromMin === null && o.toMin === null
+    ? pl.admin.schedule.offWhole
+    : (o.fromMin ?? 0) === 0
+      ? pl.admin.schedule.offUntil(formatHm(o.toMin ?? 1440))
+      : (o.toMin ?? 1440) >= 1440
+        ? pl.admin.schedule.offFrom(formatHm(o.fromMin ?? 0))
+        : `${formatHm(o.fromMin ?? 0)}–${formatHm(o.toMin ?? 1440)}`;
+const isWhole = (o: Off) => o.fromMin === null && o.toMin === null;
 
 const short = (p: { firstName: string; lastName: string }) => `${p.firstName} ${p.lastName.trim().charAt(0)}.`;
 const range = (s: { startMin: number; endMin: number }) => `${formatHm(s.startMin)}–${formatHm(s.endMin)}`;
@@ -80,7 +100,7 @@ const hours = (min: number) => `${Math.floor(min / 60)}:${String(min % 60).padSt
 const compact = (m: number) => (m % 60 ? formatHm(m) : String(Math.floor((m % 1440) / 60)));
 
 export function Schedule() {
-  const { locationId } = usePanel();
+  const { locationId, can } = usePanel();
   const today = businessDate(Date.now());
   const [week, setWeek] = useState(() => weekStart(addDays(today, 7)));
   const [mode, setMode] = useState<'week' | 'month'>(() => (storageGet(MODE_KEY) === 'month' ? 'month' : 'week'));
@@ -109,9 +129,15 @@ export function Schedule() {
     }
   }, [locationId, week, month, mode]);
   useEffect(() => {
-    setData(null);
     void load();
   }, [load]);
+  // a leader starts with their own divisions (owner, 2026-10-17); "Wszyscy" shows everyone
+  const defaulted = useRef(false);
+  useEffect(() => {
+    if (!data || defaulted.current) return;
+    defaulted.current = true;
+    if (data.editable && storageGet(DIV_KEY) === null) setGroups(data.editable.filter((d) => data.people.some((p) => p.divisions.includes(d))));
+  }, [data]);
 
   const present = useMemo(() => ORDER.filter((d) => data?.people.some((p) => p.divisions.includes(d))), [data]);
   const shown = groups.length ? present.filter((d) => groups.includes(d)) : present;
@@ -255,7 +281,7 @@ export function Schedule() {
       {!data && !error && <LogoLoader />}
       {data && present.length === 0 && <p className="muted">{t.noPeople}</p>}
       {data && present.length > 0 && (
-        <div className="time-grid-wrap">
+        <div className="time-grid-wrap sch-fade" key={`${mode}-${mode === 'month' ? month : week}`}>
           <table className={`time-grid sch-grid${mode === 'month' ? ' month' : ''}${highlight !== null ? ' dim' : ''}`} style={{ ['--days' as string]: data.days.length }}>
             <thead>
               <tr>
@@ -286,23 +312,30 @@ export function Schedule() {
                 const members = data.people.filter((p) => p.divisions.includes(g));
                 if (!members.length) return null;
                 return [
-                  <tr key={`h-${g}`} className="group-row">
+                  <tr key={`h-${g}`} className="group-row sch-division">
                     <th className="sticky" colSpan={1}>
-                      {pl.admin.divisions[g] ?? g} · {members.length}
+                      <span className="sch-division-name">{pl.admin.divisions[g] ?? g}</span>
+                      <span className="sch-division-count">{members.length}</span>
                     </th>
                     <td colSpan={data.days.length + 1} />
                   </tr>,
                   ...members.map((p) => (
                     <tr key={`${g}-${p.id}`}>
                       <th className="sticky" scope="row">
-                        <span className="name">{short(p)}</span>
+                        {can('employees.view') && (!data.editable || data.editable.includes(g)) ? (
+                          <a className="name sch-person" href={`/panel/pracownicy/${p.id}`} onClick={onNav(`/panel/pracownicy/${p.id}`)}>
+                            {short(p)}
+                          </a>
+                        ) : (
+                          <span className="name">{short(p)}</span>
+                        )}
                       </th>
                       {data.days.map((d) => {
                         const own = data.shifts.filter((s) => s.userId === p.id && s.date === d && s.division === g);
                         const off = data.unavailability.find((u) => u.userId === p.id && u.date === d);
                         const act = data.actual.filter((a) => a.userId === p.id && a.date === d);
                         return (
-                          <td key={d} className={`${d === today ? 'today' : ''}${isWeekend(d) ? ' weekend' : ''}${off ? ' sch-off' : ''}`}>
+                          <td key={d} className={`${d === today ? 'today' : ''}${isWeekend(d) ? ' weekend' : ''}${off ? (isWhole(off) ? ' sch-off' : ' sch-off part') : ''}`}>
                             <button
                               type="button"
                               className="sch-cell"
@@ -319,8 +352,12 @@ export function Schedule() {
                                   {mode === 'month' ? `${compact(s.startMin)}–${compact(s.endMin)}` : range(s)}
                                 </span>
                               ))}
-                              {off && !own.length && <span className="sch-off-label">{mode === 'month' ? '✕' : t.unavailable}</span>}
-                              {off && own.length > 0 && <span className="sch-warn">{mode === 'month' ? '⚠' : t.unavailableShort}</span>}
+                              {off && !own.length && (
+                                <span className="sch-off-label" title={off.note ?? undefined}>
+                                  {mode === 'month' ? (isWhole(off) ? '✕' : '◐') : isWhole(off) ? t.unavailable : offPart(off)}
+                                </span>
+                              )}
+                              {off && own.length > 0 && <span className="sch-warn">{mode === 'month' ? '⚠' : `⚠ ${offPart(off)}`}</span>}
                               {mode === 'week' && <PlanVsActual shifts={own.filter((s) => !s.deleted)} actual={act} date={d} today={today} />}
                             </button>
                           </td>
@@ -395,7 +432,7 @@ function ShiftDialog(props: {
   division: string;
   date: string;
   shifts: Shift[];
-  off: { note: string | null } | null;
+  off: Off | null;
   templates: Template[];
   onClose: () => void;
   onChanged: () => Promise<void>;
@@ -431,12 +468,7 @@ function ShiftDialog(props: {
       <span className="muted" style={{ fontSize: 13 }}>
         {pl.admin.divisions[props.division] ?? props.division}
       </span>
-      {props.off && (
-        <div className="notice warn-notice">
-          {t.unavailableInfo}
-          {props.off.note ? ` „${props.off.note}”` : ''}
-        </div>
-      )}
+      <OffEditor locationId={props.locationId} userId={props.person.id} date={props.date} off={props.off} onRun={run} />
       {props.shifts.map((s) => (
         <ShiftEditor key={`${s.id}-${s.startMin}-${s.endMin}-${s.deleted}`} shift={s} onRun={run} />
       ))}
@@ -586,5 +618,79 @@ function Templates({ templates, onChanged, onError }: { templates: Template[]; o
         </>
       )}
     </section>
+  );
+}
+
+/** Leader marks the day (or part of it) as unavailable — e.g. the person asked in person (owner, 2026-10-17). */
+function OffEditor(props: { locationId: string; userId: string; date: string; off: Off | null; onRun: (fn: () => Promise<unknown>, close?: boolean) => Promise<void> }) {
+  const o = props.off;
+  const initialKind = !o ? 'none' : isWhole(o) ? 'whole' : (o.fromMin ?? 0) === 0 ? 'until' : 'from';
+  const [kind, setKind] = useState<'none' | 'whole' | 'until' | 'from'>(initialKind);
+  const [time, setTime] = useState(o && !isWhole(o) ? formatHm((o.fromMin ?? 0) === 0 ? (o.toMin ?? 0) : (o.fromMin ?? 0)) : '');
+  const [note, setNote] = useState(o?.note ?? '');
+  const [editing, setEditing] = useState(false);
+  const save = () => {
+    const m = time && VALID_TIME.test(time) ? Number(time.slice(0, 2)) * 60 + Number(time.slice(3)) : null;
+    const body =
+      kind === 'whole' ? {} : kind === 'until' ? { fromMin: 0, toMin: m } : { fromMin: m, toMin: 1440 };
+    return props.onRun(() =>
+      api(`/api/admin/locations/${props.locationId}/schedule/unavailability`, { method: 'PUT', body: { userId: props.userId, date: props.date, note, ...body } }),
+    );
+  };
+  if (!editing) {
+    return o ? (
+      <div className="sch-offbox">
+        <span>
+          <strong>{t.unavailable}</strong> · {offPart(o)}
+          {o.note ? ` · „${o.note}”` : ''}
+          <span className="muted" style={{ display: 'block', fontSize: 12 }}>
+            {o.setByName ? t.offSetBy(o.setByName) : t.offByPerson}
+          </span>
+        </span>
+        <span className="btn-row">
+          <Btn onClick={() => setEditing(true)}>{t.offChange}</Btn>
+          <Btn
+            kind="danger"
+            onClick={() => void props.onRun(() => api(`/api/admin/locations/${props.locationId}/schedule/unavailability?userId=${props.userId}&date=${props.date}`, { method: 'DELETE' }))}
+          >
+            {t.remove}
+          </Btn>
+        </span>
+      </div>
+    ) : (
+      <button type="button" className="sch-offlink" onClick={() => (setKind('whole'), setEditing(true))}>
+        {t.offMark}
+      </button>
+    );
+  }
+  return (
+    <form
+      className="sch-offbox editing"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save().then(() => setEditing(false));
+      }}
+    >
+      <div className="seg" role="tablist">
+        {(['whole', 'until', 'from'] as const).map((k) => (
+          <button key={k} type="button" role="tab" aria-selected={kind === k} onClick={() => setKind(k)}>
+            {k === 'whole' ? t.offWholeLabel : k === 'until' ? t.offUntilLabel : t.offFromLabel}
+          </button>
+        ))}
+      </div>
+      {kind !== 'whole' && (
+        <div className="field">
+          <label htmlFor="off-time">{kind === 'until' ? t.offUntilLabel : t.offFromLabel}</label>
+          <TimeField id="off-time" value={time} onChange={setTime} />
+        </div>
+      )}
+      <input aria-label={t.offNote} placeholder={t.offNote} value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} />
+      <div className="btn-row">
+        <Btn kind="primary" type="submit" disabled={kind !== 'whole' && !VALID_TIME.test(time)}>
+          {t.save}
+        </Btn>
+        <Btn onClick={() => setEditing(false)}>{pl.common.cancel}</Btn>
+      </div>
+    </form>
   );
 }

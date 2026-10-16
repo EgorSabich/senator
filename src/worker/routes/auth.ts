@@ -162,12 +162,16 @@ authRoutes.post('/change-secret', requireSession, async (c) => {
     .prepare(`SELECT secret_hash AS hash, secret_salt AS salt FROM users WHERE id = ?`)
     .bind(user.id)
     .first<{ hash: string | null; salt: string | null }>();
-  if (!row?.hash || !row.salt || !(await verifySecret(current, c.env.AUTH_SECRET, row.hash, row.salt))) {
+  if (!row?.hash || !row.salt) throw new ApiError(400, 'wrong_current_secret');
+  // First sign-in with a temporary PIN/password: the session itself was opened with it a moment ago,
+  // so the person is not asked to type it again — only the new one (owner's request, 2026-10-17).
+  const skipCurrent = user.mustChangeSecret && body.current === undefined;
+  if (!skipCurrent && !(await verifySecret(current, c.env.AUTH_SECRET, row.hash, row.salt))) {
     throw new ApiError(400, 'wrong_current_secret');
   }
   const problem = checkSecret(user.secretKind, next);
   if (problem) throw badRequest(problem);
-  if (next === current) throw badRequest('same_secret');
+  if (skipCurrent ? await verifySecret(next, c.env.AUTH_SECRET, row.hash, row.salt) : next === current) throw badRequest('same_secret');
 
   // PINs are unique (time terminal, D35). A PIN someone tried to take is burned for its holder too.
   let lookup: string | null = null;

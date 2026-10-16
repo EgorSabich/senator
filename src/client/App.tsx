@@ -3,6 +3,7 @@ import { api, ApiFailure, type Me } from './api';
 import { errorText, pl } from './i18n/pl';
 import { Redirect, usePath } from './router';
 import { ChangeSecret } from './screens/ChangeSecret';
+import { maybeShowInstallGuide } from './app/Install';
 import { Login } from './screens/Login';
 import { Brand, ErrorBox, LogoLoader, SecondaryButton, screen } from './ui';
 import { clearPersonalCache } from './pwa';
@@ -76,7 +77,17 @@ export function App() {
       />
     );
   const me = state.me;
-  if (me.user.mustChangeSecret) return <ChangeSecret me={me} onDone={() => void refresh()} />;
+  if (me.user.mustChangeSecret)
+    return (
+      <ChangeSecret
+        me={me}
+        onDone={() => {
+          // first PIN of an employee: show how to add the app to the home screen (owner, 2026-10-17)
+          if (me.user.role === 'employee') maybeShowInstallGuide();
+          void refresh();
+        }}
+      />
+    );
 
   const loggedOut = () => {
     void clearPersonalCache();

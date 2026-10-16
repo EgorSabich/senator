@@ -87,7 +87,6 @@ with sync_playwright() as p:
     page.get_by_label("Login").fill(emp["login"])
     page.get_by_label("PIN lub hasło").fill(emp["tempSecret"])
     page.get_by_role("button", name="Zaloguj się").click()
-    page.get_by_label("Obecny PIN").fill(emp["tempSecret"])
     page.get_by_label("Nowy PIN (6 cyfr)").fill("583920")
     page.get_by_label("Powtórz").fill("583920")
     page.get_by_role("button", name="Zapisz").click()

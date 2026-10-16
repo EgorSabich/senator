@@ -58,14 +58,38 @@ export const MANAGER_ROLES = {
 export type ManagerRole = keyof typeof MANAGER_ROLES;
 
 /** Positions. MVP trains only waiters; others exist for documents and future modules. */
-export const POSITIONS = ['waiter', 'host', 'shift_manager', 'bartender', 'kitchen', 'hookah_master', 'call_center'] as const;
+export const POSITIONS = [
+  'waiter',
+  'waiter_assistant',
+  'host',
+  'shift_manager',
+  'bartender',
+  'bartender_assistant',
+  'kitchen',
+  'hookah_master',
+  'hookah_assistant',
+  'call_center',
+] as const;
 export type Position = (typeof POSITIONS)[number];
+
+/** Assistants belong to the division of the person they help (owner, 2026-10-17); every other position is its own division. */
+export const DIVISION_OF: Record<string, string> = {
+  waiter_assistant: 'waiter',
+  bartender_assistant: 'bartender',
+  hookah_assistant: 'hookah_master',
+};
+export const divisionOf = (position: string): string => DIVISION_OF[position] ?? position;
+/** Positions inside the given divisions (a division plus its assistants). */
+export function positionsOfDivisions(divisions: Iterable<string>): string[] {
+  const set = new Set(divisions);
+  return POSITIONS.filter((p) => set.has(divisionOf(p)));
+}
 
 /** Change levels for every versioned item (spec section E). */
 export const CHANGE_LEVELS = ['cosmetic', 'clarification', 'significant'] as const;
 export type ChangeLevel = (typeof CHANGE_LEVELS)[number];
 
-export const CONTENT_KINDS = ['lesson', 'service_book', 'regulation', 'sop', 'job_description', 'checklist'] as const;
+export const CONTENT_KINDS = ['lesson', 'service_book', 'regulation', 'sop', 'checklist'] as const;
 export type ContentKind = (typeof CONTENT_KINDS)[number];
 
 export const ALLERGEN_STATUSES = ['contains', 'not_contains', 'unconfirmed'] as const;

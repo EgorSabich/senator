@@ -13,7 +13,7 @@ with sync_playwright() as pw:
     o=b.new_context(viewport={"width":1440,"height":900},locale="pl-PL").new_page(); watch(o)
     o.goto(BASE+"/"); o.get_by_label("Login").fill("egor.wlasciciel"); o.get_by_label("PIN lub hasło").fill("TymczasoweHaslo1")
     o.get_by_role("button",name="Zaloguj się").click(); o.get_by_role("heading",name="Ustaw swoje hasło").wait_for()
-    o.get_by_label("Obecne hasło").fill("TymczasoweHaslo1"); o.get_by_label("Nowe hasło").fill("NoweHasloEgora2026"); o.get_by_label("Powtórz").fill("NoweHasloEgora2026")
+    o.get_by_label("Nowe hasło").fill("NoweHasloEgora2026"); o.get_by_label("Powtórz").fill("NoweHasloEgora2026")
     o.get_by_role("button",name="Zapisz").click(); o.get_by_role("heading",name="Dziś",exact=True).wait_for()
     r=o.request; loc=r.get(BASE+"/api/admin/locations").json()["locations"][0]["id"]
     emps={}
@@ -43,13 +43,15 @@ with sync_playwright() as pw:
     # chef logs in
     ch=b.new_context(viewport={"width":1440,"height":900},locale="pl-PL").new_page(); watch(ch)
     ch.goto(BASE+"/"); ch.get_by_label("Login").fill(login); ch.get_by_label("PIN lub hasło").fill(pwd); ch.get_by_role("button",name="Zaloguj się").click()
-    ch.get_by_role("heading",name="Ustaw swoje hasło").wait_for(); ch.get_by_label("Obecne hasło").fill(pwd); ch.get_by_label("Nowe hasło").fill("SzefKuchni2026!"); ch.get_by_label("Powtórz").fill("SzefKuchni2026!")
+    ch.get_by_role("heading",name="Ustaw swoje hasło").wait_for(); ch.get_by_label("Nowe hasło").fill("SzefKuchni2026!"); ch.get_by_label("Powtórz").fill("SzefKuchni2026!")
     ch.get_by_role("button",name="Zapisz").click(); ch.get_by_role("heading",name="Dziś",exact=True).wait_for(); ch.wait_for_timeout(500)
     assert ch.get_by_text("Zofia N.").count()==0, "chef sees floor in Dziś"
     ch.screenshot(path=f"{OUT}/r04-chef-today.png", full_page=True)
     ch.goto(BASE+"/panel/pracownicy"); ch.get_by_text("Leon Kucharz").wait_for(); assert ch.get_by_text("Zofia Nowak").count()==0
     ch.goto(BASE+"/panel/grafik"); ch.get_by_role("heading",name="Grafik").wait_for(); ch.get_by_role("button",name="Tydzień").click() if ch.get_by_role("tab",name="Tydzień").count()==0 else ch.get_by_role("tab",name="Tydzień").click()
     ch.get_by_role("button",name="Ten tydzień").click(); ch.wait_for_timeout(700)
+    assert ch.get_by_text("Zofia N.").count()==0, "chef starts with the kitchen only"
+    ch.get_by_role("button",name="Wszyscy",exact=True).first.click(); ch.wait_for_timeout(400)
     assert ch.get_by_text("Zofia N.").count()>=1, "chef should see the whole team in Grafik"
     assert ch.get_by_role("button",name=f"Zofia N., {today} — zmiany").is_disabled()
     assert not ch.get_by_role("button",name=f"Leon K., {today} — zmiany").is_disabled()

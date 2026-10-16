@@ -48,6 +48,28 @@ body {
   color: var(--text);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
+  /* app feel: no double-tap zoom, no grey flash on tap, no text size jumps on rotation, no rubber-band behind the app */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+button,
+a,
+[role='button'],
+.chip {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+/* iOS zooms into inputs smaller than 16 px — keep them at 16 on phones */
+@media (max-width: 720px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }
 
 a {

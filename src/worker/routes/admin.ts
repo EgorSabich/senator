@@ -228,7 +228,9 @@ adminRoutes.get('/locations/:locId/employees', async (c) => {
     .bind(now, locId)
     .all<{ position: string; role: string }>();
   // D44: a chef sees the kitchen, a floor manager the floor… (managers themselves only for unscoped people)
-  return c.json({ employees: scope ? results.filter((r) => r.role === 'employee' && scope.has(r.position)) : results, divisions: scope ? [...scope] : null });
+  // leaders are listed in "Kadra kierownicza", not among the staff (owner, 2026-10-17)
+  const staff = results.filter((r) => r.role === 'employee');
+  return c.json({ employees: scope ? staff.filter((r) => scope.has(r.position)) : staff, divisions: scope ? [...(access.divisions.get(locId) ?? [])] : null });
 });
 
 adminRoutes.post('/locations/:locId/employees', async (c) => {

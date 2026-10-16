@@ -319,3 +319,130 @@ html[data-nav='back']::view-transition-new(root) {
     animation: none;
   }
 }
+
+/* ───────── Native feel (2026-10-17) ───────── */
+/* skeletons instead of spinners */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+.skeleton span:not(.sr-only) {
+  display: block;
+  border-radius: 14px;
+  background: linear-gradient(90deg, var(--surface) 0%, var(--surface-raised) 40%, var(--surface) 80%) 0 0 / 300% 100%;
+  animation: sk-shine 1.4s ease-in-out infinite, fade-in 300ms ease both;
+}
+.skeleton .sk-title {
+  width: 42%;
+  height: 26px;
+  margin-bottom: 6px;
+}
+.skeleton .sk-row {
+  height: 58px;
+}
+@keyframes sk-shine {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* closing animations */
+.modal-backdrop.closing {
+  animation: fade-out 200ms ease forwards;
+}
+.modal.closing {
+  animation: pop-out 200ms ease forwards;
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+.modal-handle {
+  display: none;
+}
+html.modal-open,
+html.modal-open body {
+  overflow: hidden;
+}
+
+/* phones: dialogs are bottom sheets that slide up and can be pulled down */
+@media (max-width: 720px) {
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal {
+    width: 100%;
+    max-height: calc(100dvh - env(safe-area-inset-top) - 24px);
+    border-radius: 22px 22px 0 0;
+    border-bottom: none;
+    padding: 6px 18px calc(18px + env(safe-area-inset-bottom));
+    animation: sheet-up 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .modal.dragging {
+    transition: none;
+  }
+  .modal.closing {
+    animation: sheet-down 220ms ease forwards;
+  }
+  .modal-handle {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0 6px;
+    margin: 0 -18px;
+    cursor: grab;
+    touch-action: none;
+  }
+  .modal-handle span {
+    width: 40px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--border);
+  }
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheet-down {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* press feedback: things react under the finger */
+.row-btn,
+.a-row,
+.a-btn,
+.chip,
+.a-chip,
+.sch-template,
+.more-tile,
+.today-tile {
+  transition: transform 140ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+.row-btn:active:not(:disabled),
+a.a-row:active,
+button.a-row:active:not(:disabled),
+.a-btn:active:not(:disabled),
+.chip:active,
+.a-chip:active,
+.sch-template:active,
+.more-tile:active,
+a.today-tile:active {
+  transform: scale(0.98);
+}

@@ -26,7 +26,6 @@ with sync_playwright() as p:
     shot(page, "01-login")
     page.get_by_role("button", name="Zaloguj się").click()
     page.get_by_role("heading", name="Ustaw swoje hasło").wait_for()
-    page.get_by_label("Obecne hasło").fill("TymczasoweHaslo1")
     page.get_by_label("Nowe hasło").fill("NoweHasloEgora2026")
     page.get_by_label("Powtórz").fill("NoweHasloEgora2026")
     shot(page, "02-change")

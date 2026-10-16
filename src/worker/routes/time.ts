@@ -338,9 +338,10 @@ timeAdminRoutes.post('/terminals/:id/disable', async (c) => {
 
 /* ───────── Hourly rates (D37) and the employee summary ───────── */
 
-/** Rate valid on a business date: the latest one with valid_from ≤ date. */
+/** Rate valid on a business date: the latest one with valid_from ≤ date (before the first one: the first one). */
 export function rateOn(rates: { validFrom: string; rateGrosze: number }[], date: string): number | null {
-  let r: number | null = null;
+  // The first rate also covers shifts before it was entered (people enter a rate "from today", the week already ran).
+  let r: number | null = rates.length ? rates[0]!.rateGrosze : null;
   for (const x of rates) if (x.validFrom <= date) r = x.rateGrosze;
   return r;
 }

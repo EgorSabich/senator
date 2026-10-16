@@ -2,6 +2,7 @@
  * PINs set before the time clock (no terminal link yet) work on the terminal and get linked on first use;
  * two people sharing an old PIN both have to choose a new one.
  */
+// @ts-ignore -- tests run in Node; the app's tsconfig has no Node types
 import { execSync } from 'node:child_process';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { activateClient, Client, ownerClient, SENATOR } from './client';

@@ -19,7 +19,7 @@ with sync_playwright() as pw:
     o=b.new_context(viewport={"width":1280,"height":900},locale="pl-PL").new_page(); watch(o)
     o.goto(BASE+"/"); o.get_by_label("Login").fill("egor.wlasciciel"); o.get_by_label("PIN lub hasło").fill("TymczasoweHaslo1")
     o.get_by_role("button",name="Zaloguj się").click(); o.get_by_role("heading",name="Ustaw swoje hasło").wait_for()
-    o.get_by_label("Obecne hasło").fill("TymczasoweHaslo1"); o.get_by_label("Nowe hasło").fill("NoweHasloEgora2026"); o.get_by_label("Powtórz").fill("NoweHasloEgora2026")
+    o.get_by_label("Nowe hasło").fill("NoweHasloEgora2026"); o.get_by_label("Powtórz").fill("NoweHasloEgora2026")
     o.get_by_role("button",name="Zapisz").click(); o.get_by_role("heading",name="Dziś",exact=True).wait_for()
     r=o.request; loc=r.get(BASE+"/api/admin/locations").json()["locations"][0]["id"]
     # import
@@ -40,8 +40,8 @@ with sync_playwright() as pw:
         e=r.post(BASE+f"/api/admin/locations/{loc}/employees",data={"firstName":fn,"lastName":ln,"position":"waiter"},headers=H).json()
         c=b.new_context(viewport={"width":390,"height":844},locale="pl-PL",device_scale_factor=2,is_mobile=True,has_touch=True); p=c.new_page(); watch(p)
         p.goto(BASE+"/"); p.get_by_label("Login").fill(e["login"]); p.get_by_label("PIN lub hasło").fill(e["tempSecret"]); p.get_by_role("button",name="Zaloguj się").click()
-        p.get_by_label("Obecny PIN").fill(e["tempSecret"]); p.get_by_label("Nowy PIN (6 cyfr)").fill(pin); p.get_by_label("Powtórz").fill(pin); p.get_by_role("button",name="Zapisz").click()
-        p.get_by_role("heading",name=re.compile("Dzień dobry")).wait_for(); phones.append(p)
+        p.get_by_label("Nowy PIN (6 cyfr)").fill(pin); p.get_by_label("Powtórz").fill(pin); p.get_by_role("button",name="Zapisz").click()
+        p.get_by_role("heading",name=re.compile("Dzień dobry|Dobry wieczór|Dobranoc")).wait_for(); phones.append(p)
     tc=b.new_context(); tp=tc.new_page(); tp.goto(BASE+"/")
     tp.request.post(BASE+"/api/auth/login",data={"login":tt["login"],"secret":tt["tempSecret"]},headers=H)
     for pin in ["481937","592048","603159"]: tp.request.post(BASE+"/api/terminal/punch",data={"pin":pin,"clientId":f"ui{pin}{int(time.time())}"},headers=H)

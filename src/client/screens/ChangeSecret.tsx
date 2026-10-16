@@ -7,6 +7,8 @@ import { Brand, ErrorBox, Field, PrimaryButton, SecondaryButton, screen } from '
 /** Forced first change (onCancel absent) or a voluntary change from the account screen. */
 export function ChangeSecret({ me, onDone, onCancel }: { me: Me; onDone: () => void; onCancel?: () => void }) {
   const isPin = me.user.secretKind === 'pin';
+  // first sign-in: the temporary PIN/password was just typed on the login screen — no need to ask again
+  const askCurrent = !(me.user.mustChangeSecret && !onCancel);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [repeat, setRepeat] = useState('');
@@ -21,7 +23,7 @@ export function ChangeSecret({ me, onDone, onCancel }: { me: Me; onDone: () => v
     if (next !== repeat) return setError(pl.changeSecret.mismatch);
     setBusy(true);
     try {
-      await api('/api/auth/change-secret', { method: 'POST', body: { current, next } });
+      await api('/api/auth/change-secret', { method: 'POST', body: askCurrent ? { current, next } : { next } });
       onDone();
     } catch (err) {
       setError(errorText(err instanceof ApiFailure ? err.code : 'generic'));
@@ -43,11 +45,30 @@ export function ChangeSecret({ me, onDone, onCancel }: { me: Me; onDone: () => v
             {isPin ? pl.changeSecret.introPin : pl.changeSecret.introPassword}
           </p>
         )}
-        <Field id="current" label={isPin ? pl.changeSecret.currentPin : pl.changeSecret.currentPassword} value={current} onChange={setCurrent} type="password" autoComplete="current-password" {...digits} />
-        <Field id="next" label={isPin ? pl.changeSecret.newPin : pl.changeSecret.newPassword} hint={isPin ? pl.changeSecret.pinRules : undefined} value={next} onChange={setNext} type="password" autoComplete="new-password" {...digits} />
+        {askCurrent && (
+          <Field
+            id="current"
+            label={isPin ? pl.changeSecret.currentPin : pl.changeSecret.currentPassword}
+            value={current}
+            onChange={setCurrent}
+            type="password"
+            autoComplete="current-password"
+            {...digits}
+          />
+        )}
+        <Field
+          id="next"
+          label={isPin ? pl.changeSecret.newPin : pl.changeSecret.newPassword}
+          hint={isPin ? pl.changeSecret.pinRules : undefined}
+          value={next}
+          onChange={setNext}
+          type="password"
+          autoComplete="new-password"
+          {...digits}
+        />
         <Field id="repeat" label={pl.changeSecret.repeat} value={repeat} onChange={setRepeat} type="password" autoComplete="new-password" {...digits} />
         <ErrorBox message={error} />
-        <PrimaryButton disabled={busy || !current || !next || !repeat}>{pl.changeSecret.submit}</PrimaryButton>
+        <PrimaryButton disabled={busy || (askCurrent && !current) || !next || !repeat}>{pl.changeSecret.submit}</PrimaryButton>
         {onCancel && <SecondaryButton onClick={onCancel}>{pl.common.cancel}</SecondaryButton>}
       </form>
     </main>

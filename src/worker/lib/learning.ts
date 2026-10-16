@@ -3,8 +3,9 @@
  */
 import { itemProgress, moduleStates, programPercent, type ItemProgress, type ModuleInput, type VersionRef } from '../../shared/progress';
 import type { SessionUser } from '../env';
+import { divisionOf } from '../../shared/constants';
 
-export const DOCUMENT_KINDS = ['regulation', 'sop', 'job_description', 'checklist'] as const;
+export const DOCUMENT_KINDS = ['regulation', 'sop', 'checklist'] as const;
 /** Kinds whose items can be mandatory to read and confirm; the Service Book too (D38). */
 export const MANDATORY_KINDS = [...DOCUMENT_KINDS, 'service_book'] as const;
 
@@ -30,7 +31,8 @@ export async function userPositions(db: D1Database, user: SessionUser, locationI
     .prepare(`SELECT position FROM user_locations WHERE user_id = ? AND location_id = ? AND is_active = 1`)
     .bind(user.id, locationId)
     .all<{ position: string }>();
-  return results.map((r) => r.position);
+  // an assistant also sees what is meant for the division (waiter_assistant → waiter materials and program)
+  return [...new Set(results.flatMap((r) => [r.position, divisionOf(r.position)]))];
 }
 
 /** Published, visible content of a location (own + shared), filtered by the person's positions. */

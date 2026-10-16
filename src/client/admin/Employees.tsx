@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { POSITIONS } from '../../shared/constants';
+import { divisionOf, POSITIONS } from '../../shared/constants';
 import { comparePl, foldPolish } from '../../shared/text';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
@@ -466,7 +466,7 @@ function AddEmployee({
         <div className="field">
           <label htmlFor="pos">{t.position}</label>
           <select id="pos" value={position} onChange={(e) => setPosition(e.target.value)}>
-            {POSITIONS.filter((p) => p !== 'shift_manager' && (!divisions || divisions.includes(p))).map((p) => (
+            {POSITIONS.filter((p) => p !== 'shift_manager' && (!divisions || divisions.includes(divisionOf(p)))).map((p) => (
               <option key={p} value={p}>
                 {pl.admin.positions[p]}
               </option>

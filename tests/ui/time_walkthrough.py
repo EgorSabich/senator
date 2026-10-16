@@ -21,7 +21,7 @@ with sync_playwright() as pw:
     o=b.new_context(viewport={"width":1280,"height":900},locale="pl-PL").new_page(); watch(o)
     o.goto(BASE+"/"); o.get_by_label("Login").fill("egor.wlasciciel"); o.get_by_label("PIN lub hasło").fill("TymczasoweHaslo1")
     o.get_by_role("button", name="Zaloguj się").click(); o.get_by_role("heading", name="Ustaw swoje hasło").wait_for()
-    o.get_by_label("Obecne hasło").fill("TymczasoweHaslo1"); o.get_by_label("Nowe hasło").fill("NoweHasloEgora2026"); o.get_by_label("Powtórz").fill("NoweHasloEgora2026")
+    o.get_by_label("Nowe hasło").fill("NoweHasloEgora2026"); o.get_by_label("Powtórz").fill("NoweHasloEgora2026")
     o.get_by_role("button", name="Zapisz").click(); o.get_by_role("heading", name="Dziś", exact=True).wait_for()
     r=o.request; loc=r.get(BASE+"/api/admin/locations").json()["locations"][0]["id"]
     cid=r.post(BASE+f"/api/admin/locations/{loc}/content", data={"kind":"checklist","title":"Lista kontrolna zamknięcia zmiany — kelnerzy"}, headers=H).json()["id"]
@@ -40,8 +40,8 @@ with sync_playwright() as pw:
     for e,pin in emps:
         c=b.new_context(viewport={"width":390,"height":844},locale="pl-PL",device_scale_factor=2,is_mobile=True,has_touch=True); p=c.new_page(); watch(p)
         p.goto(BASE+"/"); p.get_by_label("Login").fill(e["login"]); p.get_by_label("PIN lub hasło").fill(e["tempSecret"]); p.get_by_role("button", name="Zaloguj się").click()
-        p.get_by_label("Obecny PIN").fill(e["tempSecret"]); p.get_by_label("Nowy PIN (6 cyfr)").fill(pin); p.get_by_label("Powtórz").fill(pin); p.get_by_role("button", name="Zapisz").click()
-        p.get_by_role("heading", name=re.compile("Dzień dobry")).wait_for(); phones.append(p)
+        p.get_by_label("Nowy PIN (6 cyfr)").fill(pin); p.get_by_label("Powtórz").fill(pin); p.get_by_role("button", name="Zapisz").click()
+        p.get_by_role("heading", name=re.compile("Dzień dobry|Dobry wieczór|Dobranoc")).wait_for(); phones.append(p)
     phones[0].wait_for_timeout(800); phones[0].screenshot(path=f"{OUT}/02-start-offshift.png")
     # terminal phone
     tc=b.new_context(viewport={"width":390,"height":844},locale="pl-PL",device_scale_factor=2,is_mobile=True,has_touch=True,permissions=["camera"]); t=tc.new_page(); watch(t)

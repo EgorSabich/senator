@@ -13,7 +13,22 @@ export function Brand({ size = 'm' }: { size?: 'm' | 'l' }) {
 }
 
 /** Loading state with the Senator mark: a ring drawn around the "S", the word lighting up letter by letter. */
+/** Skeleton rows: the page keeps its shape while data arrives (no jump, no spinner). */
+export function Skeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="skeleton" role="status" aria-live="polite">
+      <span className="sk-title" />
+      {Array.from({ length: rows }, (_, i) => (
+        <span key={i} className="sk-row" style={{ animationDelay: `${i * 60}ms` }} />
+      ))}
+      <span className="sr-only">Ładowanie…</span>
+    </div>
+  );
+}
+
 export function LogoLoader({ full = false, label }: { full?: boolean; label?: string }) {
+  // inside pages a skeleton feels faster; the animated logo stays for starting the app
+  if (!full) return <Skeleton />;
   return (
     <div className={`logo-loader${full ? ' full' : ''}`} role="status" aria-live="polite">
       <svg className="logo-mark" viewBox="0 0 64 64" aria-hidden="true">

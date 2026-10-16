@@ -13,7 +13,7 @@ with sync_playwright() as pw:
     o=b.new_context(viewport={"width":1440,"height":900},locale="pl-PL").new_page(); watch(o)
     o.goto(BASE+"/"); o.get_by_label("Login").fill("egor.wlasciciel"); o.get_by_label("PIN lub hasło").fill("TymczasoweHaslo1")
     o.get_by_role("button",name="Zaloguj się").click(); o.get_by_role("heading",name="Ustaw swoje hasło").wait_for()
-    o.get_by_label("Obecne hasło").fill("TymczasoweHaslo1"); o.get_by_label("Nowe hasło").fill("NoweHasloEgora2026"); o.get_by_label("Powtórz").fill("NoweHasloEgora2026")
+    o.get_by_label("Nowe hasło").fill("NoweHasloEgora2026"); o.get_by_label("Powtórz").fill("NoweHasloEgora2026")
     o.get_by_role("button",name="Zapisz").click(); o.get_by_role("heading",name="Dziś",exact=True).wait_for()
     r=o.request; loc=r.get(BASE+"/api/admin/locations").json()["locations"][0]["id"]
     emps={}
@@ -26,8 +26,8 @@ with sync_playwright() as pw:
     c=b.new_context(viewport={"width":390,"height":844},locale="pl-PL",device_scale_factor=2,is_mobile=True,has_touch=True); p=c.new_page(); watch(p)
     z=emps["Zofia"]
     p.goto(BASE+"/"); p.get_by_label("Login").fill(z["login"]); p.get_by_label("PIN lub hasło").fill(z["tempSecret"]); p.get_by_role("button",name="Zaloguj się").click()
-    p.get_by_label("Obecny PIN").fill(z["tempSecret"]); p.get_by_label("Nowy PIN (6 cyfr)").fill("481937"); p.get_by_label("Powtórz").fill("481937"); p.get_by_role("button",name="Zapisz").click()
-    p.get_by_role("heading",name=re.compile("Dzień dobry")).wait_for()
+    p.get_by_label("Nowy PIN (6 cyfr)").fill("481937"); p.get_by_label("Powtórz").fill("481937"); p.get_by_role("button",name="Zapisz").click()
+    p.get_by_role("heading",name=re.compile("Dzień dobry|Dobry wieczór|Dobranoc")).wait_for()
     p.locator('nav.a-tabbar a[href="/grafik"]').click(); p.get_by_role("heading",name="Grafik").wait_for()
     p.get_by_role("link",name="Niedostępność").click(); p.locator(".g-daybtn").first.wait_for(); p.wait_for_timeout(300)
     sec=p.locator("section.a-card").first
@@ -42,7 +42,13 @@ with sync_playwright() as pw:
     dlg=o.get_by_role("dialog"); dlg.wait_for(); o.screenshot(path=f"{OUT}/g02-dialog-templates.png")
     dlg.locator(".sch-template", has_text="10:00–18:00").click(); dlg.wait_for(state="hidden")
     o.get_by_role("button",name=f"Zofia N., {nxt+datetime.timedelta(days=2)} — zmiany").click()
-    dlg=o.get_by_role("dialog"); dlg.wait_for(); assert dlg.get_by_text("zgłosiła niedostępność").count()==1; o.keyboard.press("Escape")
+    dlg=o.get_by_role("dialog"); dlg.wait_for(); assert dlg.get_by_text("zgłoszone przez pracownika").count()==1; o.screenshot(path=f"{OUT}/g02b-off-dialog.png")
+    # leader marks Adam unavailable until 17:00 on Friday
+    o.keyboard.press("Escape"); o.wait_for_timeout(400)
+    o.get_by_role("button",name=f"Adam W., {nxt+datetime.timedelta(days=4)} — zmiany").click(); dlg=o.get_by_role("dialog"); dlg.wait_for()
+    dlg.get_by_role("button",name="+ Oznacz jako niedostępny").click(); dlg.get_by_role("tab",name="Niedostępny do").click(); dlg.get_by_label("Niedostępny do").fill("1700")
+    dlg.get_by_label("Powód (opcjonalnie)").fill("Prosił telefonicznie"); o.screenshot(path=f"{OUT}/g02c-off-editor.png"); dlg.get_by_role("button",name="Zapisz").first.click()
+    dlg.get_by_text("wpisał(a):").wait_for(); o.keyboard.press("Escape")
     o.wait_for_timeout(400); o.screenshot(path=f"{OUT}/g03-panel-draft.png", full_page=True)
     o.once("dialog", lambda d: d.accept()); o.get_by_role("button",name=re.compile("Opublikuj")).click(); o.get_by_text(re.compile("Opublikowano zmian")).wait_for()
     o.locator(".sch-legend-item").first.click(); o.wait_for_timeout(300); o.screenshot(path=f"{OUT}/g04-panel-published.png", full_page=True)

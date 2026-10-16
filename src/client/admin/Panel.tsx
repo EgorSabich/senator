@@ -136,7 +136,7 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
                   </select>
                 </label>
               ) : (
-                <span className="muted" style={{ fontSize: 13 }}>
+                <span className="muted topbar-name" style={{ fontSize: 13 }}>
                   {current?.name}
                 </span>
               )}
@@ -145,7 +145,7 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
               <a href="/nauka" onClick={onNav('/nauka')} style={{ fontSize: 13, fontWeight: 600 }}>
                 {pl.admin.academyView}
               </a>
-              <span className="muted" style={{ fontSize: 13 }}>
+              <span className="muted topbar-name" style={{ fontSize: 13 }}>
                 {me.user.firstName} {me.user.lastName}
               </span>
               <Btn onClick={() => void logout()}>{pl.home.logout}</Btn>

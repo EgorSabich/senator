@@ -3,6 +3,7 @@ import { onNav } from '../router';
 import { TodayCard } from './Checklist';
 import { MyTimeCard } from './MyTime';
 import { MyScheduleCard } from './Grafik';
+import { InstallCard } from './Install';
 import { ModuleList, type ProgramView } from './Program';
 import { contentHref, Fold, Icon, Loading, Problem, useAcademy, useApi } from './shared';
 
@@ -16,6 +17,9 @@ interface Home {
 }
 
 const t = pl.academy;
+
+/** Hour in Warsaw (the phone may be set to another zone). */
+const warsawHour = () => Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Europe/Warsaw' }).format(new Date()));
 
 export function Start() {
   const { locationId, me } = useAcademy();
@@ -35,12 +39,13 @@ export function Start() {
   return (
     <main className="a-main">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <h1 className="a-title">{pl.home.hello(data?.user.firstName ?? me.user.firstName)}</h1>
+        <h1 className="a-title">{pl.home.hello(data?.user.firstName ?? me.user.firstName, warsawHour())}</h1>
       </div>
       <Problem message={error} />
       {!data && !error && <Loading />}
       {data && (
         <>
+          <InstallCard />
           <TodayCard />
           <MyScheduleCard />
           <MyTimeCard />

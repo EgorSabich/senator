@@ -19,7 +19,13 @@ interface MySchedule {
   upcoming: { id: string; date: string; startMin: number; endMin: number; note: string | null }[];
 }
 interface Unav {
-  weeks: { week: string; days: string[]; deadline: number; open: boolean; dates: { date: string; note: string | null }[] }[];
+  weeks: {
+    week: string;
+    days: string[];
+    deadline: number;
+    open: boolean;
+    dates: { date: string; note: string | null; fromMin: number | null; toMin: number | null; byManager?: number }[];
+  }[];
 }
 
 const range = (s: { startMin: number; endMin: number }) => `${formatHm(s.startMin)}–${formatHm(s.endMin)}`;
@@ -149,23 +155,48 @@ function DaysOff() {
   );
 }
 
+type Part = { kind: 'whole' | 'until' | 'from'; time: string };
+const partOf = (d: { fromMin: number | null; toMin: number | null }): Part =>
+  d.fromMin === null && d.toMin === null
+    ? { kind: 'whole', time: '' }
+    : (d.fromMin ?? 0) === 0
+      ? { kind: 'until', time: formatHm(d.toMin ?? 0) }
+      : { kind: 'from', time: formatHm(d.fromMin ?? 0) };
+const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const toMin = (v: string) => Number(v.slice(0, 2)) * 60 + Number(v.slice(3));
+
 function WeekOff({ w, onSaved }: { w: Unav['weeks'][number]; onSaved: () => Promise<void> }) {
   const { locationId } = useAcademy();
-  const [picked, setPicked] = useState<string[]>(w.dates.map((d) => d.date));
+  const fromServer = () => new Map(w.dates.filter((d) => !d.byManager).map((d) => [d.date, partOf(d)]));
+  const [picked, setPicked] = useState<Map<string, Part>>(fromServer);
   const [note, setNote] = useState(w.dates[0]?.note ?? '');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   useEffect(() => {
-    setPicked(w.dates.map((d) => d.date));
+    setPicked(fromServer());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [w.dates]);
-  const dirty = JSON.stringify([...picked].sort()) !== JSON.stringify(w.dates.map((d) => d.date).sort()) || note !== (w.dates[0]?.note ?? '');
+  const byManager = new Map(w.dates.filter((d) => d.byManager).map((d) => [d.date, d]));
+  const serial = (m: Map<string, Part>) => JSON.stringify([...m.entries()].sort());
+  const dirty = serial(picked) !== serial(fromServer()) || note !== (w.dates[0]?.note ?? '');
+  const valid = [...picked.values()].every((p) => p.kind === 'whole' || HM.test(p.time));
+  const set = (date: string, p: Part | null) => {
+    setMsg(null);
+    const next = new Map(picked);
+    if (p) next.set(date, p);
+    else next.delete(date);
+    setPicked(next);
+  };
 
   async function save() {
     setBusy(true);
     setProblem(null);
     try {
-      await api(`/api/locations/${locationId}/unavailability`, { method: 'PUT', body: { week: w.week, dates: picked, note } });
+      const items = [...picked.entries()].map(([date, p]) =>
+        p.kind === 'whole' ? { date } : p.kind === 'until' ? { date, fromMin: 0, toMin: toMin(p.time) } : { date, fromMin: toMin(p.time), toMin: 1440 },
+      );
+      await api(`/api/locations/${locationId}/unavailability`, { method: 'PUT', body: { week: w.week, items, note } });
       setMsg(t.saved);
       await onSaved();
     } catch (e) {
@@ -175,39 +206,69 @@ function WeekOff({ w, onSaved }: { w: Unav['weeks'][number]; onSaved: () => Prom
     }
   }
   return (
-    <section className="a-card" style={{ gap: 10 }} aria-label={t.weekOf(dm(w.days[0]!), dm(w.days[6]!))}>
+    <section className="a-card" style={{ gap: 12 }} aria-label={t.weekOf(dm(w.days[0]!), dm(w.days[6]!))}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
         <strong>{t.weekOf(dm(w.days[0]!), dm(w.days[6]!))}</strong>
         <span className={`a-pill${w.open ? '' : ' warn'}`}>{w.open ? t.until(deadlineText(w.deadline)) : t.closed}</span>
       </div>
       <div className="g-days">
-        {w.days.map((d) => (
-          <button
-            key={d}
-            type="button"
-            className="g-daybtn"
-            aria-pressed={picked.includes(d)}
-            disabled={!w.open || busy}
-            onClick={() => {
-              setMsg(null);
-              setPicked(picked.includes(d) ? picked.filter((x) => x !== d) : [...picked, d]);
-            }}
-          >
-            {dayShort(d)}
-          </button>
-        ))}
+        {w.days.map((d) => {
+          const p = picked.get(d);
+          const mgr = byManager.get(d);
+          return (
+            <button
+              key={d}
+              type="button"
+              className={`g-daybtn${p && p.kind !== 'whole' ? ' part' : ''}${mgr ? ' mgr' : ''}`}
+              aria-pressed={Boolean(p || mgr)}
+              disabled={!w.open || busy || Boolean(mgr)}
+              onClick={() => set(d, p ? null : { kind: 'whole', time: '' })}
+            >
+              {dayShort(d)}
+            </button>
+          );
+        })}
       </div>
+      {[...picked.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([d, p]) => (
+          <div key={d} className="g-part">
+            <span className="g-part-day">{cap(dayShort(d))}</span>
+            <div className="g-seg" role="tablist">
+              {(['whole', 'until', 'from'] as const).map((k) => (
+                <button key={k} type="button" role="tab" aria-selected={p.kind === k} disabled={!w.open} onClick={() => set(d, { kind: k, time: p.time })}>
+                  {t.part[k]}
+                </button>
+              ))}
+            </div>
+            {p.kind !== 'whole' && (
+              <input
+                className="a-input g-time"
+                type="time"
+                aria-label={p.kind === 'until' ? t.part.until : t.part.from}
+                value={p.time}
+                disabled={!w.open}
+                onChange={(e) => set(d, { kind: p.kind, time: e.target.value })}
+              />
+            )}
+          </div>
+        ))}
+      {[...byManager.values()].map((m) => (
+        <span key={m.date} className="a-sub">
+          {t.byManager(cap(dayShort(m.date)))}
+        </span>
+      ))}
       {w.open ? (
         <>
           <input className="a-input" value={note} maxLength={200} onChange={(e) => (setMsg(null), setNote(e.target.value))} placeholder={t.notePlaceholder} aria-label={t.note} />
           <Problem message={problem} />
-          <button type="button" className="a-btn primary" disabled={!dirty || busy} onClick={() => void save()}>
-            {picked.length ? t.save(picked.length) : t.saveNone}
+          <button type="button" className="a-btn primary" disabled={!dirty || busy || !valid} onClick={() => void save()}>
+            {picked.size ? t.save(picked.size) : t.saveNone}
           </button>
           {msg && <span className="a-sub">{msg}</span>}
         </>
       ) : (
-        <span className="a-sub">{picked.length ? t.closedWith(picked.length) : t.closedNone}</span>
+        <span className="a-sub">{picked.size ? t.closedWith(picked.size) : t.closedNone}</span>
       )}
     </section>
   );

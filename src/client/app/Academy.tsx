@@ -1,4 +1,6 @@
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
+import { api } from '../api';
+import { apiCache } from '../apiCache';
 import type { Me } from '../api';
 import { pl } from '../i18n/pl';
 import { match, onNav, usePath } from '../router';
@@ -9,6 +11,7 @@ import { Knowledge } from './Knowledge';
 import { MenuItem, MenuList } from './Menu';
 import { MyTime } from './MyTime';
 import { Grafik } from './Grafik';
+import { InstallGuide } from './Install';
 import { Program } from './Program';
 import { Reader } from './Reader';
 import { Search } from './Search';
@@ -31,6 +34,29 @@ export function Academy({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: (
   const locationId = me.locations[0]?.id ?? '';
   const ctx = useMemo<AcademyCtx>(() => ({ me, locationId, online }), [me, locationId, online]);
 
+  // Warm up the other tabs while the phone is idle, so switching shows content at once (it refreshes anyway).
+  useEffect(() => {
+    if (!locationId) return;
+    const paths = ['home', 'program', 'my-schedule', 'menu', 'service-book', 'library', 'lessons', ...(me.user.role === 'employee' ? ['my-time'] : [])].map(
+      (p) => `/api/locations/${locationId}/${p}`,
+    );
+    const idle = (cb: () => void) => ((window as Window & { requestIdleCallback?: (f: () => void) => number }).requestIdleCallback ?? ((f: () => void) => window.setTimeout(f, 800)))(cb);
+    let cancelled = false;
+    idle(async () => {
+      for (const p of paths) {
+        if (cancelled || apiCache.has(p)) continue;
+        try {
+          apiCache.set(p, await api(p));
+        } catch {
+          /* offline or not allowed: the tab loads normally later */
+        }
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [locationId, me.user.role]);
+
   let page: ReactNode;
   let full = false; // full-screen pages bring their own top bar and footer
   let m: Record<string, string> | null;
@@ -50,6 +76,7 @@ export function Academy({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: (
   else if (path === '/wiedza/lekcje') page = <Knowledge tab="lessons" />;
   else if (path === '/szukaj') page = <Search />;
   else if (path === '/godziny') page = <MyTime />;
+  else if (path === '/instaluj') page = <InstallGuide />;
   else if (path === '/grafik') page = <Grafik tab="shifts" />;
   else if (path === '/grafik/niedostepnosc') page = <Grafik tab="off" />;
   else if (path === '/grafik/godziny') page = <Grafik tab="hours" />;

@@ -2,7 +2,7 @@
  * Access layer — every request that touches location data goes through here (spec section B, G).
  * Unknown or foreign locations/users answer 404, so their existence is never revealed.
  */
-import { DIVISION_SCOPE_PREFIX, PERMISSIONS, POSITIONS, type Permission } from '../../shared/constants';
+import { DIVISION_SCOPE_PREFIX, PERMISSIONS, POSITIONS, positionsOfDivisions, type Permission } from '../../shared/constants';
 import type { SessionUser } from '../env';
 import { ApiError, notFound } from '../lib/http';
 
@@ -53,9 +53,13 @@ export async function loadAccess(db: D1Database, user: SessionUser): Promise<Acc
 }
 
 /** Divisions this person may manage at a location (null = all). */
+/**
+ * Divisions (and the positions inside them, e.g. waiter + waiter_assistant) this person may manage at a location; null = all.
+ * Checks compare both division keys (shifts) and positions (people, materials) against this set.
+ */
 export function allowedDivisions(access: Access, locationId: string): Set<string> | null {
   const d = access.divisions.get(locationId);
-  return d && d.size ? d : null;
+  return d && d.size ? new Set([...d, ...positionsOfDivisions(d)]) : null;
 }
 
 export function requireDivision(access: Access, locationId: string, division: string): void {

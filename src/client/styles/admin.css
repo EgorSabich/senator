@@ -12,7 +12,7 @@
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 16px 0;
+  padding: calc(env(safe-area-inset-top) + 16px) 0 16px;
   position: sticky;
   top: 0;
   height: 100dvh;
@@ -65,7 +65,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px clamp(16px, 3vw, 32px);
+  padding: calc(env(safe-area-inset-top) + 12px) clamp(16px, 3vw, 32px) 12px;
   border-bottom: 1px solid var(--border);
 }
 .page {
@@ -1660,4 +1660,141 @@ input[type='checkbox']:disabled {
   justify-content: space-between;
   gap: 10px;
   font-size: 14px;
+}
+@media (max-width: 720px) {
+  .topbar {
+    flex-wrap: nowrap;
+    padding-bottom: 10px;
+  }
+  .topbar-name {
+    display: none;
+  }
+  .topbar .btn,
+  .topbar button {
+    min-height: 38px;
+    padding: 0 12px;
+  }
+}
+.chev {
+  display: inline-block;
+  color: var(--text-muted);
+  transition: transform 260ms var(--ease-out, ease);
+}
+.chev.up {
+  transform: rotate(180deg);
+}
+
+/* Grafik polish (2026-10-17) */
+.sch-fade {
+  animation: sch-fade-in 320ms var(--ease-out, ease) both;
+}
+@keyframes sch-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sch-fade {
+    animation: none;
+  }
+}
+.sch-grid .sch-division th,
+.sch-grid .sch-division td {
+  background: #322620;
+  border-top: 2px solid #4a3a31;
+  border-bottom: 1px solid #4a3a31;
+  padding: 12px 6px 10px;
+}
+.sch-grid tbody .sch-division:first-child th,
+.sch-grid tbody .sch-division:first-child td {
+  border-top: none;
+}
+.sch-grid .sch-division th.sticky {
+  box-shadow: inset 4px 0 0 var(--accent);
+  padding-left: 14px;
+}
+.sch-division-name {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.sch-division-count {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+a.sch-person {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+a.sch-person:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.sch-grid td.sch-off {
+  background-image: repeating-linear-gradient(135deg, rgba(240, 154, 142, 0.14) 0 2px, transparent 2px 9px);
+}
+.sch-grid td.sch-off.part {
+  background-image: repeating-linear-gradient(135deg, rgba(240, 163, 101, 0.1) 0 2px, transparent 2px 12px);
+}
+.sch-grid .sch-cell {
+  justify-content: center;
+}
+.sch-off-label {
+  align-self: center;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--bad-fg);
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(28, 21, 19, 0.75);
+}
+.sch-off.part .sch-off-label {
+  color: var(--warn-fg);
+}
+.sch-offbox {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--bad-border);
+  background: var(--bad-bg);
+  font-size: 14px;
+}
+.sch-offbox.editing {
+  flex-direction: column;
+  align-items: stretch;
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+.sch-offlink {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  padding: 4px 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sch-offlink:hover {
+  color: var(--accent);
 }

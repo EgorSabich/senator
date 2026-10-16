@@ -1,3 +1,4 @@
+import { divisionOf as divisionOfPosition } from '../../shared/constants';
 import { formatHm, shiftStartMs } from '../../shared/schedule';
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { addDays, businessDate, formatClock, formatDuration, warsawToMs } from '../../shared/time';
@@ -117,13 +118,18 @@ export function TimeTracking() {
   }, [load]);
 
   const people = useMemo(() => [...(data?.people ?? [])].sort((a, b) => comparePl(`${a.lastName} ${a.firstName}`, `${b.lastName} ${b.firstName}`)), [data]);
-  const divisionOf = (p: Person) => ((DIVISIONS as readonly string[]).includes(p.position ?? '') ? p.position! : 'waiter');
+  const divisionOf = (p: Person) => {
+    const d = divisionOfPosition(p.position ?? '');
+    return (DIVISIONS as readonly string[]).includes(d) ? d : 'waiter';
+  };
   const present = DIVISIONS.filter((d) => people.some((p) => divisionOf(p) === d));
   const visibleGroups = present.filter((d) => !groups.length || groups.includes(d));
   const costOf = (e: Entry): number | null => {
     if (!data?.wages || !e.clockOutAt) return null;
-    let r: number | null = null;
-    for (const x of data.rates) if (x.userId === e.userId && x.validFrom <= e.businessDate) r = x.rateGrosze;
+    // rates come sorted by valid_from; before the first one the first one applies
+    const mine = data.rates.filter((x) => x.userId === e.userId);
+    let r: number | null = mine[0]?.rateGrosze ?? null;
+    for (const x of mine) if (x.validFrom <= e.businessDate) r = x.rateGrosze;
     return r === null ? null : Math.round((minutesOf(e) / 60) * r);
   };
   const sumCost = (es: Entry[]) => es.reduce((s, e) => s + (costOf(e) ?? 0), 0);
@@ -496,7 +502,11 @@ function DayDialog(props: { locationId: string; person: Person; date: string; da
           key={`${e.id}-${e.clockInAt}-${e.clockOutAt}`}
           entry={e}
           date={props.date}
-          onSave={(inAt, outAt, note) => run(() => api(`/api/admin/time/entries/${e.id}`, { method: 'PUT', body: { clockInAt: inAt, clockOutAt: outAt, note } }))}
+          onSave={async (inAt, outAt, note) => {
+            const err = await run(() => api(`/api/admin/time/entries/${e.id}`, { method: 'PUT', body: { clockInAt: inAt, clockOutAt: outAt, note } }));
+            if (!err) props.onClose(); // saved: back to the calendar (owner, 2026-10-17)
+            return err;
+          }}
           onDelete={async () => {
             await run(() => api(`/api/admin/time/entries/${e.id}`, { method: 'DELETE' }));
             props.onClose();

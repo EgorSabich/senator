@@ -24,7 +24,7 @@ interface DocItem {
 }
 
 const t = pl.academy.knowledge;
-const KIND_ORDER = ['regulation', 'sop', 'job_description', 'checklist'];
+const KIND_ORDER = ['regulation', 'sop', 'checklist'];
 
 export function Knowledge({ tab }: { tab: 'sb' | 'library' | 'lessons' }) {
   return (
