@@ -11,7 +11,9 @@ const t = pl.admin.time;
 const MODE_KEY = 'sa.panel.timeMode';
 const GROUPS_KEY = 'sa.panel.timeGroups';
 /** Divisions of the table, in this order (D37). */
-export const DIVISIONS = ['waiter', 'host', 'bartender', 'kitchen', 'hookah_master', 'shift_manager'] as const;
+export const DIVISIONS = ['waiter', 'host', 'bartender', 'kitchen', 'hookah_master', 'call_center', 'shift_manager'] as const;
+/** "Zofia N." — first name and the initial of the last name (D39). */
+export const shortName = (p: { firstName: string; lastName: string }) => `${p.firstName} ${p.lastName.trim().charAt(0)}.`;
 const money0 = new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN', maximumFractionDigits: 0 });
 const money2 = new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 /** "250 zł" for whole złoty, "32,50 zł" otherwise. */
@@ -132,6 +134,10 @@ export function TimeTracking() {
   const missing = all.filter(isMissing);
   const nameOf = (id: string) => {
     const p = data?.people.find((x) => x.id === id);
+    return p ? shortName(p) : '—';
+  };
+  const fullNameOf = (id: string) => {
+    const p = data?.people.find((x) => x.id === id);
     return p ? `${p.firstName} ${p.lastName}` : '—';
   };
 
@@ -148,10 +154,10 @@ export function TimeTracking() {
     if (!data) return;
     const rows: string[][] = [[...t.csvHeader, ...(data.wages ? [t.csvCost] : [])]];
     const shownIds = new Set(people.filter((p) => visibleGroups.includes(divisionOf(p) as (typeof DIVISIONS)[number])).map((p) => p.id));
-    const sorted = [...data.entries.filter((e) => shownIds.has(e.userId))].sort((a, b) => comparePl(nameOf(a.userId), nameOf(b.userId)) || a.clockInAt - b.clockInAt);
+    const sorted = [...data.entries.filter((e) => shownIds.has(e.userId))].sort((a, b) => comparePl(fullNameOf(a.userId), fullNameOf(b.userId)) || a.clockInAt - b.clockInAt);
     for (const e of sorted) {
       rows.push([
-        nameOf(e.userId),
+        fullNameOf(e.userId),
         pl.admin.divisions[divisionOf(data.people.find((p) => p.id === e.userId) ?? ({ position: null } as Person))] ?? '',
         e.businessDate,
         formatDateTime(e.clockInAt),
@@ -296,9 +302,7 @@ export function TimeTracking() {
                     return (
                       <tr key={p.id}>
                         <th className="sticky" scope="row">
-                          <span className="name">
-                            {p.firstName} {p.lastName}
-                          </span>
+                          <span className="name">{shortName(p)}</span>
                           <span className="pos">{p.position ? pl.admin.positions[p.position] ?? p.position : ''}</span>
                         </th>
                         {data.days.map((d) => {

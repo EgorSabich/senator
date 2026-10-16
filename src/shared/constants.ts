@@ -21,7 +21,7 @@ export type Permission = (typeof PERMISSIONS)[number];
 export const DEFAULT_MANAGER_PERMISSIONS: Permission[] = ['employees.view', 'training.assign', 'results.view'];
 
 /** Positions. MVP trains only waiters; others exist for documents and future modules. */
-export const POSITIONS = ['waiter', 'host', 'shift_manager', 'bartender', 'kitchen', 'hookah_master'] as const;
+export const POSITIONS = ['waiter', 'host', 'shift_manager', 'bartender', 'kitchen', 'hookah_master', 'call_center'] as const;
 export type Position = (typeof POSITIONS)[number];
 
 /** Change levels for every versioned item (spec section E). */

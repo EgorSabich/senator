@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
-import { navigate, onNav } from '../router';
+import { goBack, onNav } from '../router';
 import { formatClock } from '../../shared/time';
 import { Icon, Loading, Problem, useAcademy, useApi } from './shared';
 
@@ -115,7 +115,7 @@ export function ChecklistDay({ id }: { id: string }) {
   return (
     <>
       <header className="a-topbar">
-        <button type="button" className="a-icon-btn" aria-label={pl.common.back} onClick={() => (history.length > 1 ? history.back() : navigate('/'))}>
+        <button type="button" className="a-icon-btn" aria-label={pl.common.back} onClick={() => goBack('/')}>
           <Icon name="back" size={20} />
         </button>
         <div className="meta">

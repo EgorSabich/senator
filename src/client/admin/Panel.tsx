@@ -47,17 +47,21 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
     [me, locationId, isOwner, current, refreshMe],
   );
 
+  // Main items (bottom bar on phones) first; the rest sits under "Więcej" (D39).
   const nav = [
-    { path: '/panel/pracownicy', label: pl.admin.nav.employees, icon: 'people', show: ctx.can('employees.view') },
+    { path: '/panel/pracownicy', label: pl.admin.nav.employees, icon: 'people', show: ctx.can('employees.view'), main: true },
+    { path: '/panel/czas', label: pl.admin.nav.time, icon: 'clock', show: ctx.can('time.manage'), main: true },
+    { path: '/panel/menu', label: pl.admin.nav.menu, icon: 'menu', show: ctx.can('menu.edit'), main: true },
     { path: '/panel/materialy', label: pl.admin.nav.content, icon: 'book', show: ctx.can('content.edit') },
     { path: '/panel/programy', label: pl.admin.nav.programs, icon: 'learn', show: ctx.can('content.edit') },
-    { path: '/panel/menu', label: pl.admin.nav.menu, icon: 'menu', show: ctx.can('menu.edit') },
-    { path: '/panel/czas', label: pl.admin.nav.time, icon: 'clock', show: ctx.can('time.manage') },
     { path: '/panel/listy', label: pl.admin.nav.checklists, icon: 'checklist', show: ctx.can('checklists.view') },
     { path: '/panel/menedzerowie', label: pl.admin.nav.managers, icon: 'key', show: isOwner },
     { path: '/panel/lokale', label: pl.admin.nav.locations, icon: 'pin', show: isOwner },
     { path: '/panel/dziennik', label: pl.admin.nav.audit, icon: 'list', show: isOwner },
-  ].filter((n) => n.show);
+  ].filter((n) => n.show) as { path: string; label: string; icon: string; show: boolean; main?: boolean }[];
+  const mainNav = nav.filter((n) => n.main);
+  const moreNav = nav.filter((n) => !n.main);
+  const inMore = moreNav.some((n) => path.startsWith(n.path)) || path === '/panel/wiecej';
 
   let page: React.ReactNode = null;
   let m: Record<string, string> | null;
@@ -69,6 +73,7 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
   else if (path.startsWith('/panel/menu')) page = <Menu selectedId={null} />;
   else if ((m = match('/panel/pracownicy/:id', path))) page = <Employees selectedId={m.id!} />;
   else if (path.startsWith('/panel/pracownicy')) page = <Employees selectedId={null} />;
+  else if (path === '/panel/wiecej') page = <More items={moreNav} />;
   else if (path.startsWith('/panel/czas') && ctx.can('time.manage')) page = <TimeTracking />;
   else if (path.startsWith('/panel/listy') && ctx.can('checklists.view')) page = <ChecklistStats />;
   else if (path.startsWith('/panel/menedzerowie') && isOwner) page = <Managers />;
@@ -88,7 +93,14 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
           <span className="monogram" aria-hidden="true">
             S
           </span>
-          {nav.map((n) => (
+          {mainNav.map((n) => (
+            <a key={n.path} href={n.path} onClick={onNav(n.path)} aria-current={path.startsWith(n.path) ? 'page' : undefined}>
+              <Icon name={n.icon} />
+              <span>{n.label}</span>
+            </a>
+          ))}
+          {moreNav.length > 0 && mainNav.length > 0 && <span className="rail-divider" aria-hidden="true" />}
+          {moreNav.map((n) => (
             <a key={n.path} href={n.path} onClick={onNav(n.path)} aria-current={path.startsWith(n.path) ? 'page' : undefined}>
               <Icon name={n.icon} />
               <span>{n.label}</span>
@@ -138,14 +150,37 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
           </main>
         </div>
         <nav className="tabbar" aria-label={pl.admin.panel}>
-          {nav.map((n) => (
+          {mainNav.map((n) => (
             <a key={n.path} href={n.path} onClick={onNav(n.path)} aria-current={path.startsWith(n.path) ? 'page' : undefined}>
               <Icon name={n.icon} />
               <span>{n.label}</span>
             </a>
           ))}
+          {moreNav.length > 0 && (
+            <a href="/panel/wiecej" onClick={onNav('/panel/wiecej')} aria-current={inMore ? 'page' : undefined}>
+              <Icon name="more" />
+              <span>{pl.admin.nav.more}</span>
+            </a>
+          )}
         </nav>
       </div>
     </Ctx.Provider>
+  );
+}
+
+/** "Więcej": everything that is not in the bottom bar, as large tiles (phones). */
+function More({ items }: { items: { path: string; label: string; icon: string }[] }) {
+  return (
+    <>
+      <h1 className="page-title">{pl.admin.nav.more}</h1>
+      <div className="more-grid">
+        {items.map((n) => (
+          <a key={n.path} className="more-tile" href={n.path} onClick={onNav(n.path)}>
+            <Icon name={n.icon} size={26} />
+            <span>{n.label}</span>
+          </a>
+        ))}
+      </div>
+    </>
   );
 }

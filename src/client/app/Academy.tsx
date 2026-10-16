@@ -45,6 +45,7 @@ export function Academy({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: (
   else if (path === '/nauka') page = <Program />;
   else if (path === '/wiedza') page = <Knowledge tab="sb" />;
   else if (path === '/wiedza/regulaminy') page = <Knowledge tab="library" />;
+  else if (path === '/wiedza/lekcje') page = <Knowledge tab="lessons" />;
   else if (path === '/szukaj') page = <Search />;
   else if (path === '/konto') page = <Account onLoggedOut={onLoggedOut} refreshMe={refreshMe} />;
   else page = <Start />;

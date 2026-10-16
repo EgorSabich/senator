@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { RtNode } from '../../shared/richtext';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
-import { navigate } from '../router';
+import { goBack as routerBack, navigate } from '../router';
 import { RichText } from './RichText';
 import { contentHref, formatDate, Icon, Loading, Problem, useAcademy, useApi } from './shared';
 
@@ -26,8 +26,7 @@ interface ContentView {
 const t = pl.academy;
 
 function goBack() {
-  if (history.length > 1) history.back();
-  else navigate('/');
+  routerBack('/');
 }
 
 export function Reader({ id }: { id: string }) {

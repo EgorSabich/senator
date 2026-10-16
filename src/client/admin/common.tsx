@@ -55,6 +55,13 @@ const paths: Record<string, ReactNode> = {
     </>
   ),
   back: <path d="M15 6l-6 6 6 6" />,
+  more: (
+    <>
+      <circle cx="5" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="19" cy="12" r="1.6" />
+    </>
+  ),
   clock: (
     <>
       <circle cx="12" cy="12" r="9" />

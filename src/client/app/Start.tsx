@@ -2,7 +2,7 @@ import { pl } from '../i18n/pl';
 import { onNav } from '../router';
 import { TodayCard } from './Checklist';
 import { ModuleList, type ProgramView } from './Program';
-import { contentHref, Icon, Loading, Problem, useAcademy, useApi } from './shared';
+import { contentHref, Fold, Icon, Loading, Problem, useAcademy, useApi } from './shared';
 
 interface Home {
   user: { firstName: string };
@@ -69,24 +69,21 @@ export function Start() {
             </section>
           )}
 
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <h2 className="a-label">{t.todo}</h2>
-            {tasks.length === 0 ? (
-              <p className="a-sub">{t.nothingTodo}</p>
-            ) : (
-              <div className="a-list">
-                {tasks.map((x) => (
-                  <a key={`${x.id}-${x.hint}`} className="a-row" href={contentHref(x.id)} onClick={onNav(contentHref(x.id))}>
-                    <span className="grow">
-                      <span className="t">{x.title}</span>
-                      <span className="s">{x.hint}</span>
-                    </span>
-                    {x.pill}
-                  </a>
-                ))}
-              </div>
-            )}
-          </section>
+          {tasks.length === 0 ? (
+            <p className="a-sub">{t.nothingTodo}</p>
+          ) : (
+            <Fold title={t.todo} count={tasks.length} sub={t.todoSub}>
+              {tasks.map((x) => (
+                <a key={`${x.id}-${x.hint}`} className="a-row" href={contentHref(x.id)} onClick={onNav(contentHref(x.id))}>
+                  <span className="grow">
+                    <span className="t">{x.title}</span>
+                    <span className="s">{x.hint}</span>
+                  </span>
+                  {x.pill}
+                </a>
+              ))}
+            </Fold>
+          )}
 
           <div className="a-list">
             {[

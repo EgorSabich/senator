@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { api, ApiFailure, type Me } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { LogoLoader } from '../ui';
+import { restoreScroll } from '../router';
+import { apiCache } from '../apiCache';
 
 export interface AcademyCtx {
   me: Me;
@@ -31,28 +33,43 @@ export function useOnline(): boolean {
 }
 
 /** GET with loading/error state. The service worker answers from cache when offline. */
+
 export function useApi<T>(path: string | null) {
-  const [data, setData] = useState<T | null>(null);
+  const [data, setDataState] = useState<T | null>(() => (path && apiCache.has(path) ? (apiCache.get(path) as T) : null));
   const [error, setError] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
+  const setData = useCallback(
+    (v: T | null) => {
+      if (path && v !== null) apiCache.set(path, v);
+      setDataState(v);
+    },
+    [path],
+  );
   const load = useCallback(async () => {
     if (!path) return;
     setError(null);
     setCode(null);
     try {
-      setData(await api<T>(path));
+      const v = await api<T>(path);
+      apiCache.set(path, v);
+      setDataState(v);
     } catch (e) {
       const c = e instanceof ApiFailure ? e.code : 'generic';
       setCode(c);
-      setError(c === 'network' ? pl.academy.offlineMissing : errorText(c));
+      // keep showing what we had (e.g. offline) and only report the problem when there is nothing to show
+      if (!(path && apiCache.has(path))) setError(c === 'network' ? pl.academy.offlineMissing : errorText(c));
     }
   }, [path]);
   useEffect(() => {
-    setData(null);
+    setDataState(path && apiCache.has(path) ? (apiCache.get(path) as T) : null);
     void load();
-  }, [load]);
+  }, [load, path]);
+  useEffect(() => {
+    if (data) restoreScroll();
+  }, [data]);
   return { data, error, code, reload: load, setData };
 }
+
 
 const ICONS: Record<string, ReactNode> = {
   home: <path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />,
@@ -152,3 +169,25 @@ export function formatDate(ms: number): string {
 }
 
 export const contentHref = (id: string) => `/m/${id}`;
+
+/** A section that folds out (same look and motion as the program modules). */
+export function Fold({ title, count, sub, defaultOpen = false, children }: { title: string; count?: number; sub?: string; defaultOpen?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className={`a-module${open ? ' open' : ''}`}>
+      <button type="button" className="a-module-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="grow">
+          <span className="t">{title}</span>
+          {sub && <span className="s">{sub}</span>}
+        </span>
+        {count !== undefined && <span className="a-pill warn">{count}</span>}
+        <span className="a-chevron" aria-hidden="true">
+          <Icon name="down" size={18} />
+        </span>
+      </button>
+      <div className="a-module-body" inert={!open}>
+        <div className="a-module-inner a-fold-inner">{children}</div>
+      </div>
+    </section>
+  );
+}

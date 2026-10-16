@@ -16,6 +16,8 @@
   position: sticky;
   top: 0;
   height: 100dvh;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
 .rail .monogram {
   font-family: var(--font-display);
@@ -1017,4 +1019,83 @@
 }
 .loc-two > .field {
   min-width: 0;
+}
+
+/* Program: material picker */
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.picker-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.picker-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.picker-row:first-child {
+  border-top: none;
+}
+.picker-row:hover {
+  background: var(--surface-raised);
+}
+.picker-list > .muted {
+  padding: 10px 12px;
+}
+
+/* Więcej */
+.rail-divider {
+  width: 36px;
+  height: 1px;
+  margin: 6px 0;
+  background: #2e2420;
+}
+.more-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  max-width: 720px;
+}
+.more-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 16px;
+  border-radius: var(--radius-l);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 15px;
+}
+.more-tile svg {
+  color: var(--accent);
+}
+.more-tile:hover {
+  color: var(--text);
+  background: var(--surface-raised);
+}
+@media (max-width: 760px) {
+  .tabbar a {
+    flex: 1 1 0;
+  }
 }

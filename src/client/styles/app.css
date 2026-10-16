@@ -735,3 +735,9 @@ a.a-dish:hover {
   outline: none;
   border-color: var(--accent);
 }
+.a-fold-inner > .a-row {
+  background: none;
+}
+.a-fold-inner > .a-row:first-child {
+  border-top: 1px solid var(--border);
+}

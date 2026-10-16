@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { EU_ALLERGENS } from '../../shared/constants';
 import { foldPolish } from '../../shared/text';
 import { pl } from '../i18n/pl';
-import { navigate, onNav } from '../router';
+import { goBack, onNav } from '../router';
 import { Icon, Loading, Problem, useAcademy, useApi } from './shared';
 
 type Section = 'kitchen' | 'bar';
@@ -30,6 +30,8 @@ const t = pl.academy.menu;
 const f = pl.admin.menu.fields;
 const ALLERGEN_NAMES: Record<string, string> = Object.fromEntries(EU_ALLERGENS.map((a) => [a.code, a.pl]));
 const SECTION_KEY = 'sa.app.menuSection';
+/** Filters survive opening a dish and coming back. */
+const listState = { category: 'all', query: '' };
 
 function storedSection(): Section {
   try {
@@ -43,8 +45,10 @@ export function MenuList() {
   const { locationId } = useAcademy();
   const { data, error } = useApi<MenuData>(`/api/locations/${locationId}/menu`);
   const [section, setSection] = useState<Section>(storedSection);
-  const [category, setCategory] = useState('all');
-  const [query, setQuery] = useState('');
+  const [category, setCategoryState] = useState(listState.category);
+  const [query, setQueryState] = useState(listState.query);
+  const setCategory = (v: string) => setCategoryState((listState.category = v));
+  const setQuery = (v: string) => setQueryState((listState.query = v));
 
   const cats = useMemo(() => (data?.categories ?? []).filter((c) => c.section === section), [data, section]);
   const items = useMemo(() => {
@@ -129,7 +133,7 @@ export function MenuItem({ id }: { id: string }) {
   const { data, error } = useApi<ItemView>(`/api/menu/items/${id}`);
   const [chosen, setTab] = useState<Tab | null>(null);
 
-  const back = () => (history.length > 1 ? history.back() : navigate('/menu'));
+  const back = () => goBack('/menu');
   if (!data) {
     return (
       <main className="a-main">

@@ -26,7 +26,7 @@ interface DocItem {
 const t = pl.academy.knowledge;
 const KIND_ORDER = ['regulation', 'sop', 'job_description', 'checklist'];
 
-export function Knowledge({ tab }: { tab: 'sb' | 'library' }) {
+export function Knowledge({ tab }: { tab: 'sb' | 'library' | 'lessons' }) {
   return (
     <main className="a-main">
       <h1 className="a-title">{t.title}</h1>
@@ -34,11 +34,14 @@ export function Knowledge({ tab }: { tab: 'sb' | 'library' }) {
         <a className="a-chip" href="/wiedza" onClick={onNav('/wiedza')} aria-current={tab === 'sb' ? 'page' : undefined}>
           {t.serviceBook}
         </a>
+        <a className="a-chip" href="/wiedza/lekcje" onClick={onNav('/wiedza/lekcje')} aria-current={tab === 'lessons' ? 'page' : undefined}>
+          {t.lessons}
+        </a>
         <a className="a-chip" href="/wiedza/regulaminy" onClick={onNav('/wiedza/regulaminy')} aria-current={tab === 'library' ? 'page' : undefined}>
           {t.library}
         </a>
       </nav>
-      {tab === 'sb' ? <ServiceBook /> : <Library />}
+      {tab === 'sb' ? <ServiceBook /> : tab === 'lessons' ? <Lessons /> : <Library />}
     </main>
   );
 }
@@ -50,6 +53,44 @@ function groupBySection<T extends { section: string | null }>(items: T[]): [stri
     (map.get(k) ?? map.set(k, []).get(k)!).push(i);
   }
   return [...map.entries()];
+}
+
+function Lessons() {
+  const { locationId } = useAcademy();
+  const { data, error } = useApi<{ items: (SbItem & { locked: boolean })[] }>(`/api/locations/${locationId}/lessons`);
+  return (
+    <>
+      <Problem message={error} />
+      {!data && !error && <Loading />}
+      {data && data.items.length === 0 && <p className="a-sub">{t.empty}</p>}
+      {data &&
+        groupBySection(data.items).map(([section, items]) => (
+          <section key={section} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <h2 className="a-label">{section || t.other}</h2>
+            <div className="a-list">
+              {items.map((i) =>
+                i.locked ? (
+                  <div key={i.id} className="a-row" aria-disabled="true">
+                    <span className="grow">
+                      <span className="t">{i.title}</span>
+                      <span className="s">{t.lockedLesson}</span>
+                    </span>
+                    <Icon name="lock" size={18} />
+                  </div>
+                ) : (
+                  <a key={i.id} className="a-row" href={contentHref(i.id)} onClick={onNav(contentHref(i.id))}>
+                    <span className="grow">
+                      <span className="t">{i.title}</span>
+                    </span>
+                    <StatusPill status={i.status} updated={i.updated} />
+                  </a>
+                ),
+              )}
+            </div>
+          </section>
+        ))}
+    </>
+  );
 }
 
 function ServiceBook() {

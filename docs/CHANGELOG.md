@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.3 — 2026-10-16 — Navigation, lessons in Wiedza, compact panel menu
+
+- D39: "Wstecz" returns to the same place (scroll per history entry, Menu keeps category and search); soft page transitions (View Transitions, off with reduced motion); pages show the last loaded data at once and refresh in the background.
+- Wiedza → Lekcje: all lessons of the person's position, locked ones marked. Programs: material picker with search and type chips, drafts can be added (staff see them after publishing); modules with nothing readable are hidden from staff.
+- Start: "Do zrobienia" folds like modules. Panel on the phone: Pracownicy · Czas pracy · Menu · Więcej (other sections as tiles); the rail on the computer is split the same way.
+- Position "Call center"; "Hostessa" renamed "Host"; names in Czas pracy shown as "Imię N." (CSV keeps full names).
+- Tests: 93 integration (new 09-lessons), UI walkthrough `tests/ui/nav_walkthrough.py`.
+
 ## 0.6.2 — 2026-10-16 — Location settings, Service Book mandatory, program deletion
 
 - D38: Lokale page with details, opening hours, note for the team, summary and time rules (migration 0007); staff see the details in Konto.

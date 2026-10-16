@@ -212,6 +212,29 @@ learnRoutes.get('/locations/:locId/library', async (c) => {
   });
 });
 
+/** All lessons of the person's position(s), with progress; lessons in a locked module show as locked (D39). */
+learnRoutes.get('/locations/:locId/lessons', async (c) => {
+  const locId = c.req.param('locId');
+  await locationGuard(c, locId);
+  const db = c.env.DB;
+  const positions = await userPositions(db, c.var.user, locId);
+  const [items, program] = await Promise.all([visibleContent(db, locId, positions, ['lesson']), programFor(db, c.var.user, locId)]);
+  const progress = await progressFor(db, c.var.user.id, items.map((d) => d.id));
+  const locked = new Set<string>();
+  const open = new Set<string>();
+  for (const m of program.modules) for (const i of m.items) (m.locked ? locked : open).add(i.contentItemId);
+  return c.json({
+    items: items.map((d) => ({
+      id: d.id,
+      title: d.title,
+      section: d.section,
+      status: progress.get(d.id)!.status,
+      updated: progress.get(d.id)!.updated,
+      locked: locked.has(d.id) && !open.has(d.id),
+    })),
+  });
+});
+
 learnRoutes.get('/locations/:locId/service-book', async (c) => {
   const locId = c.req.param('locId');
   await locationGuard(c, locId);

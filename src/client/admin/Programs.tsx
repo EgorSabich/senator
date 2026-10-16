@@ -1,7 +1,7 @@
 import { LogoLoader } from '../ui';
 import { useCallback, useEffect, useState } from 'react';
 import { POSITIONS } from '../../shared/constants';
-import { comparePl } from '../../shared/text';
+import { comparePl, foldPolish } from '../../shared/text';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { navigate } from '../router';
@@ -179,7 +179,7 @@ function ProgramDetail({ id, onChanged }: { id: string; onChanged: () => Promise
       const [det, c] = await Promise.all([api<Detail>(`/api/admin/programs/${id}`), api<{ items: ContentRow[] }>(`/api/admin/locations/${locationId}/content`)]);
       setD(det);
       setName(det.program.name);
-      setContent(c.items.filter((x) => x.status === 'published').sort((a, b) => comparePl(a.title, b.title)));
+      setContent(c.items.filter((x) => x.status !== 'archived').sort((a, b) => comparePl(a.title, b.title)));
     } catch (e) {
       setError(errOf(e));
     }
@@ -303,7 +303,6 @@ function ModuleCard({
   const [mandatory, setMandatory] = useState(m.isMandatory);
   const [rule, setRule] = useState(m.unlockRule);
   const [after, setAfter] = useState(m.unlockAfterModuleId ?? modules.find((x) => x.id !== m.id)?.id ?? '');
-  const [pick, setPick] = useState('');
   const kinds = pl.admin.content.kindOne;
 
   const saveItems = (items: { contentItemId: string; isMandatory: boolean }[]) => run(() => api(`/api/admin/modules/${m.id}/items`, { method: 'PUT', body: { items } }));
@@ -431,31 +430,50 @@ function ModuleCard({
           </button>
         </div>
       ))}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <div className="field" style={{ flex: '1 1 260px' }}>
-          <label htmlFor={`mp-${m.id}`}>{t.addItem}</label>
-          <select id={`mp-${m.id}`} value={pick} onChange={(e) => setPick(e.target.value)}>
-            <option value="">{t.pickItem}</option>
-            {content
-              .filter((c) => !m.items.some((i) => i.contentItemId === c.id))
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {kinds[c.kind]}: {c.title}
-                </option>
-              ))}
-          </select>
-        </div>
-        <Btn
-          disabled={!pick}
-          onClick={() => {
-            const id = pick;
-            setPick('');
-            void saveItems([...current, { contentItemId: id, isMandatory: true }]);
-          }}
-        >
-          {t.addItem}
-        </Btn>
-      </div>
+      <ContentPicker
+        id={m.id}
+        content={content.filter((c) => !m.items.some((i) => i.contentItemId === c.id))}
+        onAdd={(id) => void saveItems([...current, { contentItemId: id, isMandatory: true }])}
+      />
     </section>
+  );
+}
+
+/** Find a material by typing; filter by type; lessons first (D39). Drafts can be planned in, they show to staff once published. */
+function ContentPicker({ id, content, onAdd }: { id: string; content: ContentRow[]; onAdd: (id: string) => void }) {
+  const kinds = pl.admin.content.kindOne;
+  const present = [...new Set(content.map((c) => c.kind))];
+  const [q, setQ] = useState('');
+  const [kind, setKind] = useState<string>(() => (present.includes('lesson') ? 'lesson' : 'all'));
+  const fq = foldPolish(q.trim());
+  const shown = content.filter((c) => (kind === 'all' || c.kind === kind) && (!fq || foldPolish(c.title).includes(fq))).slice(0, 40);
+  return (
+    <div className="picker">
+      <label className="field" htmlFor={`pk-${id}`} style={{ gap: 6 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-soft)' }}>{t.addItem}</span>
+        <input id={`pk-${id}`} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.searchItem} />
+      </label>
+      <div className="btn-row">
+        {['lesson', ...present.filter((k) => k !== 'lesson'), 'all'].filter((k, i, a) => a.indexOf(k) === i && (k === 'all' || present.includes(k))).map((k) => (
+          <button key={k} type="button" className="chip" aria-pressed={kind === k} onClick={() => setKind(k)}>
+            {k === 'all' ? t.allKinds : kinds[k] ?? k}
+          </button>
+        ))}
+      </div>
+      <div className="picker-list">
+        {shown.length === 0 && <span className="muted" style={{ fontSize: 13 }}>{t.nothingFound}</span>}
+        {shown.map((c) => (
+          <button key={c.id} type="button" className="picker-row" onClick={() => onAdd(c.id)}>
+            <span>
+              {c.title}
+              {c.status !== 'published' && <span className="badge neutral" style={{ marginLeft: 8 }}>{t.draft}</span>}
+            </span>
+            <span className="muted" style={{ fontSize: 12 }}>
+              {kinds[c.kind] ?? c.kind} · {t.add1}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

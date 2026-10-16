@@ -68,7 +68,9 @@ export async function progressFor(db: D1Database, userId: string, itemIds: strin
     const marks = chunk.map(() => '?').join(', ');
     const [v, a] = await db.batch([
       db
-        .prepare(`SELECT id, content_item_id AS itemId, version_no AS versionNo, change_level AS changeLevel FROM content_versions WHERE content_item_id IN (${marks})`)
+        .prepare(
+          `SELECT id, content_item_id AS itemId, version_no AS versionNo, change_level AS changeLevel FROM content_versions WHERE content_item_id IN (${marks})`,
+        )
         .bind(...chunk),
       db.prepare(`SELECT version_id AS versionId FROM content_acknowledgements WHERE user_id = ? AND content_item_id IN (${marks})`).bind(userId, ...chunk),
     ]);
@@ -105,11 +107,16 @@ export async function programFor(db: D1Database, user: SessionUser, locationId: 
     program = await db.prepare(`SELECT id, name, position FROM programs WHERE id = ? AND location_id = ?`).bind(programId, locationId).first();
   } else if (positions && positions.length) {
     program = await db
-      .prepare(`SELECT id, name, position FROM programs WHERE location_id = ? AND is_default = 1 AND position IN (${positions.map(() => '?').join(', ')}) ORDER BY created_at LIMIT 1`)
+      .prepare(
+        `SELECT id, name, position FROM programs WHERE location_id = ? AND is_default = 1 AND position IN (${positions.map(() => '?').join(', ')}) ORDER BY created_at LIMIT 1`,
+      )
       .bind(locationId, ...positions)
       .first();
   } else if (positions === null) {
-    program = await db.prepare(`SELECT id, name, position FROM programs WHERE location_id = ? AND is_default = 1 AND position = 'waiter' LIMIT 1`).bind(locationId).first();
+    program = await db
+      .prepare(`SELECT id, name, position FROM programs WHERE location_id = ? AND is_default = 1 AND position = 'waiter' LIMIT 1`)
+      .bind(locationId)
+      .first();
   }
   if (!program) return { program: null, percent: 0, modules: [] };
 
@@ -131,11 +138,26 @@ export async function programFor(db: D1Database, user: SessionUser, locationId: 
       )
       .bind(program.id),
   ]);
-  const itemRows = (items!.results as { moduleId: string; contentItemId: string; isMandatory: number; kind: string; title: string; locationId: string | null; positions: string | null }[]).filter(
-    (r) => (r.locationId === null || r.locationId === locationId) && isVisibleFor(r.positions, positions),
-  );
+  const itemRows = (
+    items!.results as {
+      moduleId: string;
+      contentItemId: string;
+      isMandatory: number;
+      kind: string;
+      title: string;
+      locationId: string | null;
+      positions: string | null;
+    }[]
+  ).filter((r) => (r.locationId === null || r.locationId === locationId) && isVisibleFor(r.positions, positions));
   const progress = await progressFor(db, user.id, [...new Set(itemRows.map((r) => r.contentItemId))]);
-  const modRows = mods!.results as { id: string; title: string; description: string | null; isMandatory: number; unlockRule: ModuleInput['unlockRule']; unlockAfterModuleId: string | null }[];
+  const modRows = mods!.results as {
+    id: string;
+    title: string;
+    description: string | null;
+    isMandatory: number;
+    unlockRule: ModuleInput['unlockRule'];
+    unlockAfterModuleId: string | null;
+  }[];
   const inputs: ModuleInput[] = modRows.map((m) => ({
     id: m.id,
     isMandatory: Boolean(m.isMandatory),
@@ -144,26 +166,31 @@ export async function programFor(db: D1Database, user: SessionUser, locationId: 
     items: itemRows.filter((r) => r.moduleId === m.id).map((r) => ({ isMandatory: Boolean(r.isMandatory), status: progress.get(r.contentItemId)!.status })),
   }));
   const states = moduleStates(inputs);
+  // Modules with nothing to read yet (only drafts, or items for other positions) are hidden from the person;
+  // a program with no such module counts as "not ready" rather than "finished".
+  if (!inputs.some((m) => m.items.length)) return { program: null, percent: 0, modules: [] };
   return {
     program,
     percent: programPercent(inputs),
-    modules: modRows.map((m, i) => ({
-      ...states[i]!,
-      title: m.title,
-      description: m.description,
-      isMandatory: Boolean(m.isMandatory),
-      unlockRule: m.unlockRule,
-      unlockAfterModuleId: m.unlockAfterModuleId,
-      items: itemRows
-        .filter((r) => r.moduleId === m.id)
-        .map((r) => ({
-          contentItemId: r.contentItemId,
-          kind: r.kind,
-          title: r.title,
-          isMandatory: Boolean(r.isMandatory),
-          status: progress.get(r.contentItemId)!.status,
-          updated: progress.get(r.contentItemId)!.updated,
-        })),
-    })),
+    modules: modRows
+      .map((m, i) => ({
+        ...states[i]!,
+        title: m.title,
+        description: m.description,
+        isMandatory: Boolean(m.isMandatory),
+        unlockRule: m.unlockRule,
+        unlockAfterModuleId: m.unlockAfterModuleId,
+        items: itemRows
+          .filter((r) => r.moduleId === m.id)
+          .map((r) => ({
+            contentItemId: r.contentItemId,
+            kind: r.kind,
+            title: r.title,
+            isMandatory: Boolean(r.isMandatory),
+            status: progress.get(r.contentItemId)!.status,
+            updated: progress.get(r.contentItemId)!.updated,
+          })),
+      }))
+      .filter((m) => m.items.length > 0),
   };
 }

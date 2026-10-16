@@ -273,3 +273,49 @@ button:active:not(:disabled) {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* ───────── Page changes (View Transitions API; browsers without it switch instantly) ───────── */
+::view-transition-old(root) {
+  animation: vt-out 160ms ease both;
+}
+::view-transition-new(root) {
+  animation: vt-in 280ms var(--ease-out) both;
+}
+html[data-nav='back']::view-transition-new(root) {
+  animation-name: vt-in-back;
+}
+@keyframes vt-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vt-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+}
+@keyframes vt-in-back {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+}
+/* bars stay in place while the page changes */
+.a-tabbar,
+.tabbar {
+  view-transition-name: bottom-bar;
+}
+.rail {
+  view-transition-name: side-rail;
+}
+::view-transition-group(bottom-bar),
+::view-transition-group(side-rail) {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}

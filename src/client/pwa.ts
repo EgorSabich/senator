@@ -1,3 +1,4 @@
+import { apiCache } from './apiCache';
 /**
  * PWA: service worker registration and clearing cached personal data.
  * The worker (public/sw.js) keeps the app shell and the API answers a person opened, so read
@@ -15,6 +16,7 @@ export function registerServiceWorker(): void {
 }
 
 export async function clearPersonalCache(): Promise<void> {
+  apiCache.clear();
   try {
     if ('caches' in window) await caches.delete(DATA_CACHE);
   } catch {
