@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2 — 2026-10-16 — Grafik and form fixes
+
+- Grafik: "Tydzień / Miesiąc" switch (month = whole calendar month, compact times, publish for the month); column "Godziny" on the right with planned hours and number of shifts per person; Friday and Saturday highlighted; Enter saves a shift; notes on shifts removed; status of a shift as a badge.
+- Panel forms: one style for every input, select and checkbox (custom checkbox with a tick); the "Zdjęcie przy odbiciu" checkbox in Lokale no longer stretches.
+- Terminal: the "Na zmianie" list is gone (did not fit and showed names on a shared phone); the status API no longer returns who is on shift.
+
 ## 0.7.0 — 2026-10-16 — Grafik
 
 - D43 panel **Grafik** (permission `schedule.manage`, main item on the phone): week × people grouped by division, any start and end (also after midnight), shifts coloured by start hour with a legend that highlights one start time, per-day counts by start hour and total, days off shown in the grid, plan vs real entry (came / late / absent).

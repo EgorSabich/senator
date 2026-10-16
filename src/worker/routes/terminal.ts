@@ -36,27 +36,12 @@ async function loadTerminal(c: { env: AppEnv['Bindings']; var: AppEnv['Variables
   return t;
 }
 
-/** People currently on shift at the location (open, not stale). */
-async function onShift(db: D1Database, locationId: string, now: number) {
-  const { staleHours } = await locationRules(db, locationId);
-  const { results } = await db
-    .prepare(
-      `SELECT u.first_name AS firstName, u.last_name AS lastName, e.clock_in_at AS since
-       FROM time_entries e JOIN users u ON u.id = e.user_id
-       WHERE e.location_id = ? AND e.clock_out_at IS NULL AND e.clock_in_at > ?
-       ORDER BY e.clock_in_at`,
-    )
-    .bind(locationId, now - staleHours * 3600_000)
-    .all<{ firstName: string; lastName: string; since: number }>();
-  return results.map((r) => ({ name: `${r.firstName} ${r.lastName.slice(0, 1)}.`, since: r.since }));
-}
-
 terminalRoutes.get('/status', async (c) => {
   const t = await loadTerminal(c);
   const now = Date.now();
   await c.env.DB.prepare(`UPDATE terminals SET last_seen_at = ? WHERE id = ?`).bind(now, t.id).run();
   const rules = await locationRules(c.env.DB, t.locationId);
-  return c.json({ terminal: { name: t.name, location: t.locationName }, serverTime: now, photo: rules.punchPhoto, onShift: await onShift(c.env.DB, t.locationId, now) });
+  return c.json({ terminal: { name: t.name, location: t.locationName }, serverTime: now, photo: rules.punchPhoto });
 });
 
 /** Too many wrong PINs in a row on this terminal (live entries only; the phone is in the restaurant). */

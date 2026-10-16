@@ -63,7 +63,7 @@ with sync_playwright() as pw:
     # reload while offline: terminal must come back
     t.reload(); t.get_by_text("Wpisz swój PIN").wait_for(timeout=15000); t.screenshot(path=f"{OUT}/08-offline-reload.png")
     tc.set_offline(False); t.evaluate("window.dispatchEvent(new Event('online'))")
-    t.get_by_text("Na zmianie: 3").wait_for(timeout=40000); t.screenshot(path=f"{OUT}/09-synced.png")
+    t.get_by_text("Do wysłania").wait_for(state="detached", timeout=40000); t.get_by_text("Online").wait_for(timeout=40000); t.screenshot(path=f"{OUT}/09-synced.png")
     # waiter checklist
     z=phones[0]; z.reload(); z.get_by_text("Jesteś na zmianie", exact=False).first.wait_for(); z.wait_for_timeout(800); z.screenshot(path=f"{OUT}/10-start-onshift.png", full_page=True)
     z.locator("a[href^=\"/listy/\"]").first.click(); z.get_by_text("Odhacz zadania").wait_for()

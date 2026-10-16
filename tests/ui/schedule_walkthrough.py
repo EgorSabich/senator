@@ -37,7 +37,7 @@ with sync_playwright() as pw:
     # panel grafik
     o.goto(BASE+"/panel/grafik"); o.get_by_role("heading",name="Grafik").wait_for(); o.wait_for_timeout(700)
     o.get_by_role("button",name=f"Zofia N., {nxt+datetime.timedelta(days=1)} — zmiany").click()
-    dlg=o.get_by_role("dialog"); dlg.wait_for(); dlg.get_by_label("Od").fill("1000"); dlg.get_by_label("Do").fill("1800"); dlg.get_by_role("button",name="Dodaj zmianę").last.click(); dlg.wait_for(state="hidden")
+    dlg=o.get_by_role("dialog"); dlg.wait_for(); dlg.get_by_label("Od").fill("1000"); dlg.get_by_label("Do").fill("1800"); dlg.get_by_label("Do").press("Enter"); dlg.wait_for(state="hidden")
     o.get_by_role("button",name=f"Zofia N., {nxt+datetime.timedelta(days=3)} — zmiany").click()
     dlg=o.get_by_role("dialog"); dlg.wait_for(); o.screenshot(path=f"{OUT}/g02-dialog-templates.png")
     dlg.locator(".sch-template", has_text="10:00–18:00").click(); dlg.wait_for(state="hidden")
@@ -46,6 +46,15 @@ with sync_playwright() as pw:
     o.wait_for_timeout(400); o.screenshot(path=f"{OUT}/g03-panel-draft.png", full_page=True)
     o.once("dialog", lambda d: d.accept()); o.get_by_role("button",name=re.compile("Opublikuj")).click(); o.get_by_text(re.compile("Opublikowano zmian")).wait_for()
     o.locator(".sch-legend-item").first.click(); o.wait_for_timeout(300); o.screenshot(path=f"{OUT}/g04-panel-published.png", full_page=True)
+    # edit dialog with a published shift; month view; Lokale; Pracownicy checkbox
+    o.get_by_role("button",name=f"Zofia N., {nxt+datetime.timedelta(days=1)} — zmiany").click(); o.get_by_role("dialog").wait_for(); o.wait_for_timeout(300)
+    o.screenshot(path=f"{OUT}/g04b-edit-dialog.png"); o.keyboard.press("Escape")
+    o.get_by_role("tab",name="Miesiąc").click(); o.wait_for_timeout(300)
+    if nxt.month!=today.month: o.get_by_role("button",name="Następny miesiąc").click()
+    o.get_by_text("Godziny",exact=True).first.wait_for(); o.wait_for_timeout(600); o.screenshot(path=f"{OUT}/g04c-month.png", full_page=True)
+    o.get_by_role("tab",name="Tydzień").click()
+    o.goto(BASE+"/panel/lokale"); o.get_by_text("Zdjęcie przy odbiciu").wait_for(); o.get_by_text("Zdjęcie przy odbiciu").scroll_into_view_if_needed(); o.wait_for_timeout(300); o.screenshot(path=f"{OUT}/g08-lokale.png")
+    o.goto(BASE+"/panel/pracownicy"); o.get_by_text("Grupuj według stanowiska").wait_for(); o.get_by_text("Grupuj według stanowiska").click(); o.wait_for_timeout(300); o.screenshot(path=f"{OUT}/g09-employees.png")
     # staff sees it
     p.get_by_role("link",name="Moje zmiany").click(); p.locator(".g-day").first.wait_for()
     p.get_by_role("button",name="Następny tydzień").click(); p.get_by_text("10:00–18:00").first.wait_for(); p.wait_for_timeout(300)

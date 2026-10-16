@@ -51,6 +51,18 @@ function mondayOf(v: unknown): string {
   return m;
 }
 
+/** A week (?week=Monday) or a calendar month (?month=YYYY-MM) — the panel shows both (D44). */
+function periodOf(q: { week?: unknown; month?: unknown }): { days: string[]; monday: string | null } {
+  if (typeof q.month === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(q.month)) {
+    const first = `${q.month}-01`;
+    const days: string[] = [];
+    for (let d = first; d.slice(0, 7) === q.month; d = addDays(d, 1)) days.push(d);
+    return { days, monday: null };
+  }
+  const monday = mondayOf(q.week);
+  return { days: weekDays(monday), monday };
+}
+
 async function rulesOf(db: D1Database, locId: string) {
   const r = await db
     .prepare(`SELECT unavail_deadline_dow AS dow, unavail_deadline_hour AS hour FROM locations WHERE id = ?`)
@@ -92,14 +104,14 @@ scheduleAdminRoutes.get('/locations/:locId/schedule', async (c) => {
   const locId = c.req.param('locId');
   const access = await guard(c, locId);
   const db = c.env.DB;
-  const monday = mondayOf(c.req.query('week'));
-  const days = weekDays(monday);
+  const { days, monday } = periodOf({ week: c.req.query('week'), month: c.req.query('month') });
+  const last = days[days.length - 1]!;
   const allowed = allowedDivisions(access, locId);
   const [shifts, unav, templates, entries] = await db.batch([
-    db.prepare(`${SHIFT_SELECT} WHERE location_id = ? AND date BETWEEN ? AND ? ORDER BY date, start_min`).bind(locId, days[0], days[6]),
+    db.prepare(`${SHIFT_SELECT} WHERE location_id = ? AND date BETWEEN ? AND ? ORDER BY date, start_min`).bind(locId, days[0], last),
     db
       .prepare(`SELECT user_id AS userId, date, note FROM unavailability WHERE location_id = ? AND date BETWEEN ? AND ?`)
-      .bind(locId, days[0], days[6]),
+      .bind(locId, days[0], last),
     db
       .prepare(
         `SELECT id, division, start_min AS startMin, end_min AS endMin, label, use_count AS useCount FROM shift_templates
@@ -109,14 +121,14 @@ scheduleAdminRoutes.get('/locations/:locId/schedule', async (c) => {
     // plan vs actual: who clocked in on those days
     db
       .prepare(`SELECT user_id AS userId, business_date AS date, clock_in_at AS clockInAt, clock_out_at AS clockOutAt FROM time_entries WHERE location_id = ? AND business_date BETWEEN ? AND ?`)
-      .bind(locId, days[0], days[6]),
+      .bind(locId, days[0], last),
   ]);
   const { dow, hour } = await rulesOf(db, locId);
   const inScope = (d: string) => !allowed || allowed.has(d);
   const rows = (shifts!.results as ShiftRow[]).filter((s) => inScope(s.division));
   const ppl = (await people(db, locId)).map((p) => ({ ...p, divisions: p.divisions.filter(inScope) })).filter((p) => p.divisions.length);
   return c.json({
-    week: monday,
+    week: monday ?? weekStart(days[0]!),
     days,
     people: ppl,
     shifts: rows.map(view),
@@ -124,7 +136,7 @@ scheduleAdminRoutes.get('/locations/:locId/schedule', async (c) => {
     templates: (templates!.results as { division: string }[]).filter((t) => inScope(t.division)),
     actual: entries!.results,
     unpublished: rows.filter(changed).length,
-    deadline: unavailabilityDeadline(monday, dow, hour),
+    deadline: monday ? unavailabilityDeadline(monday, dow, hour) : null,
     divisions: allowed ? [...allowed] : null,
   });
 });
@@ -222,14 +234,13 @@ scheduleAdminRoutes.post('/locations/:locId/schedule/publish', async (c) => {
   const locId = c.req.param('locId');
   const access = await guard(c, locId);
   const db = c.env.DB;
-  const body = await readJson<{ week?: unknown; divisions?: unknown }>(c.req.raw);
-  const monday = mondayOf(body.week);
-  const days = weekDays(monday);
+  const body = await readJson<{ week?: unknown; month?: unknown; divisions?: unknown }>(c.req.raw);
+  const { days, monday } = periodOf(body);
   const allowed = allowedDivisions(access, locId);
   let chosen = Array.isArray(body.divisions) ? body.divisions.filter(isDivision) : null;
   if (chosen && !chosen.length) chosen = null;
   const inScope = (d: string) => (!allowed || allowed.has(d)) && (!chosen || chosen.includes(d));
-  const { results } = await db.prepare(`${SHIFT_SELECT} WHERE location_id = ? AND date BETWEEN ? AND ?`).bind(locId, days[0], days[6]).all<ShiftRow>();
+  const { results } = await db.prepare(`${SHIFT_SELECT} WHERE location_id = ? AND date BETWEEN ? AND ?`).bind(locId, days[0], days[days.length - 1]).all<ShiftRow>();
   const todo = results.filter((s) => inScope(s.division) && changed(s));
   const now = Date.now();
   const stmts: D1PreparedStatement[] = [];
@@ -251,7 +262,7 @@ scheduleAdminRoutes.post('/locations/:locId/schedule/publish', async (c) => {
       locationId: locId,
       action: 'schedule.publish',
       entityType: 'schedule',
-      entityId: monday,
+      entityId: monday ?? days[0]!.slice(0, 7),
       after: { changes: todo.length, people: users.size, divisions: chosen ?? (allowed ? [...allowed] : 'all') },
     }),
   );

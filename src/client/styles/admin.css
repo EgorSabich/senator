@@ -225,7 +225,7 @@
   font-weight: 600;
   color: var(--text-soft);
 }
-.field input,
+.field input:not([type='checkbox']):not([type='radio']):not([type='file']),
 .field select,
 .field textarea {
   min-height: 46px;
@@ -251,11 +251,18 @@
   min-height: 32px;
 }
 .check input {
-  width: 20px;
-  height: 20px;
-  margin-top: 1px;
-  accent-color: var(--accent);
+  margin-top: 0;
   flex: none;
+}
+.check {
+  align-items: center;
+  cursor: pointer;
+  color: var(--text);
+}
+.field .check {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
 }
 .table-wrap {
   overflow-x: auto;
@@ -1009,7 +1016,7 @@
 .emp-group {
   margin-top: 10px;
 }
-.loc-section .field input,
+.loc-section .field input:not([type='checkbox']),
 .loc-section .field select,
 .loc-section .field textarea,
 .loc-day input {
@@ -1356,4 +1363,175 @@
 }
 .sch-grid td {
   min-width: 0;
+}
+
+/* ───────── Form controls everywhere in the panel (D44) ───────── */
+:where(input:not([type='checkbox'], [type='radio'], [type='file'], [type='range'], [type='color']), select, textarea) {
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+:where(input, select, textarea)::placeholder {
+  color: var(--text-disabled);
+}
+:where(input:not([type='checkbox'], [type='radio']), select, textarea):focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(224, 123, 50, 0.18);
+}
+input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  flex: none;
+  border-radius: 7px;
+  border: 1.5px solid #5a483f;
+  background: var(--bg);
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 120ms ease;
+}
+input[type='checkbox']::after {
+  content: '';
+  width: 6px;
+  height: 11px;
+  border: solid var(--on-accent);
+  border-width: 0 2.4px 2.4px 0;
+  transform: translateY(-1px) rotate(45deg) scale(0);
+  transition: transform 140ms ease;
+}
+input[type='checkbox']:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+input[type='checkbox']:checked::after {
+  transform: translateY(-1px) rotate(45deg) scale(1);
+}
+input[type='checkbox']:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+input[type='checkbox']:active:not(:disabled) {
+  transform: scale(0.92);
+}
+input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input[type='checkbox']:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* segmented switch */
+.seg {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.seg button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.seg button[aria-selected='true'] {
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+/* Grafik: weekend, hours column, month view, shift editor */
+.sch-grid .weekend {
+  background: rgba(224, 123, 50, 0.045);
+}
+.sch-grid thead th.weekend {
+  color: var(--text-soft);
+  box-shadow: inset 0 -2px 0 rgba(224, 123, 50, 0.45);
+}
+.sch-grid .sch-hours-col {
+  width: 92px;
+  text-align: right;
+  padding: 8px 12px;
+  border-left: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+.sch-grid td.sch-hours-col strong {
+  display: block;
+  font-size: 14px;
+}
+.sch-grid td.sch-hours-col small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.sch-grid.month {
+  min-width: calc(150px + 92px + var(--days) * 46px);
+}
+.sch-grid.month thead th {
+  padding: 8px 2px;
+}
+.sch-grid.month .sch-cell {
+  padding: 3px 2px;
+  min-height: 44px;
+}
+.sch-grid.month .sch-shift {
+  padding: 3px 2px;
+  font-size: 10.5px;
+  text-align: center;
+  border-left-width: 2px;
+}
+.sch-grid.month .sch-shift.changed::after {
+  top: 2px;
+  right: 2px;
+  width: 5px;
+  height: 5px;
+}
+.sch-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--c, var(--border));
+}
+.sch-editor.deleted {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  opacity: 0.85;
+}
+.sch-editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.sch-grid .sch-hours-col {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+.sch-grid .group-row .sch-hours-col {
+  background: transparent;
 }

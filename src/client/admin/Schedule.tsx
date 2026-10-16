@@ -51,7 +51,7 @@ interface WeekView {
   templates: Template[];
   actual: { userId: string; date: string; clockInAt: number; clockOutAt: number | null }[];
   unpublished: number;
-  deadline: number;
+  deadline: number | null;
   divisions: string[] | null;
 }
 
@@ -60,11 +60,29 @@ const range = (s: { startMin: number; endMin: number }) => `${formatHm(s.startMi
 const dayHead = new Intl.DateTimeFormat('pl-PL', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
 const longDay = new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 const LATE_MIN = 5;
+const MODE_KEY = 'sa.panel.scheduleMode';
+const monthName = (m: string) => {
+  const v = new Intl.DateTimeFormat('pl-PL', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${m}-15T12:00:00Z`));
+  return v.charAt(0).toUpperCase() + v.slice(1);
+};
+const shiftMonth = (m: string, d: number) => {
+  const x = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1 + d, 1));
+  return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+/** Friday and Saturday stand out — the busiest days. */
+const isWeekend = (d: string) => {
+  const dow = new Date(`${d}T12:00:00Z`).getUTCDay();
+  return dow === 5 || dow === 6;
+};
+const hours = (min: number) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
+const compact = (m: number) => (m % 60 ? formatHm(m) : String(Math.floor((m % 1440) / 60)));
 
 export function Schedule() {
   const { locationId } = usePanel();
   const today = businessDate(Date.now());
   const [week, setWeek] = useState(() => weekStart(addDays(today, 7)));
+  const [mode, setMode] = useState<'week' | 'month'>(() => (storageGet(MODE_KEY) === 'month' ? 'month' : 'week'));
+  const [month, setMonth] = useState(() => today.slice(0, 7));
   const [data, setData] = useState<WeekView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -83,11 +101,11 @@ export function Schedule() {
   const load = useCallback(async () => {
     try {
       setError(null);
-      setData(await api<WeekView>(`/api/admin/locations/${locationId}/schedule?week=${week}`));
+      setData(await api<WeekView>(`/api/admin/locations/${locationId}/schedule?${mode === 'month' ? `month=${month}` : `week=${week}`}`));
     } catch (e) {
       setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
     }
-  }, [locationId, week]);
+  }, [locationId, week, month, mode]);
   useEffect(() => {
     setData(null);
     void load();
@@ -109,7 +127,10 @@ export function Schedule() {
     if (!window.confirm(t.publishConfirm(data.unpublished))) return;
     setBusy(true);
     try {
-      const r = await api<{ published: number; people: number }>(`/api/admin/locations/${locationId}/schedule/publish`, { method: 'POST', body: { week } });
+      const r = await api<{ published: number; people: number }>(`/api/admin/locations/${locationId}/schedule/publish`, {
+        method: 'POST',
+        body: mode === 'month' ? { month } : { week },
+      });
       setNotice(t.published(r.published, r.people));
       await load();
     } catch (e) {
@@ -137,25 +158,58 @@ export function Schedule() {
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <h1 className="page-title">{t.title}</h1>
         <div className="btn-row">
-          <Btn onClick={() => void copyWeek()} disabled={busy || !data}>
-            {t.copyWeek}
-          </Btn>
+          {mode === 'week' && (
+            <Btn onClick={() => void copyWeek()} disabled={busy || !data}>
+              {t.copyWeek}
+            </Btn>
+          )}
           <Btn kind="primary" onClick={() => void publish()} disabled={busy || !data?.unpublished}>
             {data?.unpublished ? t.publish(data.unpublished) : t.allPublished}
           </Btn>
         </div>
       </div>
       <div className="btn-row" style={{ alignItems: 'center' }}>
-        <Btn onClick={() => setWeek(addDays(week, -7))} aria-label={t.prevWeek}>
-          ‹
-        </Btn>
-        <Btn onClick={() => setWeek(weekStart(today))}>{t.thisWeek}</Btn>
-        <Btn onClick={() => setWeek(addDays(week, 7))} aria-label={t.nextWeek}>
-          ›
-        </Btn>
-        <strong style={{ fontSize: 15 }}>{t.weekLabel(longDay.format(new Date(`${week}T12:00:00Z`)), longDay.format(new Date(`${addDays(week, 6)}T12:00:00Z`)))}</strong>
+        <div className="seg" role="tablist" aria-label={t.view}>
+          {(['week', 'month'] as const).map((x) => (
+            <button
+              key={x}
+              type="button"
+              role="tab"
+              aria-selected={mode === x}
+              onClick={() => {
+                setMode(x);
+                storageSet(MODE_KEY, x);
+              }}
+            >
+              {x === 'week' ? t.weekView : t.monthView}
+            </button>
+          ))}
+        </div>
+        {mode === 'week' ? (
+          <>
+            <Btn onClick={() => setWeek(addDays(week, -7))} aria-label={t.prevWeek}>
+              ‹
+            </Btn>
+            <Btn onClick={() => setWeek(weekStart(today))}>{t.thisWeek}</Btn>
+            <Btn onClick={() => setWeek(addDays(week, 7))} aria-label={t.nextWeek}>
+              ›
+            </Btn>
+            <strong style={{ fontSize: 15 }}>{t.weekLabel(longDay.format(new Date(`${week}T12:00:00Z`)), longDay.format(new Date(`${addDays(week, 6)}T12:00:00Z`)))}</strong>
+          </>
+        ) : (
+          <>
+            <Btn onClick={() => setMonth(shiftMonth(month, -1))} aria-label={t.prevMonth}>
+              ‹
+            </Btn>
+            <Btn onClick={() => setMonth(today.slice(0, 7))}>{t.thisMonth}</Btn>
+            <Btn onClick={() => setMonth(shiftMonth(month, 1))} aria-label={t.nextMonth}>
+              ›
+            </Btn>
+            <strong style={{ fontSize: 15 }}>{monthName(month)}</strong>
+          </>
+        )}
       </div>
-      {data && (
+      {data && data.deadline !== null && (
         <p className="muted" style={{ margin: 0, fontSize: 13 }}>
           {Date.now() <= data.deadline ? t.deadlineOpen(formatDeadline(data.deadline)) : t.deadlineClosed(formatDeadline(data.deadline))}
         </p>
@@ -200,7 +254,7 @@ export function Schedule() {
       {data && present.length === 0 && <p className="muted">{t.noPeople}</p>}
       {data && present.length > 0 && (
         <div className="time-grid-wrap">
-          <table className={`time-grid sch-grid${highlight !== null ? ' dim' : ''}`}>
+          <table className={`time-grid sch-grid${mode === 'month' ? ' month' : ''}${highlight !== null ? ' dim' : ''}`} style={{ ['--days' as string]: data.days.length }}>
             <thead>
               <tr>
                 <th className="sticky">{t.person}</th>
@@ -208,19 +262,21 @@ export function Schedule() {
                   const day = live.filter((s) => s.date === d);
                   const byStart = [...new Set(day.map((s) => s.startMin))].sort((a, b) => a - b);
                   return (
-                    <th key={d} className={d === today ? 'today' : undefined}>
-                      <div>{dayHead.format(new Date(`${d}T12:00:00Z`))}</div>
+                    <th key={d} className={`${d === today ? 'today' : ''}${isWeekend(d) ? ' weekend' : ''}`}>
+                      <div>{mode === 'month' ? monthHead(d) : dayHead.format(new Date(`${d}T12:00:00Z`))}</div>
                       <div className="sch-counts">
-                        {byStart.map((m) => (
-                          <span key={m} style={{ color: shiftColor(m) }}>
-                            {formatHm(m)}×{day.filter((s) => s.startMin === m).length}
-                          </span>
-                        ))}
-                        <strong>{t.total(day.length)}</strong>
+                        {mode === 'week' &&
+                          byStart.map((m) => (
+                            <span key={m} style={{ color: shiftColor(m) }}>
+                              {formatHm(m)}×{day.filter((s) => s.startMin === m).length}
+                            </span>
+                          ))}
+                        <strong>{mode === 'week' ? t.total(day.length) : day.length || ''}</strong>
                       </div>
                     </th>
                   );
                 })}
+                <th className="sch-hours-col">{t.hoursCol}</th>
               </tr>
             </thead>
             <tbody>
@@ -232,7 +288,7 @@ export function Schedule() {
                     <th className="sticky" colSpan={1}>
                       {pl.admin.divisions[g] ?? g} · {members.length}
                     </th>
-                    <td colSpan={7} />
+                    <td colSpan={data.days.length + 1} />
                   </tr>,
                   ...members.map((p) => (
                     <tr key={`${g}-${p.id}`}>
@@ -244,25 +300,38 @@ export function Schedule() {
                         const off = data.unavailability.find((u) => u.userId === p.id && u.date === d);
                         const act = data.actual.filter((a) => a.userId === p.id && a.date === d);
                         return (
-                          <td key={d} className={`${d === today ? 'today' : ''}${off ? ' sch-off' : ''}`}>
+                          <td key={d} className={`${d === today ? 'today' : ''}${isWeekend(d) ? ' weekend' : ''}${off ? ' sch-off' : ''}`}>
                             <button type="button" className="sch-cell" onClick={() => setCell({ person: p, division: g, date: d })} aria-label={t.cellLabel(short(p), d)}>
                               {own.map((s) => (
                                 <span
                                   key={s.id}
                                   className={`sch-shift${s.deleted ? ' deleted' : ''}${s.changed ? ' changed' : ''}${highlight === s.startMin ? ' hl' : ''}`}
                                   style={{ ['--c' as string]: shiftColor(s.startMin) }}
-                                  title={s.note ?? undefined}
-                                >
-                                  {range(s)}
+                                                >
+                                  {mode === 'month' ? `${compact(s.startMin)}–${compact(s.endMin)}` : range(s)}
                                 </span>
                               ))}
-                              {off && !own.length && <span className="sch-off-label">{t.unavailable}</span>}
-                              {off && own.length > 0 && <span className="sch-warn">{t.unavailableShort}</span>}
-                              <PlanVsActual shifts={own.filter((s) => !s.deleted)} actual={act} date={d} today={today} />
+                              {off && !own.length && <span className="sch-off-label">{mode === 'month' ? '✕' : t.unavailable}</span>}
+                              {off && own.length > 0 && <span className="sch-warn">{mode === 'month' ? '⚠' : t.unavailableShort}</span>}
+                              {mode === 'week' && <PlanVsActual shifts={own.filter((s) => !s.deleted)} actual={act} date={d} today={today} />}
                             </button>
                           </td>
                         );
                       })}
+                      <td className="sch-hours-col">
+                        {(() => {
+                          const mine = data.shifts.filter((s) => s.userId === p.id && s.division === g && !s.deleted);
+                          const min = mine.reduce((a, s) => a + (s.endMin - s.startMin), 0);
+                          return min ? (
+                            <span title={t.shiftsCount(mine.length)}>
+                              <strong>{hours(min)}</strong>
+                              <small>{t.shiftsCount(mine.length)}</small>
+                            </span>
+                          ) : (
+                            <span className="muted">—</span>
+                          );
+                        })()}
+                      </td>
                     </tr>
                   )),
                 ];
@@ -291,6 +360,11 @@ export function Schedule() {
     </div>
   );
 }
+
+const monthHead = (d: string) => {
+  const x = new Date(`${d}T12:00:00Z`);
+  return `${['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb'][x.getUTCDay()]} ${x.getUTCDate()}`;
+};
 
 function formatDeadline(ms: number) {
   return new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Warsaw' }).format(new Date(ms));
@@ -321,7 +395,6 @@ function ShiftDialog(props: {
   const [error, setError] = useState<string | null>(null);
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
-  const [note, setNote] = useState('');
   const endRef = useRef<HTMLInputElement>(null);
   const valid = VALID_TIME.test(start) && VALID_TIME.test(end);
 
@@ -340,7 +413,7 @@ function ShiftDialog(props: {
       () =>
         api(`/api/admin/locations/${props.locationId}/schedule/shifts`, {
           method: 'POST',
-          body: { userId: props.person.id, date: props.date, division: props.division, start: s, end: e, note: note || undefined },
+          body: { userId: props.person.id, date: props.date, division: props.division, start: s, end: e },
         }),
       true,
     );
@@ -371,27 +444,31 @@ function ShiftDialog(props: {
           ))}
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 10 }}>
-        <div className="field">
-          <label htmlFor="sh-start">{t.start}</label>
-          <TimeField id="sh-start" value={start} onChange={setStart} onComplete={() => endRef.current?.focus()} autoFocus={!props.templates.length} />
+      <form
+        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valid) void add(start, end);
+        }}
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 10 }}>
+          <div className="field">
+            <label htmlFor="sh-start">{t.start}</label>
+            <TimeField id="sh-start" value={start} onChange={setStart} onComplete={() => endRef.current?.focus()} autoFocus={!props.templates.length} />
+          </div>
+          <div className="field">
+            <label htmlFor="sh-end">{t.end}</label>
+            <TimeField id="sh-end" ref={endRef} value={end} onChange={setEnd} />
+          </div>
         </div>
-        <div className="field">
-          <label htmlFor="sh-end">{t.end}</label>
-          <TimeField id="sh-end" ref={endRef} value={end} onChange={setEnd} />
+        <ErrorBox message={error} />
+        <div className="btn-row">
+          <Btn kind="primary" type="submit" disabled={!valid}>
+            {t.addShift}
+          </Btn>
+          <Btn onClick={props.onClose}>{pl.admin.card.close}</Btn>
         </div>
-      </div>
-      <div className="field">
-        <label htmlFor="sh-note">{t.note}</label>
-        <input id="sh-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder={t.notePlaceholder} />
-      </div>
-      <ErrorBox message={error} />
-      <div className="btn-row">
-        <Btn kind="primary" disabled={!valid} onClick={() => void add(start, end)}>
-          {t.addShift}
-        </Btn>
-        <Btn onClick={props.onClose}>{pl.admin.card.close}</Btn>
-      </div>
+      </form>
     </Modal>
   );
 }
@@ -399,21 +476,38 @@ function ShiftDialog(props: {
 function ShiftEditor({ shift, onRun }: { shift: Shift; onRun: (fn: () => Promise<unknown>, close?: boolean) => Promise<void> }) {
   const [start, setStart] = useState(formatHm(shift.startMin));
   const [end, setEnd] = useState(formatHm(shift.endMin));
-  const [note, setNote] = useState(shift.note ?? '');
   const endRef = useRef<HTMLInputElement>(null);
-  const dirty = start !== formatHm(shift.startMin) || end !== formatHm(shift.endMin) || note !== (shift.note ?? '');
+  const dirty = start !== formatHm(shift.startMin) || end !== formatHm(shift.endMin);
+  const ok = dirty && VALID_TIME.test(start) && VALID_TIME.test(end);
   if (shift.deleted) {
     return (
-      <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: 12 }}>
+      <div className="sch-editor deleted">
         <span>
-          <s>{range(shift)}</s> · {t.deletedPending}
+          <s>{range(shift)}</s> <span className="badge warn">{t.deletedPending}</span>
         </span>
         <Btn onClick={() => void onRun(() => api(`/api/admin/schedule/shifts/${shift.id}/restore`, { method: 'POST' }))}>{t.restore}</Btn>
       </div>
     );
   }
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 12, borderLeft: `4px solid ${shiftColor(shift.startMin)}` }}>
+    <form
+      className="sch-editor"
+      style={{ ['--c' as string]: shiftColor(shift.startMin) }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (ok) void onRun(() => api(`/api/admin/schedule/shifts/${shift.id}`, { method: 'PUT', body: { start, end } }));
+      }}
+    >
+      <div className="sch-editor-head">
+        <strong>{range(shift)}</strong>
+        {!shift.published ? (
+          <span className="badge neutral">{t.badgeDraft}</span>
+        ) : shift.changed ? (
+          <span className="badge warn">{t.badgeChanged}</span>
+        ) : (
+          <span className="badge ok">{t.badgePublished}</span>
+        )}
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 10 }}>
         <div className="field">
           <label htmlFor={`${shift.id}-s`}>{t.start}</label>
@@ -424,23 +518,15 @@ function ShiftEditor({ shift, onRun }: { shift: Shift; onRun: (fn: () => Promise
           <TimeField id={`${shift.id}-e`} ref={endRef} value={end} onChange={setEnd} />
         </div>
       </div>
-      <input aria-label={t.note} value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder={t.notePlaceholder} />
-      <span className="muted" style={{ fontSize: 12 }}>
-        {!shift.published ? t.notPublished : shift.changed ? t.changedSincePublish : t.isPublished}
-      </span>
       <div className="btn-row">
-        <Btn
-          kind="primary"
-          disabled={!dirty || !VALID_TIME.test(start) || !VALID_TIME.test(end)}
-          onClick={() => void onRun(() => api(`/api/admin/schedule/shifts/${shift.id}`, { method: 'PUT', body: { start, end, note } }))}
-        >
+        <Btn kind="primary" type="submit" disabled={!ok}>
           {t.save}
         </Btn>
         <Btn kind="danger" onClick={() => void onRun(() => api(`/api/admin/schedule/shifts/${shift.id}`, { method: 'DELETE' }))}>
           {t.remove}
         </Btn>
       </div>
-    </div>
+    </form>
   );
 }
 

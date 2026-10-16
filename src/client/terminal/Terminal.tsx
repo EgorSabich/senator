@@ -51,7 +51,6 @@ interface Status {
   terminal: { name: string; location: string };
   serverTime: number;
   photo?: boolean;
-  onShift: { name: string; since: number }[];
 }
 
 type Result =
@@ -600,14 +599,6 @@ function TerminalScreen({ onSignedOut }: { onSignedOut: () => void }) {
 
       <footer className="t-foot">
         <p className="t-hint">{t.hint}</p>
-        {status && (
-          <div className="t-shift">
-            <span className="t-shift-label">{t.onShift(status.onShift.length)}</span>
-            <div className="t-shift-names">
-              {status.onShift.length === 0 ? <span className="t-muted">{t.nobody}</span> : status.onShift.map((p) => <span key={p.name + p.since}>{p.name}</span>)}
-            </div>
-          </div>
-        )}
       </footer>
 
       {exiting && <ExitDialog queued={queue.length} onClose={() => setExiting(false)} onExited={() => { setQ([]); onSignedOut(); }} />}
