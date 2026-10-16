@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { divisionOf as divisionOfPosition } from '../../shared/constants';
 import { formatHm, shiftStartMs } from '../../shared/schedule';
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
@@ -474,7 +475,7 @@ function EntryEditor({ entry, date, dayStartHour, onSave, onDelete }: { entry: E
 function DayDialog(props: { locationId: string; person: Person; date: string; dayStartHour: number; entries: Entry[]; onClose: () => void; onChanged: () => Promise<void> }) {
   const [adding, setAdding] = useState(props.entries.length === 0);
   const [punches, setPunches] = useState<{ id: string; at: number; outcome: string; person: string | null; offline: number; hasPhoto?: number }[] | null>(null);
-  const [bigPhoto, setBigPhoto] = useState<string | null>(null);
+  const [bigPhoto, setBigPhoto] = useState<{ id: string; caption: string } | null>(null);
   useEffect(() => {
     void api<{ punches: typeof punches }>(`/api/admin/locations/${props.locationId}/time/punches?date=${props.date}`)
       .then((r) => setPunches(r.punches))
@@ -530,26 +531,105 @@ function DayDialog(props: { locationId: string; person: Person; date: string; da
       <p className="muted" style={{ margin: 0, fontSize: 12 }}>
         {t.afterMidnight(props.dayStartHour)}
       </p>
-      {mine.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div className="label">{t.punches}</div>
-          {mine.map((p) => (
-            <span key={p.id} className="muted punch-row" style={{ fontSize: 13 }}>
-              {p.hasPhoto ? (
-                <button type="button" className="punch-thumb" onClick={() => setBigPhoto(bigPhoto === p.id ? null : p.id)} aria-label={t.punchPhoto}>
-                  <img src={`/api/admin/time/punches/${p.id}/photo`} alt="" loading="lazy" />
-                </button>
-              ) : null}
-              <span>
-                {formatClock(p.at)} · {t.outcomes[p.outcome] ?? p.outcome}
-                {p.offline ? ` · ${t.sources.offline}` : ''}
-              </span>
+      {mine.length > 0 && <PunchCards punches={mine} onOpen={setBigPhoto} />}
+      {bigPhoto && <PhotoLightbox src={`/api/admin/time/punches/${bigPhoto.id}/photo`} caption={bigPhoto.caption} onClose={() => setBigPhoto(null)} />}
+    </Modal>
+  );
+}
+
+type Punch = { id: string; at: number; outcome: string; person: string | null; offline: number; hasPhoto?: number };
+
+/** Option B (owner, 2026-10-17): every shift as a card — entry and exit photos side by side, large. */
+function PunchCards({ punches, onOpen }: { punches: Punch[]; onOpen: (p: { id: string; caption: string }) => void }) {
+  const sorted = [...punches].sort((a, b) => a.at - b.at);
+  const cards: { in: Punch | null; out: Punch | null }[] = [];
+  const other: Punch[] = [];
+  for (const p of sorted) {
+    if (p.outcome === 'in') cards.push({ in: p, out: null });
+    else if (p.outcome === 'out') {
+      const open = [...cards].reverse().find((c) => !c.out);
+      if (open) open.out = p;
+      else cards.push({ in: null, out: p });
+    } else other.push(p);
+  }
+  const side = (p: Punch | null, kind: 'in' | 'out') => {
+    const label = kind === 'in' ? t.punchIn : t.punchOut;
+    if (!p)
+      return (
+        <div className="pcard-side empty">
+          <div className="pcard-photo none">{t.noPunch}</div>
+          <div className="pcard-meta">
+            <span>{label}</span>
+            <strong>—</strong>
+          </div>
+        </div>
+      );
+    const caption = `${label} · ${formatClock(p.at)}`;
+    return (
+      <div className="pcard-side">
+        {p.hasPhoto ? (
+          <button type="button" className="pcard-photo" onClick={() => onOpen({ id: p.id, caption })} aria-label={`${t.punchPhoto}: ${caption}`}>
+            <img src={`/api/admin/time/punches/${p.id}/photo`} alt="" loading="lazy" />
+          </button>
+        ) : (
+          <div className="pcard-photo none">{t.noPhoto}</div>
+        )}
+        <div className="pcard-meta">
+          <span>{label}</span>
+          <strong>{formatClock(p.at)}</strong>
+          {p.offline ? <em>{t.sources.offline}</em> : null}
+        </div>
+      </div>
+    );
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="label">{t.punches}</div>
+      {cards.map((c, i) => (
+        <div key={i} className="pcard" style={{ animationDelay: `${i * 60}ms` }}>
+          {side(c.in, 'in')}
+          {side(c.out, 'out')}
+        </div>
+      ))}
+      {other.length > 0 && (
+        <div className="muted" style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {other.map((p) => (
+            <span key={p.id}>
+              {formatClock(p.at)} · {t.outcomes[p.outcome] ?? p.outcome}
             </span>
           ))}
-          {bigPhoto && <img className="punch-big" src={`/api/admin/time/punches/${bigPhoto}/photo`} alt={t.punchPhoto} onClick={() => setBigPhoto(null)} />}
         </div>
       )}
-    </Modal>
+    </div>
+  );
+}
+
+/** Full-size photo over the dialog: grows in smoothly, closes with a tap or Esc. */
+export function PhotoLightbox({ src, caption, onClose }: { src: string; caption: string; onClose: () => void }) {
+  const [closing, setClosing] = useState(false);
+  const close = () => {
+    setClosing(true);
+    window.setTimeout(onClose, 200);
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        close();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return createPortal(
+    <div className={`lightbox${closing ? ' closing' : ''}`} role="dialog" aria-label={caption} onClick={close}>
+      <figure>
+        <img src={src} alt={caption} />
+        <figcaption>{caption}</figcaption>
+      </figure>
+    </div>,
+    document.body,
   );
 }
 

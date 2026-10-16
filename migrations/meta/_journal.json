@@ -85,6 +85,20 @@
       "when": 1792190836456,
       "tag": "0011_partial_unavailability",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792193373903,
+      "tag": "0012_checklist_photos",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1792193620514,
+      "tag": "0013_knowledge_tabs",
+      "breakpoints": true
     }
   ]
 }

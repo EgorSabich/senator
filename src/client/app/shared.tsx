@@ -137,6 +137,12 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M12 11v6M12 7.5v.5" />
     </>
   ),
+  camera: (
+    <>
+      <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </>
+  ),
   photo: (
     <>
       <rect x="3" y="5" width="18" height="14" rx="2" />

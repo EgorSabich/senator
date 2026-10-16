@@ -181,6 +181,10 @@ export const contentItems = sqliteTable(
     sortOrder: integer('sort_order').notNull().default(0),
     /** Checklists only (D42): "individual" = everyone on shift does every item; "shared" = one item, one person (D36). */
     checklistMode: text('checklist_mode').notNull().default('individual'),
+    /** Individual checklists (2026-10-17): JSON array of item keys that need a photo when ticked. */
+    checklistPhotoKeys: text('checklist_photo_keys'),
+    /** Service Book–type pages (2026-10-17): the Wiedza tab they belong to; null = the built-in Service Book tab. */
+    tabId: text('tab_id'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -190,6 +194,23 @@ export const contentItems = sqliteTable(
     uniqueIndex('content_items_import_key_uq').on(t.locationId, t.importKey),
   ],
 );
+
+/**
+ * Wiedza tabs (2026-10-17): "Service Book" for waiters, "Bar Book" for the bar… A tab is seen by its positions
+ * (null = everyone); its pages are content items of kind service_book with tab_id. kt_service_book is built in.
+ */
+export const knowledgeTabs = sqliteTable('knowledge_tabs', {
+  id: id(),
+  /** null = shared by every location (owner only). */
+  locationId: text('location_id').references(() => locations.id),
+  title: text('title').notNull(),
+  /** comma-separated positions; null = everyone */
+  positions: text('positions'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdBy: text('created_by').references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
 
 /** Uploaded photos and files in R2 (key = loc/<locationId|shared>/<kind>/<id>.<ext>). */
 export const media = sqliteTable(
@@ -569,6 +590,8 @@ export const checklistMarks = sqliteTable(
     markedAt: integer('marked_at').notNull(),
     /** '' for shared lists (one mark per item), the user id for individual ones (one mark per item and person). */
     ownerKey: text('owner_key').notNull().default(''),
+    /** Photo in the PHOTOS bucket for items that need one; removed after CHECKLIST_PHOTO_DAYS. */
+    photoKey: text('photo_key'),
   },
   (t) => [
     uniqueIndex('checklist_marks_owner_uq').on(t.contentItemId, t.businessDate, t.itemKey, t.ownerKey),

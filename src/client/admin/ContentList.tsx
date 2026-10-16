@@ -25,6 +25,17 @@ interface Item {
   requiresAck: boolean;
   positions: string[];
   updatedAt: number;
+  tabId?: string | null;
+}
+
+export interface KTab {
+  id: string;
+  title: string;
+  positions: string[];
+  shared: boolean;
+  builtIn: boolean;
+  editable: boolean;
+  pages: number;
 }
 
 const t = pl.admin.content;
@@ -44,11 +55,18 @@ export function ContentList() {
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [settingPositions, setSettingPositions] = useState(false);
+  const [tabs, setTabs] = useState<KTab[]>([]);
+  const [tabFilter, setTabFilter] = useState<string>('all');
+  const [editingTab, setEditingTab] = useState<KTab | 'new' | null>(null);
+  const [divisions, setDivisions] = useState<string[] | null>(null);
 
   const load = useCallback(async () => {
     setItems(null);
     try {
-      setItems((await api<{ items: Item[] }>(`/api/admin/locations/${locationId}/content?kind=${kind}`)).items);
+      const res = await api<{ items: Item[]; divisions: string[] | null }>(`/api/admin/locations/${locationId}/content?kind=${kind}`);
+      setItems(res.items);
+      setDivisions(res.divisions);
+      if (kind === 'service_book') setTabs((await api<{ tabs: KTab[] }>(`/api/admin/locations/${locationId}/knowledge-tabs`)).tabs);
     } catch (e) {
       setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
     }
@@ -59,6 +77,7 @@ export function ContentList() {
 
   const visible = (items ?? [])
     .filter((i) => (showArchived ? i.status === 'archived' : i.status !== 'archived'))
+    .filter((i) => kind !== 'service_book' || tabFilter === 'all' || i.tabId === tabFilter)
     .filter((i) => (position === 'all' ? true : position === 'none' ? i.positions.length === 0 : i.positions.length === 0 || i.positions.includes(position)));
   const togglePick = (id: string) =>
     setPicked((prev) => {
@@ -146,6 +165,38 @@ export function ContentList() {
           </button>
         ))}
       </div>
+      {kind === 'service_book' && (
+        <div className="kt-bar">
+          <div className="btn-row" style={{ alignItems: 'center' }} role="group" aria-label={t.tabs.title}>
+            <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>
+              {t.tabs.title}
+            </span>
+            <button className="chip" aria-pressed={tabFilter === 'all'} onClick={() => setTabFilter('all')}>
+              {t.tabs.all}
+            </button>
+            {tabs.map((tb) => (
+              <button key={tb.id} className="chip" aria-pressed={tabFilter === tb.id} onClick={() => setTabFilter(tb.id)}>
+                {tb.title} · {tb.pages}
+              </button>
+            ))}
+            <Btn onClick={() => setEditingTab('new')}>{t.tabs.add}</Btn>
+          </div>
+          {(() => {
+            const cur = tabs.find((x) => x.id === tabFilter);
+            if (!cur) return <p className="muted" style={{ margin: 0, fontSize: 13 }}>{t.tabs.hint}</p>;
+            return (
+              <p className="muted" style={{ margin: 0, fontSize: 13, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span>{t.tabs.seenBy(cur.positions.length ? cur.positions.map((p) => pl.admin.positions[p] ?? p).join(', ') : t.forAll)}</span>
+                {cur.editable && (
+                  <button type="button" className="link-btn" onClick={() => setEditingTab(cur)}>
+                    {t.tabs.edit}
+                  </button>
+                )}
+              </p>
+            );
+          })()}
+        </div>
+      )}
       <div className="btn-row">
         <button className="chip" aria-pressed={!showArchived} onClick={() => setShowArchived(false)}>
           {t.published} / {t.draft}
@@ -246,8 +297,25 @@ export function ContentList() {
           }}
         />
       )}
+      {editingTab && (
+        <TabDialog
+          tab={editingTab === 'new' ? null : editingTab}
+          locationId={locationId}
+          divisions={divisions}
+          onClose={() => setEditingTab(null)}
+          onSaved={async (id, msg) => {
+            setEditingTab(null);
+            setNotice(msg);
+            if (id) setTabFilter(id);
+            else setTabFilter('all');
+            await load();
+          }}
+        />
+      )}
       {creating && (
         <NewContent
+          tabs={tabs}
+          defaultTab={tabFilter !== 'all' ? tabFilter : tabs[0]?.id ?? null}
           defaultKind={kind}
           locationId={locationId}
           canShare={isOwner}
@@ -259,8 +327,17 @@ export function ContentList() {
   );
 }
 
-function NewContent(props: { defaultKind: string; locationId: string; canShare: boolean; onClose: () => void; onCreated: (id: string) => void }) {
+function NewContent(props: {
+  defaultKind: string;
+  locationId: string;
+  canShare: boolean;
+  tabs: KTab[];
+  defaultTab: string | null;
+  onClose: () => void;
+  onCreated: (id: string) => void;
+}) {
   const [kind, setKind] = useState(props.defaultKind);
+  const [tabId, setTabId] = useState(props.defaultTab);
   const [title, setTitle] = useState('');
   const [section, setSection] = useState('');
   const [shared, setShared] = useState(false);
@@ -270,7 +347,7 @@ function NewContent(props: { defaultKind: string; locationId: string; canShare: 
     try {
       const res = await api<{ id: string }>(`/api/admin/locations/${props.locationId}/content`, {
         method: 'POST',
-        body: { kind, title, section: section || undefined, shared },
+        body: { kind, title, section: section || undefined, shared, tabId: kind === 'service_book' && tabId ? tabId : undefined },
       });
       props.onCreated(res.id);
     } catch (err) {
@@ -290,6 +367,20 @@ function NewContent(props: { defaultKind: string; locationId: string; canShare: 
             ))}
           </select>
         </div>
+        {kind === 'service_book' && props.tabs.length > 0 && (
+          <div className="field">
+            <label htmlFor="ctab">{t.tabs.which}</label>
+            <select id="ctab" value={tabId ?? ''} onChange={(e) => setTabId(e.target.value)}>
+              {props.tabs
+                .filter((x) => !shared || x.shared)
+                .map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.title}
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
         <div className="field">
           <label htmlFor="ctitle">{t.titleLabel}</label>
           <input id="ctitle" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={160} />
@@ -363,6 +454,98 @@ function PositionsDialog(props: { ids: string[]; initial: string[]; onClose: () 
         </Btn>
         <Btn onClick={props.onClose}>{pl.common.cancel}</Btn>
       </div>
+    </Modal>
+  );
+}
+
+/** Add or change a Wiedza tab: its name and who sees it. An empty tab can be removed. */
+function TabDialog(props: { tab: KTab | null; locationId: string; divisions: string[] | null; onClose: () => void; onSaved: (id: string | null, msg: string) => Promise<void> }) {
+  const tb = t.tabs;
+  const [title, setTitle] = useState(props.tab?.title ?? '');
+  const [chosen, setChosen] = useState<Set<string>>(new Set(props.tab?.positions ?? props.divisions ?? []));
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const allowed = POSITIONS.filter((p) => !props.divisions || props.divisions.includes(p));
+  async function run(fn: () => Promise<void>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const save = () =>
+    run(async () => {
+      const body = { title, positions: [...chosen] };
+      if (props.tab) {
+        await api(`/api/admin/knowledge-tabs/${props.tab.id}`, { method: 'PUT', body });
+        await props.onSaved(props.tab.id, tb.saved);
+      } else {
+        const r = await api<{ id: string }>(`/api/admin/locations/${props.locationId}/knowledge-tabs`, { method: 'POST', body });
+        await props.onSaved(r.id, tb.created);
+      }
+    });
+  const remove = () =>
+    run(async () => {
+      if (!props.tab || !confirm(tb.confirmDelete(props.tab.title))) return;
+      await api(`/api/admin/knowledge-tabs/${props.tab.id}`, { method: 'DELETE' });
+      await props.onSaved(null, tb.deleted);
+    });
+  return (
+    <Modal title={props.tab ? tb.editTitle : tb.newTitle} onClose={props.onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+      >
+        <div className="field">
+          <label htmlFor="kt-title">{tb.name}</label>
+          <input id="kt-title" value={title} maxLength={60} placeholder={tb.namePlaceholder} onChange={(e) => setTitle(e.target.value)} />
+        </div>
+        <fieldset style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <legend style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-soft)', marginBottom: 6 }}>{tb.who}</legend>
+          {allowed.map((p) => (
+            <label key={p} className="check">
+              <input
+                type="checkbox"
+                checked={chosen.has(p)}
+                onChange={(e) => {
+                  const n = new Set(chosen);
+                  if (e.target.checked) n.add(p);
+                  else n.delete(p);
+                  setChosen(n);
+                }}
+              />
+              <span>{pl.admin.positions[p] ?? p}</span>
+            </label>
+          ))}
+          <span className="muted" style={{ fontSize: 12 }}>
+            {chosen.size ? tb.whoHint : props.divisions ? tb.pickOne : tb.everyone}
+          </span>
+        </fieldset>
+        <ErrorBox message={error} />
+        <div className="btn-row">
+          <Btn kind="primary" type="submit" disabled={busy || !title.trim() || (Boolean(props.divisions) && chosen.size === 0)}>
+            {props.tab ? pl.common.save : tb.add}
+          </Btn>
+          <Btn onClick={props.onClose}>{pl.admin.cancel}</Btn>
+          {props.tab && !props.tab.builtIn && (
+            <Btn kind="danger" disabled={busy || props.tab.pages > 0} onClick={() => void remove()}>
+              {tb.delete}
+            </Btn>
+          )}
+        </div>
+        {props.tab && !props.tab.builtIn && props.tab.pages > 0 && (
+          <span className="muted" style={{ fontSize: 12 }}>
+            {tb.notEmpty(props.tab.pages)}
+          </span>
+        )}
+      </form>
     </Modal>
   );
 }

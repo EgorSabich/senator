@@ -1,6 +1,14 @@
 # Changelog
 
 
+
+## 0.10.0 — 2026-10-17 (D47, iteration 2)
+
+- Checklist photos: in the editor of an individual list the leader ticks „Zadania ze zdjęciem”; on the phone such a task opens the camera and is ticked only with the photo (shrunk to ≤1024 px JPEG). Panel day view: camera chip by the person's name opens the photo. Photos live in the private PHOTOS bucket, leave after 30 days (nightly), and go with the person / the material on permanent deletion. Migration 0012.
+- Wiedza tabs: `knowledge_tabs` (migration 0013) with a built-in „Service Book” for waiters (runners see it through the division). A page of kind service_book belongs to a tab; staff see a tab only if their position matches it. Leaders add, rename and remove (empty) tabs for their own divisions in Materiały → „Zakładki Wiedzy”; the page editor has „Zakładka w Wiedzy”. The reader shows the tab name.
+- Grafik export: „Eksportuj” → PNG (one image, share sheet on phones) or PDF A4 landscape (pages, heads repeated). Black, white and greys; no new libraries (own canvas + minimal PDF writer).
+- Punch cards (option B): each shift is a card with entry and exit photos side by side; a tap opens the photo in a smooth lightbox (Esc closes the photo first).
+
 ## 0.9.1 — 2026-10-17
 
 - Checklists fold by sections — on the phone (finished sections fold, a section folds by itself a moment after its last task; „Zwiń / Rozwiń wszystko”) and in the panel day view (unfinished sections open, finished folded, „brakuje N” in the header).
