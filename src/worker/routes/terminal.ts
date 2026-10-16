@@ -11,6 +11,7 @@ import { locationRules } from '../lib/location';
 import type { AppEnv } from '../env';
 import { ApiError, badRequest, newId, readJson } from '../lib/http';
 import { pinLookup, verifySecret } from '../auth/crypto';
+import { assignPinLookup, burnPinStatement } from '../lib/pin';
 import { clearSessionCookie } from '../auth/session';
 import { decodePunchPhoto } from '../jobs/punchPhotos';
 
@@ -59,7 +60,7 @@ async function checkPaused(db: D1Database, terminalId: string, now: number) {
 async function personByPin(db: D1Database, secret: string, pin: string, locationId: string) {
   if (checkPin(pin) === 'pin_format') return null;
   const lookup = await pinLookup(pin, secret);
-  return db
+  const found = await db
     .prepare(
       `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName FROM users u
        WHERE u.pin_lookup = ? AND u.status = 'active' AND u.role = 'employee'
@@ -67,6 +68,36 @@ async function personByPin(db: D1Database, secret: string, pin: string, location
     )
     .bind(lookup, locationId)
     .first<{ id: string; firstName: string; lastName: string }>();
+  return found ?? legacyPin(db, secret, pin, lookup, locationId);
+}
+
+/**
+ * PINs set before the time clock existed (D35) have no terminal link yet; it was made only at the next sign-in,
+ * and staff stay signed in for weeks. So when the quick lookup finds nobody, the PIN is checked against the people
+ * of this location who still have no link (slow, but only until everyone is linked) and linked on success.
+ * Two people with the same old PIN: neither keeps it — both must set a new one (same rule as D35).
+ */
+async function legacyPin(db: D1Database, secret: string, pin: string, lookup: string, locationId: string) {
+  const { results } = await db
+    .prepare(
+      `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName, u.secret_hash AS hash, u.secret_salt AS salt FROM users u
+       WHERE u.pin_lookup IS NULL AND u.status = 'active' AND u.role = 'employee' AND u.secret_kind = 'pin' AND u.must_change_secret = 0
+         AND u.secret_hash IS NOT NULL AND u.secret_salt IS NOT NULL
+         AND EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ? AND ul.is_active = 1)
+       LIMIT 80`,
+    )
+    .bind(locationId)
+    .all<{ id: string; firstName: string; lastName: string; hash: string; salt: string }>();
+  if (!results.length) return null;
+  const checks = await Promise.all(results.map((r) => verifySecret(pin, secret, r.hash, r.salt)));
+  const matches = results.filter((_, i) => checks[i]);
+  if (matches.length === 1) {
+    const m = matches[0]!;
+    if ((await assignPinLookup(db, m.id, lookup)) === 'ok') return { id: m.id, firstName: m.firstName, lastName: m.lastName };
+    return null;
+  }
+  if (matches.length > 1) await db.batch(matches.map((m) => burnPinStatement(db, m.id)));
+  return null;
 }
 
 /**

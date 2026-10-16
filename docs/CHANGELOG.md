@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1 — 2026-10-16 — Old PINs on the terminal
+
+- Fix: PINs set before the time clock (0.6.0) had no terminal link until the person signed in again, and staff stay signed in — so the terminal answered "Nieznany PIN". Now, when the quick lookup finds nobody, the PIN is checked against the location's people still without a link and linked on first use. Two people with the same old PIN: nobody is clocked in and both must choose a new PIN.
+- Tests: 113 integration (new 15-legacy-pin).
+
 ## 0.8.0 — 2026-10-16 — Leadership roles, "Dziś"
 
 - D44 roles in "Kadra kierownicza" (was Menedżerowie): Zarządzający (everything, incl. adding leaders, Lokale, the log; new permissions `managers.manage`, `locations.manage`, `audit.view`), Menedżer sali (kelnerzy, host, call center), Szef kuchni, Szef baru, Szef mistrzów shishy. A role is a preset of permissions + divisions (stored as `role:…` and `division:…`), single permissions can still be changed; nobody but the owner or another zarządzający changes one's own permissions.
