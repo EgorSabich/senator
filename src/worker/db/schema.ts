@@ -43,6 +43,9 @@ export const locations = sqliteTable('locations', {
   staleHours: integer('stale_hours').notNull().default(16),
   /** D40: terminal takes a small photo at every punch (kept 60 days). */
   punchPhoto: integer('punch_photo', { mode: 'boolean' }).notNull().default(false),
+  /** D43: staff report days off for a week until this weekday (0 = Sunday … 6 = Saturday) of the week before, HH:59. */
+  unavailDeadlineDow: integer('unavail_deadline_dow').notNull().default(0),
+  unavailDeadlineHour: integer('unavail_deadline_hour').notNull().default(23),
   createdAt: createdAt(),
 });
 
@@ -603,4 +606,64 @@ export const payRates = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('pay_rates_uq').on(t.userId, t.locationId, t.validFrom), index('pay_rates_loc_idx').on(t.locationId)],
+);
+
+/**
+ * Planned shifts (D43). The draft fields are what the manager edits; the pub_* fields are what staff see,
+ * copied on "Opublikuj". A published shift deleted in the draft keeps is_deleted = 1 until the next publish.
+ */
+export const scheduleShifts = sqliteTable(
+  'schedule_shifts',
+  {
+    id: id(),
+    locationId: text('location_id').notNull().references(() => locations.id),
+    userId: text('user_id').notNull().references(() => users.id),
+    /** calendar date the shift starts on */
+    date: text('date').notNull(),
+    division: text('division').notNull(),
+    /** minutes from 00:00; end may pass 1440 (after midnight) */
+    startMin: integer('start_min').notNull(),
+    endMin: integer('end_min').notNull(),
+    note: text('note'),
+    isDeleted: integer('is_deleted', { mode: 'boolean' }).notNull().default(false),
+    published: integer('published', { mode: 'boolean' }).notNull().default(false),
+    pubStartMin: integer('pub_start_min'),
+    pubEndMin: integer('pub_end_min'),
+    pubNote: text('pub_note'),
+    publishedAt: integer('published_at'),
+    createdBy: text('created_by').references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('schedule_shifts_loc_date_idx').on(t.locationId, t.date), index('schedule_shifts_user_idx').on(t.userId, t.date)],
+);
+
+/** Shift templates per division, saved automatically from the shifts people actually plan (D43). */
+export const shiftTemplates = sqliteTable(
+  'shift_templates',
+  {
+    id: id(),
+    locationId: text('location_id').notNull().references(() => locations.id),
+    division: text('division').notNull(),
+    startMin: integer('start_min').notNull(),
+    endMin: integer('end_min').notNull(),
+    label: text('label'),
+    useCount: integer('use_count').notNull().default(0),
+    lastUsedAt: integer('last_used_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('shift_templates_uq').on(t.locationId, t.division, t.startMin, t.endMin)],
+);
+
+/** Days a person cannot work (D43), reported by the person before the deadline. */
+export const unavailability = sqliteTable(
+  'unavailability',
+  {
+    userId: text('user_id').notNull().references(() => users.id),
+    locationId: text('location_id').notNull().references(() => locations.id),
+    date: text('date').notNull(),
+    note: text('note'),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.locationId, t.date] }), index('unavailability_loc_date_idx').on(t.locationId, t.date)],
 );

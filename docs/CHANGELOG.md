@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0 — 2026-10-16 — Grafik
+
+- D43 panel **Grafik** (permission `schedule.manage`, main item on the phone): week × people grouped by division, any start and end (also after midnight), shifts coloured by start hour with a legend that highlights one start time, per-day counts by start hour and total, days off shown in the grid, plan vs real entry (came / late / absent).
+- Templates are saved automatically per division from planned shifts and appear as one-tap buttons sorted by use; they can be named or deleted. "Kopiuj poprzedni tydzień" fills empty days with drafts.
+- Drafts vs published: staff see only what was published; a changed or deleted shift is marked until the next "Opublikuj" (the answer lists who got changes — for notifications later). Overlapping shifts of one person are refused.
+- Managers can be limited to divisions (e.g. a chef: Kuchnia only) in Menedżerowie; stored with the permissions (`division:kitchen`).
+- Staff: new bottom bar Start · Nauka · Grafik · Menu · Wiedza (search moved to a header icon); Grafik tab with "Moje zmiany" (week, who works with me), "Niedostępność" (days off for the next six weeks, note, deadline) and "Moje godziny"; "Mój grafik" card on Start.
+- Lokale: deadline for days off (weekday and hour of the week before, default Sunday 23:59). Czas pracy cells show the published plan and lateness.
+- Migration 0010 (schedule_shifts, shift_templates, unavailability, location deadline). Deleting a person removes their shifts and days off.
+- Tests: 106 integration (new 13-schedule), UI walkthrough `tests/ui/schedule_walkthrough.py`.
+
 ## 0.6.6 — 2026-10-16 — Individual and shared checklists, checklist import
 
 - D42: checklist mode in the material settings — "Indywidualna" (default for new lists: everyone on shift does every item, own progress, nothing to close) or "Wspólna" (D36: one item, one person, close the day). Lists that existed before stay "Wspólna" (migration 0009). Panel → Listy shows each person's progress for individual lists (people who worked that day and fit the list's positions, also those who did nothing) and how many people did each item; statistics count individual lists against the people on shift.

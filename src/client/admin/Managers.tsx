@@ -1,6 +1,6 @@
 import { LogoLoader } from '../ui';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { PERMISSIONS } from '../../shared/constants';
+import { DIVISION_SCOPE_PREFIX, PERMISSIONS, POSITIONS } from '../../shared/constants';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { ErrorBox } from '../ui';
@@ -123,6 +123,24 @@ function ManagerCard(props: { m: Manager; locationId: string; locName: string; o
             <span>{pl.admin.permissions[p]}</span>
           </label>
         ))}
+      </fieldset>
+      <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <legend className="label" style={{ marginBottom: 4 }}>
+          {t.divisions}
+        </legend>
+        <span className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+          {t.divisionsHint}
+        </span>
+        <div className="btn-row">
+          {POSITIONS.map((d) => {
+            const key = DIVISION_SCOPE_PREFIX + d;
+            return (
+              <button key={d} type="button" className="chip" aria-pressed={perms.includes(key)} onClick={() => setPerms(perms.includes(key) ? perms.filter((x) => x !== key) : [...perms, key])}>
+                {pl.admin.divisions[d] ?? d}
+              </button>
+            );
+          })}
+        </div>
       </fieldset>
       <div>
         <Btn kind="primary" disabled={!dirty || busy} onClick={() => void save()}>

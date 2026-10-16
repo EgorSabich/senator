@@ -13,6 +13,7 @@ import { learnRoutes } from './routes/learn';
 import { terminalRoutes } from './routes/terminal';
 import { timeAdminRoutes } from './routes/time';
 import { checklistAdminRoutes, checklistRoutes } from './routes/checklists';
+import { scheduleAdminRoutes, scheduleRoutes } from './routes/schedule';
 import { requireSameOrigin, requireSession } from './auth/session';
 import { runNightlyBackup } from './jobs/backup';
 import { anonymizeExpiredUsers } from './jobs/anonymize';
@@ -47,6 +48,7 @@ admin.route('/', menuAdminRoutes);
 admin.route('/', programAdminRoutes);
 admin.route('/', timeAdminRoutes);
 admin.route('/', checklistAdminRoutes);
+admin.route('/', scheduleAdminRoutes);
 app.route('/api/admin', admin);
 
 // Staff (waiter) views; every path here needs a session.
@@ -58,6 +60,7 @@ staff.use('/checklists/*', requireSession);
 staff.route('/', menuRoutes);
 staff.route('/', learnRoutes);
 staff.route('/', checklistRoutes);
+staff.route('/', scheduleRoutes);
 // Time clock phone (role "terminal" reaches nothing else — see requireSession).
 const terminal = new Hono<AppEnv>();
 terminal.use('*', requireSession);

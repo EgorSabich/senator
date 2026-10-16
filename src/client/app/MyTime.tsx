@@ -46,13 +46,13 @@ export function MyTimeCard() {
   );
 }
 
-export function MyTime() {
+export function MyTime({ embedded = false }: { embedded?: boolean }) {
   const { locationId } = useAcademy();
   const [month, setMonth] = useState<string | null>(null);
   const { data, error } = useApi<MyTimeView>(`/api/locations/${locationId}/my-time${month ? `?month=${month}` : ''}`);
   return (
     <main className="a-main">
-      <h1 className="a-title">{t.title}</h1>
+      {!embedded && <h1 className="a-title">{t.title}</h1>}
       <Problem message={error} />
       {!data && !error && <Loading />}
       {data && (

@@ -1,3 +1,4 @@
+import { formatHm, shiftStartMs } from '../../shared/schedule';
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { addDays, businessDate, formatClock, formatDuration, warsawToMs } from '../../shared/time';
 import { comparePl } from '../../shared/text';
@@ -54,6 +55,7 @@ interface TimeData {
   people: Person[];
   entries: Entry[];
   openBefore: Entry[];
+  plan?: { userId: string; date: string; startMin: number; endMin: number }[];
 }
 
 function mondayOf(date: string): string {
@@ -307,6 +309,7 @@ export function TimeTracking() {
                         </th>
                         {data.days.map((d) => {
                           const es = mine.filter((e) => e.businessDate === d);
+                          const planned = (data.plan ?? []).filter((x) => x.userId === p.id && x.date === d);
                           return (
                             <td key={d} className={d === businessDate(data.now, data.dayStartHour) ? 'today' : ''}>
                               <button type="button" className={`cell${es.length ? ' has' : ''}`} onClick={() => setCell({ person: p, date: d })} aria-label={`${p.firstName} ${p.lastName}, ${d}`}>
@@ -320,6 +323,16 @@ export function TimeTracking() {
                                       {data.wages && cost !== null && <small>{formatMoney(cost)}</small>}
                                       {isMissing(e) && <small>{t.missingShort}</small>}
                                     </span>
+                                  );
+                                })}
+                                {planned.map((x) => {
+                                  const startMs = shiftStartMs(d, x.startMin);
+                                  const lateMin = es.length ? Math.round((Math.min(...es.map((e) => e.clockInAt)) - startMs) / 60000) : null;
+                                  return (
+                                    <small key={x.startMin} className={`plan${lateMin !== null && lateMin > 5 ? ' late' : !es.length && startMs < data.now ? ' absent' : ''}`}>
+                                      {t.plan(formatHm(x.startMin), formatHm(x.endMin))}
+                                      {lateMin !== null && lateMin > 5 ? ` · +${lateMin} min` : !es.length && startMs < data.now ? ` · ${t.absent}` : ''}
+                                    </small>
                                   );
                                 })}
                               </button>
@@ -362,10 +375,10 @@ export function TimeTracking() {
   );
 }
 
-const VALID_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+export const VALID_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** "HH:MM" typed as digits (the colon comes by itself); calls onComplete when four valid digits are in. */
-const TimeField = forwardRef<HTMLInputElement, { id: string; value: string; onChange: (v: string) => void; onComplete?: () => void; required?: boolean; autoFocus?: boolean }>(
+export const TimeField = forwardRef<HTMLInputElement, { id: string; value: string; onChange: (v: string) => void; onComplete?: () => void; required?: boolean; autoFocus?: boolean }>(
   function TimeField({ id, value, onChange, onComplete, required, autoFocus }, ref) {
     return (
       <input

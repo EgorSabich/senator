@@ -19,6 +19,8 @@ interface LocationSettings {
   dayStartHour: number;
   staleHours: number;
   punchPhoto: boolean;
+  unavailDeadlineDow: number;
+  unavailDeadlineHour: number;
 }
 
 export function Locations() {
@@ -208,6 +210,28 @@ function LocationSettingsView({ id, onSaved }: { id: string; onSaved: () => Prom
           </select>
           <span className="muted" style={{ fontSize: 12 }}>
             {t.staleHint}
+          </span>
+        </div>
+        <div className="field">
+          <label htmlFor="loc-unav-dow">{t.unavailDeadline}</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <select id="loc-unav-dow" value={form.unavailDeadlineDow} onChange={(e) => set('unavailDeadlineDow', Number(e.target.value))}>
+              {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+                <option key={d} value={d}>
+                  {t.weekdays[d]}
+                </option>
+              ))}
+            </select>
+            <select aria-label={t.unavailDeadlineHour} value={form.unavailDeadlineHour} onChange={(e) => set('unavailDeadlineHour', Number(e.target.value))}>
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>
+                  {String(h).padStart(2, '0')}:59
+                </option>
+              ))}
+            </select>
+          </div>
+          <span className="muted" style={{ fontSize: 12 }}>
+            {t.unavailDeadlineHint}
           </span>
         </div>
         <div className="field">

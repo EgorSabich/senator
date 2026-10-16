@@ -74,7 +74,7 @@ learnRoutes.get('/locations/:locId/info', async (c) => {
   const locId = c.req.param('locId');
   await locationGuard(c, locId);
   const l = await c.env.DB.prepare(
-    `SELECT id, name, slug, address, phone, email, opening_hours_json AS openingHoursJson, staff_note AS staffNote, day_start_hour AS dayStartHour, stale_hours AS staleHours, punch_photo AS punchPhoto FROM locations WHERE id = ?`,
+    `SELECT id, name, slug, address, phone, email, opening_hours_json AS openingHoursJson, staff_note AS staffNote, day_start_hour AS dayStartHour, stale_hours AS staleHours, punch_photo AS punchPhoto, unavail_deadline_dow AS unavailDeadlineDow, unavail_deadline_hour AS unavailDeadlineHour FROM locations WHERE id = ?`,
   )
     .bind(locId)
     .first<Parameters<typeof locationView>[0]>();

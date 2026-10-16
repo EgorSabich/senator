@@ -15,10 +15,17 @@ export const PERMISSIONS = [
   'time.manage',
   'checklists.view',
   'wages.manage',
+  'schedule.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
 export const DEFAULT_MANAGER_PERMISSIONS: Permission[] = ['employees.view', 'training.assign', 'results.view'];
+
+/**
+ * A manager can be limited to some divisions (D43): stored next to permissions as "division:kitchen".
+ * No division entries = all divisions. Used by Grafik (and later Rekrutacja).
+ */
+export const DIVISION_SCOPE_PREFIX = 'division:';
 
 /** Positions. MVP trains only waiters; others exist for documents and future modules. */
 export const POSITIONS = ['waiter', 'host', 'shift_manager', 'bartender', 'kitchen', 'hookah_master', 'call_center'] as const;

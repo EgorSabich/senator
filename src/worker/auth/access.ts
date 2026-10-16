@@ -2,7 +2,7 @@
  * Access layer — every request that touches location data goes through here (spec section B, G).
  * Unknown or foreign locations/users answer 404, so their existence is never revealed.
  */
-import { PERMISSIONS, type Permission } from '../../shared/constants';
+import { DIVISION_SCOPE_PREFIX, PERMISSIONS, POSITIONS, type Permission } from '../../shared/constants';
 import type { SessionUser } from '../env';
 import { ApiError, notFound } from '../lib/http';
 
@@ -11,10 +11,13 @@ export interface Access {
   role: SessionUser['role'];
   /** locationId → permissions held there (employees: empty set = may read own data there). */
   locations: Map<string, Set<Permission>>;
+  /** locationId → divisions a manager is limited to (D43); missing or empty = all divisions. */
+  divisions: Map<string, Set<string>>;
 }
 
 export async function loadAccess(db: D1Database, user: SessionUser): Promise<Access> {
   const locations = new Map<string, Set<Permission>>();
+  const divisions = new Map<string, Set<string>>();
   if (user.role === 'owner') {
     const { results } = await db.prepare(`SELECT id FROM locations WHERE is_active = 1`).all<{ id: string }>();
     for (const r of results) locations.set(r.id, new Set(PERMISSIONS));
@@ -30,6 +33,10 @@ export async function loadAccess(db: D1Database, user: SessionUser): Promise<Acc
     for (const r of results) {
       if (!locations.has(r.loc)) locations.set(r.loc, new Set());
       if ((PERMISSIONS as readonly string[]).includes(r.perm)) locations.get(r.loc)!.add(r.perm as Permission);
+      else if (r.perm.startsWith(DIVISION_SCOPE_PREFIX)) {
+        if (!divisions.has(r.loc)) divisions.set(r.loc, new Set());
+        divisions.get(r.loc)!.add(r.perm.slice(DIVISION_SCOPE_PREFIX.length));
+      }
     }
   } else {
     const { results } = await db
@@ -42,8 +49,21 @@ export async function loadAccess(db: D1Database, user: SessionUser): Promise<Acc
       .all<{ loc: string }>();
     for (const r of results) locations.set(r.loc, new Set());
   }
-  return { userId: user.id, role: user.role, locations };
+  return { userId: user.id, role: user.role, locations, divisions };
 }
+
+/** Divisions this person may manage at a location (null = all). */
+export function allowedDivisions(access: Access, locationId: string): Set<string> | null {
+  const d = access.divisions.get(locationId);
+  return d && d.size ? d : null;
+}
+
+export function requireDivision(access: Access, locationId: string, division: string): void {
+  const d = allowedDivisions(access, locationId);
+  if (d && !d.has(division)) throw new ApiError(403, 'forbidden');
+}
+
+export const isDivision = (v: unknown): v is string => typeof v === 'string' && (POSITIONS as readonly string[]).includes(v);
 
 export function requireLocation(access: Access, locationId: string): void {
   if (!access.locations.has(locationId)) throw notFound();

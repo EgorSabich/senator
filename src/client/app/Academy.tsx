@@ -8,6 +8,7 @@ import { ChecklistDay } from './Checklist';
 import { Knowledge } from './Knowledge';
 import { MenuItem, MenuList } from './Menu';
 import { MyTime } from './MyTime';
+import { Grafik } from './Grafik';
 import { Program } from './Program';
 import { Reader } from './Reader';
 import { Search } from './Search';
@@ -19,9 +20,9 @@ import '../styles/app.css';
 const TABS = [
   { path: '/', label: pl.academy.tabs.start, icon: 'home' },
   { path: '/nauka', label: pl.academy.tabs.learning, icon: 'learn' },
+  { path: '/grafik', label: pl.academy.tabs.schedule, icon: 'calendar' },
   { path: '/menu', label: pl.academy.tabs.menu, icon: 'menu' },
   { path: '/wiedza', label: pl.academy.tabs.knowledge, icon: 'book' },
-  { path: '/szukaj', label: pl.academy.tabs.search, icon: 'search' },
 ];
 
 export function Academy({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () => void; refreshMe: () => Promise<void> }) {
@@ -49,6 +50,9 @@ export function Academy({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: (
   else if (path === '/wiedza/lekcje') page = <Knowledge tab="lessons" />;
   else if (path === '/szukaj') page = <Search />;
   else if (path === '/godziny') page = <MyTime />;
+  else if (path === '/grafik') page = <Grafik tab="shifts" />;
+  else if (path === '/grafik/niedostepnosc') page = <Grafik tab="off" />;
+  else if (path === '/grafik/godziny') page = <Grafik tab="hours" />;
   else if (path === '/konto') page = <Account onLoggedOut={onLoggedOut} refreshMe={refreshMe} />;
   else page = <Start />;
 
@@ -69,6 +73,9 @@ export function Academy({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: (
                   {pl.academy.panel}
                 </a>
               )}
+              <a className="a-icon-btn" href="/szukaj" onClick={onNav('/szukaj')} aria-label={pl.academy.tabs.search} aria-current={path === '/szukaj' ? 'page' : undefined}>
+                <Icon name="search" size={20} />
+              </a>
               <a className="a-icon-btn" href="/konto" onClick={onNav('/konto')} aria-label={pl.academy.account}>
                 <Icon name="user" size={20} />
               </a>

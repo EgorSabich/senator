@@ -71,6 +71,13 @@
       "when": 1792141610711,
       "tag": "0009_checklist_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792142160129,
+      "tag": "0010_schedule",
+      "breakpoints": true
     }
   ]
 }

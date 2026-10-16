@@ -4,6 +4,7 @@
 import { Hono } from 'hono';
 import {
   DEFAULT_MANAGER_PERMISSIONS,
+  DIVISION_SCOPE_PREFIX,
   PERMISSIONS,
   POSITIONS,
   type Permission,
@@ -81,10 +82,13 @@ interface LocationRow {
   dayStartHour: number;
   staleHours: number;
   punchPhoto: number;
+  unavailDeadlineDow: number;
+  unavailDeadlineHour: number;
 }
 
 const LOCATION_SELECT = `SELECT id, name, slug, address, phone, email, opening_hours_json AS openingHoursJson, staff_note AS staffNote,
-  day_start_hour AS dayStartHour, stale_hours AS staleHours, punch_photo AS punchPhoto FROM locations`;
+  day_start_hour AS dayStartHour, stale_hours AS staleHours, punch_photo AS punchPhoto,
+  unavail_deadline_dow AS unavailDeadlineDow, unavail_deadline_hour AS unavailDeadlineHour FROM locations`;
 
 export function locationView(l: LocationRow) {
   let hours: Record<string, string> = {};
@@ -104,6 +108,8 @@ export function locationView(l: LocationRow) {
     dayStartHour: l.dayStartHour,
     staleHours: l.staleHours,
     punchPhoto: Boolean(l.punchPhoto),
+    unavailDeadlineDow: l.unavailDeadlineDow ?? 0,
+    unavailDeadlineHour: l.unavailDeadlineHour ?? 23,
   };
 }
 
@@ -166,6 +172,8 @@ adminRoutes.put('/locations/:id/settings', async (c) => {
   const dayStartHour = int('dayStartHour', 0, 12, before.dayStartHour);
   const staleHours = int('staleHours', 8, 24, before.staleHours);
   if (body.punchPhoto !== undefined && typeof body.punchPhoto !== 'boolean') throw badRequest('setting_invalid', { field: 'punchPhoto' });
+  const unavailDeadlineDow = int('unavailDeadlineDow', 0, 6, before.unavailDeadlineDow);
+  const unavailDeadlineHour = int('unavailDeadlineHour', 0, 23, before.unavailDeadlineHour);
   const punchPhoto = body.punchPhoto === undefined ? Boolean(before.punchPhoto) : (body.punchPhoto as boolean);
   const after = {
     name,
@@ -177,13 +185,15 @@ adminRoutes.put('/locations/:id/settings', async (c) => {
     dayStartHour,
     staleHours,
     punchPhoto,
+    unavailDeadlineDow,
+    unavailDeadlineHour,
   };
   await db.batch([
     db
       .prepare(
-        `UPDATE locations SET name = ?, address = ?, phone = ?, email = ?, opening_hours_json = ?, staff_note = ?, day_start_hour = ?, stale_hours = ?, punch_photo = ? WHERE id = ?`,
+        `UPDATE locations SET name = ?, address = ?, phone = ?, email = ?, opening_hours_json = ?, staff_note = ?, day_start_hour = ?, stale_hours = ?, punch_photo = ?, unavail_deadline_dow = ?, unavail_deadline_hour = ? WHERE id = ?`,
       )
-      .bind(after.name, after.address, after.phone, after.email, after.openingHoursJson, after.staffNote, after.dayStartHour, after.staleHours, after.punchPhoto ? 1 : 0, id),
+      .bind(after.name, after.address, after.phone, after.email, after.openingHoursJson, after.staffNote, after.dayStartHour, after.staleHours, after.punchPhoto ? 1 : 0, after.unavailDeadlineDow, after.unavailDeadlineHour, id),
     auditStatement(db, {
       actorId: c.var.user.id,
       locationId: id,
@@ -383,7 +393,10 @@ adminRoutes.delete('/users/:id', async (c) => {
 function parsePermissions(v: unknown): Permission[] {
   if (!Array.isArray(v)) throw badRequest('permissions_invalid');
   const out = [...new Set(v)];
-  if (!out.every((p) => typeof p === 'string' && (PERMISSIONS as readonly string[]).includes(p))) {
+  const ok = (p: unknown) =>
+    typeof p === 'string' &&
+    ((PERMISSIONS as readonly string[]).includes(p) || (p.startsWith(DIVISION_SCOPE_PREFIX) && (POSITIONS as readonly string[]).includes(p.slice(DIVISION_SCOPE_PREFIX.length))));
+  if (!out.every(ok)) {
     throw badRequest('permissions_invalid');
   }
   return out as Permission[];

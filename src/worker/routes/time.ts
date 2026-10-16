@@ -74,9 +74,18 @@ timeAdminRoutes.get('/locations/:locId/time', async (c) => {
           .all<{ userId: string; rateGrosze: number; validFrom: string }>()
       ).results
     : [];
+  // D43: the published plan, to compare with the real times
+  const plan = await db
+    .prepare(
+      `SELECT user_id AS userId, date, pub_start_min AS startMin, pub_end_min AS endMin FROM schedule_shifts
+       WHERE location_id = ? AND published = 1 AND date BETWEEN ? AND ?`,
+    )
+    .bind(locId, from, last)
+    .all<{ userId: string; date: string; startMin: number; endMin: number }>();
   return c.json({
     days,
     now: Date.now(),
+    plan: plan.results,
     wages,
     rates,
     ...(await locationRules(db, locId)),

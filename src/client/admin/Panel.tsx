@@ -1,4 +1,5 @@
 import { TimeTracking } from './TimeTracking';
+import { Schedule } from './Schedule';
 import { ChecklistStats } from './ChecklistStats';
 import { createContext, useContext, useMemo, useState } from 'react';
 import type { Me } from '../api';
@@ -51,6 +52,7 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
   const nav = [
     { path: '/panel/pracownicy', label: pl.admin.nav.employees, icon: 'people', show: ctx.can('employees.view'), main: true },
     { path: '/panel/czas', label: pl.admin.nav.time, icon: 'clock', show: ctx.can('time.manage'), main: true },
+    { path: '/panel/grafik', label: pl.admin.nav.schedule, icon: 'calendar', show: ctx.can('schedule.manage'), main: true },
     { path: '/panel/menu', label: pl.admin.nav.menu, icon: 'menu', show: ctx.can('menu.edit'), main: true },
     { path: '/panel/materialy', label: pl.admin.nav.content, icon: 'book', show: ctx.can('content.edit') },
     { path: '/panel/programy', label: pl.admin.nav.programs, icon: 'learn', show: ctx.can('content.edit') },
@@ -75,6 +77,7 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
   else if (path.startsWith('/panel/pracownicy')) page = <Employees selectedId={null} />;
   else if (path === '/panel/wiecej') page = <More items={moreNav} />;
   else if (path.startsWith('/panel/czas') && ctx.can('time.manage')) page = <TimeTracking />;
+  else if (path.startsWith('/panel/grafik') && ctx.can('schedule.manage')) page = <Schedule />;
   else if (path.startsWith('/panel/listy') && ctx.can('checklists.view')) page = <ChecklistStats />;
   else if (path.startsWith('/panel/menedzerowie') && isOwner) page = <Managers />;
   else if (path.startsWith('/panel/lokale') && isOwner) page = <Locations />;

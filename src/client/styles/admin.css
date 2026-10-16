@@ -1187,3 +1187,173 @@
   white-space: pre;
   user-select: all;
 }
+
+/* Grafik (D43) */
+.sch-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.sch-legend-item,
+.sch-template {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.sch-template {
+  min-height: 42px;
+}
+.sch-template.static {
+  cursor: default;
+}
+.sch-legend-item i,
+.sch-template i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--c);
+}
+.sch-legend-item[aria-pressed='true'] {
+  border-color: var(--c);
+  box-shadow: 0 0 0 1px var(--c) inset;
+}
+.sch-counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 6px;
+  margin-top: 4px;
+  font-size: 10px;
+  text-transform: none;
+}
+.sch-counts strong {
+  color: var(--text-soft);
+}
+.sch-grid td {
+  vertical-align: top;
+  min-width: 104px;
+}
+.sch-cell {
+  width: 100%;
+  min-height: 52px;
+  padding: 5px;
+  border: none;
+  background: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+}
+.sch-cell:hover {
+  background: var(--surface-raised);
+}
+.sch-shift {
+  position: relative;
+  display: block;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--c) 22%, transparent);
+  border-left: 3px solid var(--c);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  transition: opacity 160ms ease;
+}
+.sch-shift.changed::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.sch-shift.deleted {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.sch-grid.dim .sch-shift:not(.hl) {
+  opacity: 0.25;
+}
+.sch-off {
+  background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(255, 255, 255, 0.035) 6px 12px);
+}
+.sch-off-label,
+.sch-warn {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.sch-warn {
+  color: var(--warn-fg);
+}
+.sch-actual {
+  font-size: 10px;
+  color: var(--ok-fg);
+  text-align: left;
+}
+.sch-actual.bad {
+  color: var(--bad-fg);
+}
+.sch-fold {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: none;
+  background: none;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+.sch-tpl-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 180px) auto;
+  align-items: center;
+  gap: 10px;
+}
+@media (max-width: 640px) {
+  .sch-tpl-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}
+.time-grid .cell small.plan {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.time-grid .cell small.plan.late,
+.time-grid .cell small.plan.absent {
+  color: var(--bad-fg);
+}
+.sch-grid {
+  table-layout: fixed;
+  min-width: 940px;
+}
+.sch-grid thead th {
+  white-space: normal;
+  vertical-align: top;
+}
+.sch-grid .sticky {
+  width: 150px;
+}
+.sch-grid td {
+  min-width: 0;
+}

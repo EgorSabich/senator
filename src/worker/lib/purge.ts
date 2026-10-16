@@ -24,6 +24,8 @@ export function purgeUserStatements(db: D1Database, userId: string, login: strin
     s(`DELETE FROM time_punches WHERE user_id = ?`, userId),
     s(`DELETE FROM checklist_marks WHERE user_id = ?`, userId),
     s(`DELETE FROM pay_rates WHERE user_id = ?`, userId),
+    s(`DELETE FROM schedule_shifts WHERE user_id = ?`, userId),
+    s(`DELETE FROM unavailability WHERE user_id = ?`, userId),
     // links where they were the actor
     s(`UPDATE extra_attempt_grants SET granted_by = NULL WHERE granted_by = ?`, userId),
     s(`UPDATE assignments SET assigned_by = NULL WHERE assigned_by = ?`, userId),
@@ -37,6 +39,7 @@ export function purgeUserStatements(db: D1Database, userId: string, login: strin
     s(`UPDATE media SET uploaded_by = NULL WHERE uploaded_by = ?`, userId),
     s(`UPDATE time_entries SET edited_by = NULL WHERE edited_by = ?`, userId),
     s(`UPDATE pay_rates SET created_by = NULL WHERE created_by = ?`, userId),
+    s(`UPDATE schedule_shifts SET created_by = NULL WHERE created_by = ?`, userId),
     s(`UPDATE checklist_days SET closed_by = NULL WHERE closed_by = ?`, userId),
     // audit log: keep what happened, drop who it was
     s(`UPDATE audit_log SET actor_id = NULL WHERE actor_id = ?`, userId),
