@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.5 — 2026-10-16 — Moje godziny, materials per position
+
+- D41 "Moje godziny" for employees: card on Start, page `/godziny` (month switch, total, previous month, shifts with from–to and hours, "trwa", "brak wyjścia", "poprawione przez menedżera") and the person's own PIN punches; link in Konto. Hours only — no rates or money.
+- Materiały: "Widzi:" filter by position (incl. "Bez stanowiska"), "Wszyscy" shown on materials without a position, "Zaznacz kilka" → "Ustaw stanowiska" for many materials at once (new `POST /api/admin/content/positions`, audited). Staff already see only materials, lessons, checklists and programs of their positions; the import format already takes `positions`.
+- Tests: 98 integration (new 11-my-time), UI walkthrough `tests/ui/mytime_walkthrough.py`.
+
 ## 0.6.4 — 2026-10-16 — Terminal: name check with a slider, optional punch photo
 
 - D40: after the PIN the terminal shows "Imię N." and what will happen (start / end of shift with hours so far); the person slides to confirm or taps "To nie ja"; it closes itself after 10 s. Without internet the slider shows a generic text and the punch goes to the queue as before. Wrong PINs at this step count towards the terminal pause.

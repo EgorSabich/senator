@@ -297,6 +297,25 @@ contentAdminRoutes.put('/content/:id', async (c) => {
   return c.json({ ok: true, savedAt: now });
 });
 
+/** Several materials at once get the same positions (D41); an empty list = everyone sees them. */
+contentAdminRoutes.post('/content/positions', async (c) => {
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  const body = await readJson<{ ids?: unknown; positions?: unknown }>(c.req.raw);
+  if (!Array.isArray(body.ids) || !body.ids.length || body.ids.length > 200 || !body.ids.every((i) => typeof i === 'string')) throw badRequest('invalid_input');
+  const positions = parsePositions(body.positions);
+  const ids = [...new Set(body.ids as string[])];
+  const statements: D1PreparedStatement[] = [];
+  for (const id of ids) {
+    const item = await loadItem(db, access, id); // checks the right to edit it
+    statements.push(db.prepare(`DELETE FROM content_item_positions WHERE content_item_id = ?`).bind(item.id));
+    for (const p of positions) statements.push(db.prepare(`INSERT INTO content_item_positions (content_item_id, position) VALUES (?, ?)`).bind(item.id, p));
+    statements.push(auditStatement(db, { actorId: c.var.user.id, locationId: item.locationId, action: 'content.settings', entityType: 'content', entityId: item.id, after: { positions } }));
+  }
+  await db.batch(statements);
+  return c.json({ ok: true, updated: ids.length });
+});
+
 contentAdminRoutes.post('/content/:id/discard-draft', async (c) => {
   const db = c.env.DB;
   const access = await loadAccess(db, c.var.user);

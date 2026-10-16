@@ -104,6 +104,12 @@ const ICONS: Record<string, ReactNode> = {
     </>
   ),
   back: <path d="M15 6l-6 6 6 6" />,
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
   next: <path d="M9 6l6 6-6 6" />,
   down: <path d="M6 9l6 6 6-6" />,
   lock: (

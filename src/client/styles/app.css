@@ -741,3 +741,34 @@ a.a-dish:hover {
 .a-fold-inner > .a-row:first-child {
   border-top: 1px solid var(--border);
 }
+
+/* Moje godziny (D41) */
+.mt-month {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mt-month-name {
+  font-weight: 700;
+  font-size: 16px;
+}
+.mt-month .a-icon-btn:disabled {
+  opacity: 0.3;
+}
+.mt-total {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.mt-total-h {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1;
+}
+.mt-hours {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

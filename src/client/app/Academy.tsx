@@ -7,6 +7,7 @@ import { Account } from './Account';
 import { ChecklistDay } from './Checklist';
 import { Knowledge } from './Knowledge';
 import { MenuItem, MenuList } from './Menu';
+import { MyTime } from './MyTime';
 import { Program } from './Program';
 import { Reader } from './Reader';
 import { Search } from './Search';
@@ -47,6 +48,7 @@ export function Academy({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: (
   else if (path === '/wiedza/regulaminy') page = <Knowledge tab="library" />;
   else if (path === '/wiedza/lekcje') page = <Knowledge tab="lessons" />;
   else if (path === '/szukaj') page = <Search />;
+  else if (path === '/godziny') page = <MyTime />;
   else if (path === '/konto') page = <Account onLoggedOut={onLoggedOut} refreshMe={refreshMe} />;
   else page = <Start />;
 

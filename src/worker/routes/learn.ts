@@ -10,6 +10,8 @@ import type { AppEnv } from '../env';
 import { ApiError, badRequest, notFound, readJson } from '../lib/http';
 import { ftsQuery } from '../lib/search';
 import { locationView } from './admin';
+import { locationRules } from '../lib/location';
+import { businessDate } from '../../shared/time';
 import { loadAccess, requireLocation } from '../auth/access';
 import { DOCUMENT_KINDS, MANDATORY_KINDS, isVisibleFor, programFor, progressFor, userPositions, visibleContent, type VisibleItem } from '../lib/learning';
 
@@ -304,4 +306,69 @@ learnRoutes.get('/locations/:locId/search', async (c) => {
     .filter(Boolean)
     .slice(0, 40);
   return c.json({ query: raw, results });
+});
+
+/**
+ * "Moje godziny" (D41): the person's own shifts and punches of a month — hours only, never money.
+ * Months are business months (a shift belongs to the business date it started on).
+ */
+learnRoutes.get('/locations/:locId/my-time', async (c) => {
+  const locId = c.req.param('locId');
+  await locationGuard(c, locId);
+  const db = c.env.DB;
+  const user = c.var.user;
+  const rules = await locationRules(db, locId);
+  const now = Date.now();
+  const current = businessDate(now, rules.dayStartHour).slice(0, 7);
+  const q = c.req.query('month');
+  const month = q && /^\d{4}-(0[1-9]|1[0-2])$/.test(q) && q <= current ? q : current;
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  const shift = (d: number) => {
+    const t = new Date(Date.UTC(y, m - 1 + d, 1));
+    return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}`;
+  };
+  const prev = shift(-1);
+  const next = shift(1);
+  const from = `${month}-01`;
+  const to = `${next}-01`;
+  const minutesOf = (e: { clockInAt: number; clockOutAt: number | null }) => {
+    if (e.clockOutAt) return Math.round((e.clockOutAt - e.clockInAt) / 60000);
+    return now - e.clockInAt <= rules.staleHours * 3600_000 ? Math.round((now - e.clockInAt) / 60000) : 0;
+  };
+  const { results } = await db
+    .prepare(
+      `SELECT business_date AS date, clock_in_at AS clockInAt, clock_out_at AS clockOutAt, in_source AS inSource, out_source AS outSource, edited_at AS editedAt
+       FROM time_entries WHERE user_id = ? AND location_id = ? AND business_date >= ? AND business_date < ? ORDER BY clock_in_at DESC`,
+    )
+    .bind(user.id, locId, `${prev}-01`, to)
+    .all<{ date: string; clockInAt: number; clockOutAt: number | null; inSource: string; outSource: string | null; editedAt: number | null }>();
+  const inMonth = results.filter((e) => e.date >= from);
+  const prevMinutes = results.filter((e) => e.date < from).reduce((a, e) => a + minutesOf(e), 0);
+  const punches = await db
+    .prepare(
+      `SELECT p.at, p.outcome, p.offline FROM time_punches p JOIN terminals t ON t.id = p.terminal_id
+       WHERE p.user_id = ? AND t.location_id = ? AND p.at >= ? AND p.at < ? ORDER BY p.at DESC LIMIT 300`,
+    )
+    .bind(user.id, locId, Date.parse(`${from}T00:00:00Z`) - 86400_000, Date.parse(`${to}T00:00:00Z`) + 86400_000)
+    .all<{ at: number; outcome: string; offline: number }>();
+  return c.json({
+    month,
+    prevMonth: prev,
+    nextMonth: next <= current ? next : null,
+    totalMinutes: inMonth.reduce((a, e) => a + minutesOf(e), 0),
+    shifts: inMonth.filter((e) => minutesOf(e) > 0 || e.clockOutAt).length,
+    prevTotalMinutes: prevMinutes,
+    entries: inMonth.map((e) => ({
+      date: e.date,
+      clockInAt: e.clockInAt,
+      clockOutAt: e.clockOutAt,
+      minutes: minutesOf(e),
+      open: !e.clockOutAt && now - e.clockInAt <= rules.staleHours * 3600_000,
+      missingExit: !e.clockOutAt && now - e.clockInAt > rules.staleHours * 3600_000,
+      byManager: e.inSource === 'manual' || e.outSource === 'manual' || Boolean(e.editedAt),
+    })),
+    punches: punches.results
+      .filter((p) => businessDate(p.at, rules.dayStartHour).slice(0, 7) === month)
+      .map((p) => ({ at: p.at, outcome: p.outcome, offline: Boolean(p.offline) })),
+  });
 });

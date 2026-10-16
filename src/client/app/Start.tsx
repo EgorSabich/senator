@@ -1,6 +1,7 @@
 import { pl } from '../i18n/pl';
 import { onNav } from '../router';
 import { TodayCard } from './Checklist';
+import { MyTimeCard } from './MyTime';
 import { ModuleList, type ProgramView } from './Program';
 import { contentHref, Fold, Icon, Loading, Problem, useAcademy, useApi } from './shared';
 
@@ -40,6 +41,7 @@ export function Start() {
       {data && (
         <>
           <TodayCard />
+          <MyTimeCard />
           {data.program ? (
             <section className="a-card" aria-label={data.program.name}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>

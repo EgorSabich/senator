@@ -3,7 +3,8 @@ import { api } from '../api';
 import { pl } from '../i18n/pl';
 import { clearPersonalCache } from '../pwa';
 import { ChangeSecret } from '../screens/ChangeSecret';
-import { useAcademy, useApi } from './shared';
+import { onNav } from '../router';
+import { Icon, useAcademy, useApi } from './shared';
 
 const t = pl.academy.profile;
 
@@ -47,6 +48,17 @@ export function Account({ onLoggedOut, refreshMe }: { onLoggedOut: () => void; r
           {t.login}: <strong style={{ color: 'var(--text)' }}>{me.user.login}</strong>
         </span>
       </div>
+      {me.user.role === 'employee' && (
+        <div className="a-list">
+          <a className="a-row" href="/godziny" onClick={onNav('/godziny')}>
+            <Icon name="clock" size={20} />
+            <span className="grow">
+              <span className="t">{pl.myTime.title}</span>
+            </span>
+            <Icon name="next" size={18} />
+          </a>
+        </div>
+      )}
       <LocationInfo />
       {done && (
         <div className="a-note" role="status">

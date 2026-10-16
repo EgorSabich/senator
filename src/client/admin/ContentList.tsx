@@ -1,6 +1,6 @@
 import { LogoLoader } from '../ui';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { CONTENT_KINDS } from '../../shared/constants';
+import { CONTENT_KINDS, POSITIONS } from '../../shared/constants';
 import { comparePl } from '../../shared/text';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
@@ -29,6 +29,7 @@ interface Item {
 
 const t = pl.admin.content;
 const KIND_KEY = 'sa.panel.contentKind';
+const POS_KEY = 'sa.panel.contentPosition';
 
 export function ContentList() {
   const { locationId, isOwner } = usePanel();
@@ -39,6 +40,10 @@ export function ContentList() {
   const [showArchived, setShowArchived] = useState(false);
   const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [position, setPosition] = useState<string>(storageGet(POS_KEY) ?? 'all');
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [settingPositions, setSettingPositions] = useState(false);
 
   const load = useCallback(async () => {
     setItems(null);
@@ -52,7 +57,16 @@ export function ContentList() {
     void load();
   }, [load]);
 
-  const visible = (items ?? []).filter((i) => (showArchived ? i.status === 'archived' : i.status !== 'archived'));
+  const visible = (items ?? [])
+    .filter((i) => (showArchived ? i.status === 'archived' : i.status !== 'archived'))
+    .filter((i) => (position === 'all' ? true : position === 'none' ? i.positions.length === 0 : i.positions.length === 0 || i.positions.includes(position)));
+  const togglePick = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const groups = new Map<string, Item[]>();
   for (const i of visible) {
     const key = i.section ?? '';
@@ -140,6 +154,45 @@ export function ContentList() {
           {t.archived}
         </button>
       </div>
+      <div className="btn-row" style={{ alignItems: 'center' }} aria-label={t.seenBy}>
+        <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>
+          {t.seenBy}
+        </span>
+        {['all', ...POSITIONS, 'none'].map((p) => (
+          <button
+            key={p}
+            className="chip"
+            aria-pressed={position === p}
+            onClick={() => {
+              setPosition(p);
+              storageSet(POS_KEY, p);
+            }}
+          >
+            {p === 'all' ? t.allPositions : p === 'none' ? t.noPositionOnly : pl.admin.positions[p]}
+          </button>
+        ))}
+      </div>
+      <div className="btn-row" style={{ alignItems: 'center' }}>
+        <Btn
+          onClick={() => {
+            setSelecting(!selecting);
+            setPicked(new Set());
+          }}
+        >
+          {selecting ? t.selectDone : t.select}
+        </Btn>
+        {selecting && (
+          <>
+            <Btn onClick={() => setPicked(new Set(visible.filter((i) => i.editable).map((i) => i.id)))}>{t.selectAll}</Btn>
+            <Btn kind="primary" disabled={!picked.size} onClick={() => setSettingPositions(true)}>
+              {t.setPositions}
+            </Btn>
+            <span className="muted" style={{ fontSize: 13 }}>
+              {t.selected(picked.size)}
+            </span>
+          </>
+        )}
+      </div>
       <ErrorBox message={error} />
       {items === null && <LogoLoader />}
       {items !== null && visible.length === 0 && <p className="muted">{t.empty}</p>}
@@ -147,9 +200,18 @@ export function ContentList() {
         <section key={s} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {s && <h2 className="label" style={{ margin: '8px 0 0' }}>{s}</h2>}
           {groups.get(s)!.map((i) => (
-            <button key={i.id} className="row-btn" onClick={() => navigate(`/panel/materialy/${i.id}`)}>
+            <button
+              key={i.id}
+              className={`row-btn${selecting && picked.has(i.id) ? ' picked' : ''}`}
+              aria-pressed={selecting ? picked.has(i.id) : undefined}
+              disabled={selecting && !i.editable}
+              onClick={() => (selecting ? togglePick(i.id) : navigate(`/panel/materialy/${i.id}`))}
+            >
               <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8, width: '100%', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: 15, fontWeight: 700 }}>{i.draftTitle ?? i.title}</span>
+                <span style={{ fontSize: 15, fontWeight: 700, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  {selecting && <span className={`pick-box${picked.has(i.id) ? ' on' : ''}`} aria-hidden="true" />}
+                  {i.draftTitle ?? i.title}
+                </span>
                 <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   {i.shared && <span className="badge neutral">{t.shared}</span>}
                   {i.status === 'published' && <span className="badge ok">{t.published}</span>}
@@ -160,13 +222,30 @@ export function ContentList() {
               </span>
               <span className="muted" style={{ fontSize: 12 }}>
                 {i.versionNo ? t.version(i.versionNo) : t.draft} · {formatDateTime(i.updatedAt)}
-                {i.positions.length > 0 && ` · ${i.positions.map((p) => pl.admin.positions[p]).join(', ')}`}
+                {` · ${i.positions.length ? i.positions.map((p) => pl.admin.positions[p]).join(', ') : t.forAll}`}
               </span>
             </button>
           ))}
         </section>
       ))}
       {importing && <ContentImport onClose={() => setImporting(false)} onDone={load} />}
+      {settingPositions && (
+        <PositionsDialog
+          ids={[...picked]}
+          initial={(() => {
+            const sets = (items ?? []).filter((i) => picked.has(i.id)).map((i) => i.positions.slice().sort().join(','));
+            return sets.length && sets.every((x) => x === sets[0]) && sets[0] ? sets[0].split(',') : [];
+          })()}
+          onClose={() => setSettingPositions(false)}
+          onSaved={async (n) => {
+            setSettingPositions(false);
+            setSelecting(false);
+            setPicked(new Set());
+            setNotice(t.positionsSaved(n));
+            await load();
+          }}
+        />
+      )}
       {creating && (
         <NewContent
           defaultKind={kind}
@@ -236,6 +315,54 @@ function NewContent(props: { defaultKind: string; locationId: string; canShare: 
           <Btn onClick={props.onClose}>{pl.admin.cancel}</Btn>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+function PositionsDialog(props: { ids: string[]; initial: string[]; onClose: () => void; onSaved: (n: number) => Promise<void> }) {
+  const [chosen, setChosen] = useState<Set<string>>(new Set(props.initial));
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api<{ updated: number }>('/api/admin/content/positions', { method: 'POST', body: { ids: props.ids, positions: [...chosen] } });
+      await props.onSaved(r.updated);
+    } catch (e) {
+      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal title={t.setPositionsTitle(props.ids.length)} onClose={props.onClose}>
+      <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+        {t.setPositionsHint}
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {POSITIONS.map((p) => (
+          <label key={p} className="check">
+            <input
+              type="checkbox"
+              checked={chosen.has(p)}
+              onChange={(e) => {
+                const next = new Set(chosen);
+                if (e.target.checked) next.add(p);
+                else next.delete(p);
+                setChosen(next);
+              }}
+            />
+            <span>{pl.admin.positions[p]}</span>
+          </label>
+        ))}
+      </div>
+      <ErrorBox message={error} />
+      <div className="btn-row">
+        <Btn kind="primary" disabled={busy} onClick={() => void save()}>
+          {t.setPositions}
+        </Btn>
+        <Btn onClick={props.onClose}>{pl.common.cancel}</Btn>
+      </div>
     </Modal>
   );
 }

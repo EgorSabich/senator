@@ -1128,3 +1128,32 @@
   border-radius: 12px;
   cursor: zoom-out;
 }
+
+/* multi-select in Materiały (D41) */
+.row-btn.picked {
+  border-color: var(--accent);
+}
+.pick-box {
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 6px;
+  border: 2px solid var(--border-strong, var(--text-muted));
+  flex: none;
+  position: relative;
+}
+.pick-box.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.pick-box.on::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 10px;
+  border: solid #1c1513;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
