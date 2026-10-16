@@ -282,6 +282,7 @@ export const pl = {
       location: 'Lokal',
       hours: 'Godziny otwarcia',
       note: 'Informacja od kierownictwa',
+      version: (v: string) => `Wersja aplikacji ${v}`,
       punchPhoto: 'Terminal robi małe zdjęcie przy każdym odbiciu. Widzi je tylko menedżer, zdjęcia są usuwane po 60 dniach.',
       pinTerminalInfo: 'Tym samym PIN-em rejestrujesz wejście i wyjście na telefonie służbowym w restauracji.',
       title: 'Konto',

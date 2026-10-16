@@ -73,6 +73,7 @@ export function Account({ onLoggedOut, refreshMe }: { onLoggedOut: () => void; r
         {t.logout}
       </button>
       <p className="a-sub">{t.offlineInfo}</p>
+      <p className="a-sub" style={{ opacity: 0.6 }}>{t.version(__APP_VERSION__)}</p>
     </main>
   );
 }
