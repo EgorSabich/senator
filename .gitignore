@@ -13,3 +13,4 @@ menu-bundle*.json
 __pycache__/
 senator-materialy*.json
 content-bundle*.json
+.reg/
