@@ -207,7 +207,7 @@ timeAdminRoutes.get('/locations/:locId/time/punches', async (c) => {
   if (!isIsoDate(date)) throw badRequest('invalid_input');
   const { results } = await db
     .prepare(
-      `SELECT p.id, p.at, p.offline, p.outcome, t.name AS terminal,
+      `SELECT p.id, p.at, p.offline, p.outcome, t.name AS terminal, (p.photo_key IS NOT NULL) AS hasPhoto,
               CASE WHEN u.id IS NULL THEN NULL ELSE u.first_name || ' ' || u.last_name END AS person
        FROM time_punches p JOIN terminals t ON t.id = p.terminal_id LEFT JOIN users u ON u.id = p.user_id
        WHERE t.location_id = ? AND p.at >= ? AND p.at < ? ORDER BY p.at`,
@@ -216,6 +216,21 @@ timeAdminRoutes.get('/locations/:locId/time/punches', async (c) => {
     .all<{ at: number }>();
   const { dayStartHour } = await locationRules(db, locId);
   return c.json({ punches: results.filter((p) => businessDate(p.at, dayStartHour) === date) });
+});
+
+/** Punch photo (D40), only for people who manage time at that location. */
+timeAdminRoutes.get('/time/punches/:id/photo', async (c) => {
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  const p = await db
+    .prepare(`SELECT p.photo_key AS photoKey, t.location_id AS locationId FROM time_punches p JOIN terminals t ON t.id = p.terminal_id WHERE p.id = ?`)
+    .bind(c.req.param('id'))
+    .first<{ photoKey: string | null; locationId: string }>();
+  if (!p || !p.photoKey) throw notFound();
+  requirePermission(access, p.locationId, 'time.manage');
+  const obj = await c.env.PHOTOS.get(p.photoKey);
+  if (!obj) throw notFound();
+  return new Response(obj.body, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store' } });
 });
 
 /* ───────── Terminal accounts (owner) ───────── */

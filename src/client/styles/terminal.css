@@ -104,7 +104,7 @@
 }
 .t-clock {
   text-align: center;
-  margin-top: clamp(0px, 2vh, 24px);
+  margin-top: clamp(8px, 4vh, 40px);
 }
 .t-time {
   font-family: var(--font-display);
@@ -114,7 +114,7 @@
   font-variant-numeric: tabular-nums;
 }
 .t-date {
-  margin-top: 4px;
+  margin-top: clamp(10px, 1.8vh, 18px);
   font-size: 15px;
   color: var(--text-muted);
 }
@@ -329,6 +329,138 @@
   line-height: 1.45;
   color: var(--text-soft);
   max-width: 360px;
+}
+
+/* confirmation with the slider (D40) */
+.t-confirm-card .t-result-title {
+  font-size: clamp(34px, 5.5vh, 46px);
+}
+.t-confirm-card.warn .t-result-title {
+  font-size: 28px;
+}
+.t-confirm-card.ok .t-result-sub,
+.t-confirm-card.out .t-result-sub {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.t-confirm {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  animation: pop-in 260ms var(--ease-out, ease) both;
+}
+.t-cam {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.t-cam video {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  background: var(--surface);
+  border: 2px solid var(--border);
+}
+.t-cam.on video {
+  border-color: var(--accent);
+}
+.t-slider {
+  position: relative;
+  width: 100%;
+  height: 72px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  overflow: hidden;
+  touch-action: none;
+}
+.t-slider-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 56px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-soft);
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--text-soft) 0%, var(--text) 50%, var(--text-soft) 100%) 0 0 / 200% 100% text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: t-shine 2.4s linear infinite;
+}
+@keyframes t-shine {
+  to {
+    background-position: -200% 0;
+  }
+}
+.t-slider-knob {
+  position: relative;
+  z-index: 1;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #1c1513;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.t-slider-knob.snap {
+  transition: transform 260ms var(--ease-out, ease);
+}
+.t-notme {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 10px 18px;
+  min-height: 44px;
+}
+.t-countdown {
+  width: 100%;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+.t-countdown i {
+  display: block;
+  height: 100%;
+  background: var(--text-muted);
+  transform-origin: left;
+  animation: t-countdown 10s linear forwards;
+}
+@keyframes t-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-slider-text {
+    animation: none;
+  }
 }
 
 /* exit */

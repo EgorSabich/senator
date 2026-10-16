@@ -41,6 +41,8 @@ export const locations = sqliteTable('locations', {
   dayStartHour: integer('day_start_hour').notNull().default(6),
   /** An open shift older than this many hours counts as "missing exit". */
   staleHours: integer('stale_hours').notNull().default(16),
+  /** D40: terminal takes a small photo at every punch (kept 60 days). */
+  punchPhoto: integer('punch_photo', { mode: 'boolean' }).notNull().default(false),
   createdAt: createdAt(),
 });
 
@@ -540,6 +542,8 @@ export const timePunches = sqliteTable(
     /** in | out | unknown_pin | rejected */
     outcome: text('outcome').notNull(),
     entryId: text('entry_id'),
+    /** R2 key of the punch photo (D40), removed after 60 days. */
+    photoKey: text('photo_key'),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('time_punches_client_uq').on(t.terminalId, t.clientId), index('time_punches_user_idx').on(t.userId)],

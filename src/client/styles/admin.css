@@ -1099,3 +1099,32 @@
     flex: 1 1 0;
   }
 }
+
+/* punch photos in the day dialog (D40) */
+.punch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.punch-thumb {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  flex: none;
+  cursor: zoom-in;
+}
+.punch-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.punch-big {
+  width: 100%;
+  max-width: 280px;
+  border-radius: 12px;
+  cursor: zoom-out;
+}

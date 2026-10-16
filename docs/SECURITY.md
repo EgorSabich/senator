@@ -24,6 +24,7 @@
 | Managers can never act on the owner or other managers | Stage 2 — done |
 | Audit log of admin actions, never containing secrets | Stage 2 — done |
 | Private photos via authenticated route | Stage 3 |
+| Punch photos (D40): off by default, camera allowed only for the app origin (`camera=(self)`), 240 px JPEG, private R2, readable only with `time.manage`, deleted after 60 days and with the person; staff informed in Konto | 0.6.4 |
 
 Known accepted risk: someone who knows a login can lock that account for 15 minutes (no data is revealed; a manager can unlock).
 

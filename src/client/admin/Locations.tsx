@@ -18,6 +18,7 @@ interface LocationSettings {
   staffNote: string | null;
   dayStartHour: number;
   staleHours: number;
+  punchPhoto: boolean;
 }
 
 export function Locations() {
@@ -207,6 +208,15 @@ function LocationSettingsView({ id, onSaved }: { id: string; onSaved: () => Prom
           </select>
           <span className="muted" style={{ fontSize: 12 }}>
             {t.staleHint}
+          </span>
+        </div>
+        <div className="field">
+          <label className="check">
+            <input type="checkbox" checked={form.punchPhoto} onChange={(e) => set('punchPhoto', e.target.checked)} />
+            <span>{t.punchPhoto}</span>
+          </label>
+          <span className="muted" style={{ fontSize: 12 }}>
+            {t.punchPhotoHint}
           </span>
         </div>
       </fieldset>

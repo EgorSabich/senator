@@ -57,6 +57,13 @@
       "when": 1792102844492,
       "tag": "0007_location_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792140300784,
+      "tag": "0008_punch_photo",
+      "breakpoints": true
     }
   ]
 }

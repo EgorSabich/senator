@@ -10,10 +10,14 @@ doc={"type":"doc","content":[{"type":"heading","attrs":{"level":2},"content":[{"
   {"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"Ostatni obchód"}]},
   {"type":"bulletList","content":[li("Naładuj radiotelefon i telefon służbowy."),li("Zbierz i wynieś wszystkie śmieci.")]}]}
 def watch(p): p.on("pageerror", lambda e: errors.append(str(e)))
+def slide(p):
+    k=p.locator(".t-slider-knob"); k.wait_for(); bb=k.bounding_box(); tr=p.locator(".t-slider").bounding_box()
+    x,y=bb["x"]+bb["width"]/2, bb["y"]+bb["height"]/2
+    p.mouse.move(x,y); p.mouse.down(); p.mouse.move(tr["x"]+tr["width"]-10, y, steps=12); p.mouse.up()
 def keypad(p, pin):
     for d in pin: p.locator(".t-pad button", has_text=re.compile(f"^{d}$")).click()
 with sync_playwright() as pw:
-    b=pw.chromium.launch()
+    b=pw.chromium.launch(args=["--use-fake-ui-for-media-stream","--use-fake-device-for-media-stream"])
     o=b.new_context(viewport={"width":1280,"height":900},locale="pl-PL").new_page(); watch(o)
     o.goto(BASE+"/"); o.get_by_label("Login").fill("egor.wlasciciel"); o.get_by_label("PIN lub hasło").fill("TymczasoweHaslo1")
     o.get_by_role("button", name="Zaloguj się").click(); o.get_by_role("heading", name="Ustaw swoje hasło").wait_for()
@@ -40,16 +44,22 @@ with sync_playwright() as pw:
         p.get_by_role("heading", name=re.compile("Dzień dobry")).wait_for(); phones.append(p)
     phones[0].wait_for_timeout(800); phones[0].screenshot(path=f"{OUT}/02-start-offshift.png")
     # terminal phone
-    tc=b.new_context(viewport={"width":390,"height":844},locale="pl-PL",device_scale_factor=2,is_mobile=True,has_touch=True); t=tc.new_page(); watch(t)
+    tc=b.new_context(viewport={"width":390,"height":844},locale="pl-PL",device_scale_factor=2,is_mobile=True,has_touch=True,permissions=["camera"]); t=tc.new_page(); watch(t)
     t.goto(BASE+"/"); t.get_by_label("Login").fill(tlogin); t.get_by_label("PIN lub hasło").fill(tpass); t.get_by_role("button", name="Zaloguj się").click()
     t.get_by_text("Wpisz swój PIN").wait_for(); t.wait_for_timeout(800); t.screenshot(path=f"{OUT}/03-terminal.png")
     keypad(t,"48"); t.screenshot(path=f"{OUT}/04-terminal-typing.png"); keypad(t,"1937")
+    t.get_by_text("Rozpoczynasz zmianę").wait_for(); t.get_by_text("Zofia N.").wait_for(); t.wait_for_timeout(500); t.screenshot(path=f"{OUT}/04b-confirm.png")
+    # "To nie ja" cancels, nothing saved
+    t.get_by_role("button", name="To nie ja").click(); t.get_by_text("Wpisz swój PIN").wait_for()
+    keypad(t,"481937"); t.get_by_text("Rozpoczynasz zmianę").wait_for(); slide(t)
     t.get_by_text("Dzień dobry, Zofia!").wait_for(); t.wait_for_timeout(700); t.screenshot(path=f"{OUT}/05-terminal-in.png")
     t.wait_for_timeout(4800); keypad(t,"111111"); t.get_by_text("Nieznany PIN").wait_for(); t.wait_for_timeout(500); t.screenshot(path=f"{OUT}/06-unknown.png")
-    t.wait_for_timeout(4800); keypad(t,"592048"); t.get_by_text("Dzień dobry, Adam!").wait_for()
+    # photo on (Lokale setting), terminal picks it up with the next status
+    r.put(BASE+f"/api/admin/locations/{loc}/settings", data={"punchPhoto": True}, headers=H); t.reload(); t.get_by_text("Wpisz swój PIN").wait_for(); t.wait_for_timeout(1500)
+    keypad(t,"592048"); t.get_by_text("Adam W.").wait_for(); t.wait_for_timeout(1500); t.screenshot(path=f"{OUT}/05b-confirm-photo.png"); slide(t); t.get_by_text("Dzień dobry, Adam!").wait_for()
     # offline punch
     t.wait_for_timeout(4800); tc.set_offline(True); t.wait_for_timeout(300)
-    keypad(t,"603159"); t.get_by_text("Zapisano bez internetu").wait_for(); t.wait_for_timeout(500); t.screenshot(path=f"{OUT}/07-offline.png")
+    keypad(t,"603159"); t.get_by_text("Odbicie bez internetu").wait_for(); t.screenshot(path=f"{OUT}/06b-confirm-offline.png"); slide(t); t.get_by_text("Zapisano bez internetu").wait_for(); t.wait_for_timeout(500); t.screenshot(path=f"{OUT}/07-offline.png")
     # reload while offline: terminal must come back
     t.reload(); t.get_by_text("Wpisz swój PIN").wait_for(timeout=15000); t.screenshot(path=f"{OUT}/08-offline-reload.png")
     tc.set_offline(False); t.evaluate("window.dispatchEvent(new Event('online'))")
@@ -66,6 +76,10 @@ with sync_playwright() as pw:
     o.goto(BASE+"/panel/czas"); o.get_by_text("Teraz na zmianie").wait_for(); o.wait_for_timeout(900); o.screenshot(path=f"{OUT}/13-panel-time.png", full_page=True)
     o.locator(".time-grid td.today button.cell").first.click(); o.get_by_role("dialog").wait_for(); o.wait_for_timeout(500); o.screenshot(path=f"{OUT}/14-panel-day.png")
     o.get_by_role("dialog").get_by_label("Wyjście").first.fill("0130"); o.get_by_role("dialog").get_by_role("button", name="Zapisz").first.click(); o.wait_for_timeout(900)
+    o.keyboard.press("Escape"); o.wait_for_timeout(300)
+    o.locator("tr", has_text="Adam W.").locator("td.today button.cell").first.click(); o.get_by_role("dialog").wait_for(); o.locator(".punch-thumb img").first.wait_for(); o.wait_for_timeout(600)
+    assert o.evaluate("[...document.querySelectorAll('.punch-thumb img')].every(i => i.naturalWidth > 0)"), "punch photo not loaded"
+    o.locator(".punch-thumb").first.click(); o.wait_for_timeout(400); o.screenshot(path=f"{OUT}/14b-panel-photo.png")
     o.keyboard.press("Escape"); o.wait_for_timeout(300)
     # manual shift: typing 4 digits moves on to "Wyjście"
     o.locator(".time-grid td:not(.today) button.cell").first.click(); o.get_by_role("dialog").wait_for()

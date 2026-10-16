@@ -14,23 +14,43 @@ import '../styles/terminal.css';
 const t = pl.terminal;
 const QUEUE_KEY = 'sa.terminal.queue';
 const OFFSET_KEY = 'sa.terminal.offset';
+const PHOTO_KEY = 'sa.terminal.photo';
 export const TERMINAL_FLAG = 'sa.terminal';
 const PIN_LENGTH = 6;
 const REQUEST_TIMEOUT = 8000;
 const HEARTBEAT_MS = 30_000;
 const FLUSH_MS = 15_000;
 const RESULT_MS = 4500;
+const CONFIRM_MS = 10_000;
+const MAX_QUEUED_PHOTOS = 20;
 const RELOAD_AFTER_MS = 12 * 3600_000;
 
 interface Queued {
   clientId: string;
   pin: string;
   at: number;
+  photo?: string;
+}
+
+/** Answer of /api/terminal/preview (D40): whose PIN it is and what the slider will save. */
+interface Preview {
+  outcome: 'in' | 'out' | 'duplicate' | 'unknown_pin';
+  name?: string;
+  since?: number;
+  missingExit?: boolean;
+}
+
+interface Confirming {
+  pin: string;
+  /** null = no connection: a generic confirmation, the punch is queued */
+  preview: Preview | null;
+  key: number;
 }
 
 interface Status {
   terminal: { name: string; location: string };
   serverTime: number;
+  photo?: boolean;
   onShift: { name: string; since: number }[];
 }
 
@@ -92,6 +112,138 @@ interface PunchAnswer {
   missingExit?: boolean;
 }
 
+/** Front camera for the optional punch photo (D40): opened only on the confirmation screen, closed right after. */
+function useCamera() {
+  const video = useRef<HTMLVideoElement | null>(null);
+  const stream = useRef<MediaStream | null>(null);
+  const token = useRef(0);
+  const [state, setState] = useState<'off' | 'starting' | 'on' | 'failed'>('off');
+
+  const attach = useCallback((el: HTMLVideoElement | null) => {
+    video.current = el;
+    if (el && stream.current && el.srcObject !== stream.current) {
+      el.srcObject = stream.current;
+      void el.play().catch(() => undefined);
+    }
+  }, []);
+
+  const stop = useCallback(() => {
+    token.current += 1;
+    stream.current?.getTracks().forEach((tr) => tr.stop());
+    stream.current = null;
+    if (video.current) video.current.srcObject = null;
+    setState('off');
+  }, []);
+
+  const start = useCallback(async () => {
+    const my = ++token.current;
+    setState('starting');
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } }, audio: false });
+      if (my !== token.current) {
+        s.getTracks().forEach((tr) => tr.stop());
+        return;
+      }
+      stream.current = s;
+      attach(video.current);
+      setState('on');
+    } catch {
+      if (my === token.current) setState('failed');
+    }
+  }, [attach]);
+
+  /** Small JPEG (240 px wide, ~10–30 KB) or null when there is no picture yet. */
+  const capture = useCallback((): string | null => {
+    const v = video.current;
+    if (!v || !stream.current || v.readyState < 2 || !v.videoWidth) return null;
+    const w = 240;
+    const h = Math.round((v.videoHeight / v.videoWidth) * w);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(v, 0, 0, w, h);
+    const url = canvas.toDataURL('image/jpeg', 0.6);
+    return url.length < 100_000 ? url : canvas.toDataURL('image/jpeg', 0.4);
+  }, []);
+
+  useEffect(() => stop, [stop]);
+  return { attach, start, stop, capture, state };
+}
+
+/** Horizontal "slide to confirm" (D40): a deliberate gesture, so a wrong PIN or a pocket tap never saves anything. */
+function Slider({ label, onDone }: { label: string; onDone: () => void }) {
+  const track = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ start: number; max: number } | null>(null);
+  const xRef = useRef(0);
+  const [x, setX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const done = useRef(false);
+  const move = (v: number) => {
+    xRef.current = v;
+    setX(v);
+  };
+  const finish = () => {
+    if (done.current) return;
+    done.current = true;
+    try {
+      navigator.vibrate?.(30);
+    } catch {
+      /* none */
+    }
+    onDone();
+  };
+  return (
+    <div className="t-slider" ref={track}>
+      <span className="t-slider-text" style={{ opacity: Math.max(0, 1 - x / 160) }}>
+        {label}
+      </span>
+      <button
+        type="button"
+        className={`t-slider-knob${dragging ? '' : ' snap'}`}
+        style={{ transform: `translateX(${x}px)` }}
+        aria-label={pl.terminal.slideLabel}
+        onPointerDown={(e) => {
+          const r = track.current!.getBoundingClientRect();
+          drag.current = { start: e.clientX - xRef.current, max: r.width - e.currentTarget.offsetWidth - 12 };
+          setDragging(true);
+          e.currentTarget.setPointerCapture(e.pointerId);
+        }}
+        onPointerMove={(e) => {
+          if (!drag.current) return;
+          move(Math.min(Math.max(e.clientX - drag.current.start, 0), drag.current.max));
+        }}
+        onPointerUp={() => {
+          const d = drag.current;
+          drag.current = null;
+          setDragging(false);
+          if (!d) return;
+          if (xRef.current >= d.max * 0.85) {
+            move(d.max);
+            finish();
+          } else move(0);
+        }}
+        onPointerCancel={() => {
+          drag.current = null;
+          setDragging(false);
+          move(0);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            finish();
+          }
+        }}
+      >
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M5 12h14M13 6l6 6-6 6" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 function TerminalScreen({ onSignedOut }: { onSignedOut: () => void }) {
   const [pin, setPin] = useState('');
   const [result, setResult] = useState<Result | null>(null);
@@ -102,6 +254,11 @@ function TerminalScreen({ onSignedOut }: { onSignedOut: () => void }) {
   const [now, setNow] = useState(Date.now());
   const [exiting, setExiting] = useState(false);
   const [shake, setShake] = useState(0);
+  const [confirming, setConfirming] = useState<Confirming | null>(null);
+  const camera = useCamera();
+  // remembered, so a terminal restarted without internet still takes the photo
+  const photoOn = status ? Boolean(status.photo) : store<boolean>(PHOTO_KEY, false);
+  const confirmTimer = useRef<number | undefined>(undefined);
   const offset = useRef<number>(store<number>(OFFSET_KEY, 0));
   const queueRef = useRef(queue);
   const resultTimer = useRef<number | undefined>(undefined);
@@ -151,6 +308,7 @@ function TerminalScreen({ onSignedOut }: { onSignedOut: () => void }) {
       const s = await call<Status>('/api/terminal/status');
       offset.current = s.serverTime - Date.now();
       save(OFFSET_KEY, offset.current);
+      save(PHOTO_KEY, Boolean(s.photo));
       setStatus(s);
       setOnline(true);
     } catch (e) {
@@ -166,7 +324,7 @@ function TerminalScreen({ onSignedOut }: { onSignedOut: () => void }) {
       while (queueRef.current.length) {
         const item = queueRef.current[0]!;
         try {
-          await call('/api/terminal/punch', { method: 'POST', body: { pin: item.pin, clientId: item.clientId, at: item.at, offline: true } });
+          await call('/api/terminal/punch', { method: 'POST', body: { pin: item.pin, clientId: item.clientId, at: item.at, offline: true, photo: item.photo } });
         } catch (e) {
           if (e instanceof ApiFailure && e.status === 0) {
             setOnline(false);
@@ -223,10 +381,13 @@ function TerminalScreen({ onSignedOut }: { onSignedOut: () => void }) {
   }, []);
 
   const submit = useCallback(
-    async (code: string) => {
+    async (code: string, photo: string | null = null) => {
       setBusy(true);
       const item: Queued = { clientId: newClientId(), pin: code, at: Date.now() + offset.current };
+      if (photo) item.photo = photo;
       const queueOffline = () => {
+        // photos are small, but the phone's storage is not endless: a long offline spell keeps the times, not the pictures
+        if (queueRef.current.filter((q) => q.photo).length >= MAX_QUEUED_PHOTOS) delete item.photo;
         setQ([...queueRef.current, item]);
         setOnline(false);
         showResult({ kind: 'queued', at: item.at });
@@ -237,7 +398,7 @@ function TerminalScreen({ onSignedOut }: { onSignedOut: () => void }) {
           void flush();
           return;
         }
-        const r = await call<PunchAnswer>('/api/terminal/punch', { method: 'POST', body: { pin: code, clientId: item.clientId } });
+        const r = await call<PunchAnswer>('/api/terminal/punch', { method: 'POST', body: { pin: code, clientId: item.clientId, photo: item.photo } });
         setOnline(true);
         const name = r.firstName ?? '';
         if (r.outcome === 'in') showResult({ kind: 'in', name, at: r.at, missingExit: r.missingExit });
@@ -259,8 +420,61 @@ function TerminalScreen({ onSignedOut }: { onSignedOut: () => void }) {
     [flush, heartbeat, lost, setQ, showResult],
   );
 
+  const closeConfirm = useCallback(() => {
+    window.clearTimeout(confirmTimer.current);
+    camera.stop();
+    setConfirming(null);
+  }, [camera]);
+
+  const openConfirm = useCallback(
+    (code: string, preview: Preview | null) => {
+      setConfirming({ pin: code, preview, key: Date.now() });
+      if (photoOn) void camera.start();
+      window.clearTimeout(confirmTimer.current);
+      confirmTimer.current = window.setTimeout(() => {
+        camera.stop();
+        setConfirming(null);
+      }, CONFIRM_MS);
+    },
+    [camera, photoOn],
+  );
+
+  const confirmed = useCallback(() => {
+    if (!confirming) return;
+    const photo = photoOn ? camera.capture() : null;
+    const code = confirming.pin;
+    closeConfirm();
+    void submit(code, photo);
+  }, [camera, closeConfirm, confirming, photoOn, submit]);
+
+  /** Full PIN typed: ask the server whose it is, then show the slider (D40). Without internet: a generic slider. */
+  const check = useCallback(
+    async (code: string) => {
+      setBusy(true);
+      try {
+        if (queueRef.current.length || !navigator.onLine) return openConfirm(code, null);
+        const p = await call<Preview>('/api/terminal/preview', { method: 'POST', body: { pin: code } });
+        setOnline(true);
+        if (p.outcome === 'unknown_pin') showResult({ kind: 'unknown_pin' });
+        else if (p.outcome === 'duplicate') showResult({ kind: 'duplicate', name: p.name ?? '', at: p.since ?? Date.now() });
+        else openConfirm(code, p);
+      } catch (e) {
+        if (e instanceof ApiFailure && e.status === 429) showResult({ kind: 'paused' });
+        else if (e instanceof ApiFailure && (e.status === 401 || e.status === 403)) lost();
+        else {
+          setOnline(false);
+          openConfirm(code, null);
+        }
+      } finally {
+        setBusy(false);
+        setPin('');
+      }
+    },
+    [lost, openConfirm, showResult],
+  );
+
   const press = (d: string) => {
-    if (busy || exiting) return;
+    if (busy || exiting || confirming) return;
     if (result) setResult(null);
     try {
       navigator.vibrate?.(10);
@@ -271,7 +485,7 @@ function TerminalScreen({ onSignedOut }: { onSignedOut: () => void }) {
     idleTimer.current = window.setTimeout(() => setPin(''), 10_000);
     setPin((p) => {
       const next = (p + d).slice(0, PIN_LENGTH);
-      if (next.length === PIN_LENGTH) void submit(next);
+      if (next.length === PIN_LENGTH) void check(next);
       return next;
     });
   };
@@ -280,6 +494,11 @@ function TerminalScreen({ onSignedOut }: { onSignedOut: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (exiting) return;
+      if (confirming) {
+        if (e.key === 'Escape') closeConfirm();
+        else if (e.key === 'Enter') confirmed();
+        return;
+      }
       if (/^\d$/.test(e.key)) press(e.key);
       else if (e.key === 'Backspace') setPin((p) => p.slice(0, -1));
       else if (e.key === 'Escape') setPin('');
@@ -319,11 +538,13 @@ function TerminalScreen({ onSignedOut }: { onSignedOut: () => void }) {
       </div>
 
       <div className="t-pin-area">
-        {result ? (
+        {confirming ? (
+          <ConfirmCard c={confirming} />
+        ) : result ? (
           <ResultCard r={result} />
         ) : (
           <>
-            <p className="t-label">{t.enterPin}</p>
+            <p className="t-label">{busy ? t.checking : t.enterPin}</p>
             <div className={`t-dots${busy ? ' busy' : ''}`} key={shake} data-shake={shake > 0 || undefined} aria-label={`${pin.length} / ${PIN_LENGTH}`}>
               {Array.from({ length: PIN_LENGTH }, (_, i) => (
                 <span key={i} className={i < pin.length ? 'filled' : ''} />
@@ -333,25 +554,49 @@ function TerminalScreen({ onSignedOut }: { onSignedOut: () => void }) {
         )}
       </div>
 
-      <div className="t-pad" role="group" aria-label={t.enterPin}>
-        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
-          <button key={d} type="button" onClick={() => press(d)} disabled={busy}>
-            {d}
+      {confirming ? (
+        <div className="t-confirm" key={confirming.key}>
+          {photoOn && (
+            <div className={`t-cam ${camera.state}`}>
+              {camera.state === 'failed' ? (
+                <span>{t.photoOff}</span>
+              ) : (
+                <>
+                  <video ref={camera.attach} muted playsInline autoPlay aria-hidden="true" />
+                  <span>{t.photoOn}</span>
+                </>
+              )}
+            </div>
+          )}
+          <Slider label={t.slide} onDone={confirmed} />
+          <button type="button" className="t-notme" onClick={closeConfirm}>
+            {t.notMe}
           </button>
-        ))}
-        <button type="button" className="t-small" onClick={() => setPin('')} disabled={busy}>
-          {t.clear}
-        </button>
-        <button type="button" onClick={() => press('0')} disabled={busy}>
-          0
-        </button>
-        <button type="button" className="t-small" aria-label={t.erase} onClick={() => setPin((p) => p.slice(0, -1))} disabled={busy}>
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M21 5H9l-6 7 6 7h12z" />
-            <path d="M17 9l-6 6M11 9l6 6" />
-          </svg>
-        </button>
-      </div>
+          <div className="t-countdown" aria-hidden="true">
+            <i />
+          </div>
+        </div>
+      ) : (
+        <div className="t-pad" role="group" aria-label={t.enterPin}>
+          {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
+            <button key={d} type="button" onClick={() => press(d)} disabled={busy}>
+              {d}
+            </button>
+          ))}
+          <button type="button" className="t-small" onClick={() => setPin('')} disabled={busy}>
+            {t.clear}
+          </button>
+          <button type="button" onClick={() => press('0')} disabled={busy}>
+            0
+          </button>
+          <button type="button" className="t-small" aria-label={t.erase} onClick={() => setPin((p) => p.slice(0, -1))} disabled={busy}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 5H9l-6 7 6 7h12z" />
+              <path d="M17 9l-6 6M11 9l6 6" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       <footer className="t-foot">
         <p className="t-hint">{t.hint}</p>
@@ -366,6 +611,25 @@ function TerminalScreen({ onSignedOut }: { onSignedOut: () => void }) {
       </footer>
 
       {exiting && <ExitDialog queued={queue.length} onClose={() => setExiting(false)} onExited={() => { setQ([]); onSignedOut(); }} />}
+    </div>
+  );
+}
+
+function ConfirmCard({ c }: { c: Confirming }) {
+  const p = c.preview;
+  let title: string = t.confirmOffline;
+  let sub: string = t.confirmOfflineSub;
+  if (p?.outcome === 'in') {
+    title = p.name ?? '';
+    sub = t.confirmIn + (p.missingExit ? `. ${t.confirmInMissing}` : '');
+  } else if (p?.outcome === 'out' && p.since) {
+    title = p.name ?? '';
+    sub = t.confirmOut(formatClock(p.since), formatDuration(Math.round((Date.now() - p.since) / 60000)));
+  }
+  return (
+    <div className={`t-result t-confirm-card ${p ? (p.outcome === 'out' ? 'out' : 'ok') : 'warn'}`} role="status">
+      <div className="t-result-title">{title}</div>
+      <div className="t-result-sub">{sub}</div>
     </div>
   );
 }

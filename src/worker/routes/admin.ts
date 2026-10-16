@@ -16,6 +16,7 @@ import { generateTempPassword, generateTempPin, hashSecret } from '../auth/crypt
 import { revokeUserSessions } from '../auth/session';
 import { loadAccess, requireManageableUser, requireOwner, requirePermission } from '../auth/access';
 import { confirmMatches, purgeUserStatements } from '../lib/purge';
+import { deleteKeys } from '../jobs/punchPhotos';
 
 export const adminRoutes = new Hono<AppEnv>();
 // Session is enforced by the /api/admin router (index.ts).
@@ -79,10 +80,11 @@ interface LocationRow {
   staffNote: string | null;
   dayStartHour: number;
   staleHours: number;
+  punchPhoto: number;
 }
 
 const LOCATION_SELECT = `SELECT id, name, slug, address, phone, email, opening_hours_json AS openingHoursJson, staff_note AS staffNote,
-  day_start_hour AS dayStartHour, stale_hours AS staleHours FROM locations`;
+  day_start_hour AS dayStartHour, stale_hours AS staleHours, punch_photo AS punchPhoto FROM locations`;
 
 export function locationView(l: LocationRow) {
   let hours: Record<string, string> = {};
@@ -101,6 +103,7 @@ export function locationView(l: LocationRow) {
     staffNote: l.staffNote,
     dayStartHour: l.dayStartHour,
     staleHours: l.staleHours,
+    punchPhoto: Boolean(l.punchPhoto),
   };
 }
 
@@ -162,6 +165,8 @@ adminRoutes.put('/locations/:id/settings', async (c) => {
   };
   const dayStartHour = int('dayStartHour', 0, 12, before.dayStartHour);
   const staleHours = int('staleHours', 8, 24, before.staleHours);
+  if (body.punchPhoto !== undefined && typeof body.punchPhoto !== 'boolean') throw badRequest('setting_invalid', { field: 'punchPhoto' });
+  const punchPhoto = body.punchPhoto === undefined ? Boolean(before.punchPhoto) : (body.punchPhoto as boolean);
   const after = {
     name,
     address: text('address', 200, before.address),
@@ -171,21 +176,22 @@ adminRoutes.put('/locations/:id/settings', async (c) => {
     staffNote: text('staffNote', 1000, before.staffNote),
     dayStartHour,
     staleHours,
+    punchPhoto,
   };
   await db.batch([
     db
       .prepare(
-        `UPDATE locations SET name = ?, address = ?, phone = ?, email = ?, opening_hours_json = ?, staff_note = ?, day_start_hour = ?, stale_hours = ? WHERE id = ?`,
+        `UPDATE locations SET name = ?, address = ?, phone = ?, email = ?, opening_hours_json = ?, staff_note = ?, day_start_hour = ?, stale_hours = ?, punch_photo = ? WHERE id = ?`,
       )
-      .bind(after.name, after.address, after.phone, after.email, after.openingHoursJson, after.staffNote, after.dayStartHour, after.staleHours, id),
+      .bind(after.name, after.address, after.phone, after.email, after.openingHoursJson, after.staffNote, after.dayStartHour, after.staleHours, after.punchPhoto ? 1 : 0, id),
     auditStatement(db, {
       actorId: c.var.user.id,
       locationId: id,
       action: 'location.update',
       entityType: 'location',
       entityId: id,
-      before: { name: before.name, dayStartHour: before.dayStartHour, staleHours: before.staleHours },
-      after: { name, dayStartHour, staleHours },
+      before: { name: before.name, dayStartHour: before.dayStartHour, staleHours: before.staleHours, punchPhoto: Boolean(before.punchPhoto) },
+      after: { name, dayStartHour, staleHours, punchPhoto },
     }),
   ]);
   return c.json({ ok: true });
@@ -360,10 +366,15 @@ adminRoutes.delete('/users/:id', async (c) => {
   if (target.status !== 'inactive') throw new ApiError(409, 'delete_needs_inactive');
   const body = await readJson<{ confirm?: unknown }>(c.req.raw);
   if (!confirmMatches(body.confirm, target.login)) throw badRequest('delete_confirm_mismatch');
+  const photos = await db.prepare(`SELECT photo_key AS k FROM time_punches WHERE user_id = ? AND photo_key IS NOT NULL`).bind(target.id).all<{ k: string }>();
   await db.batch([
     ...purgeUserStatements(db, target.id, target.login),
     auditStatement(db, { actorId: c.var.user.id, locationId: target.sharedLocationId, action: 'user.delete', entityType: 'user', entityId: target.id }),
   ]);
+  await deleteKeys(
+    c.env.PHOTOS,
+    photos.results.map((r) => r.k),
+  ).catch(() => undefined); // a failed delete leaves an unlinked file in the private bucket; nothing points to it
   return c.json({ ok: true });
 });
 

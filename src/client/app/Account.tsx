@@ -72,12 +72,12 @@ const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 function LocationInfo() {
   const { locationId } = useAcademy();
   const { data } = useApi<{
-    location: { name: string; address: string | null; phone: string | null; email: string | null; openingHours: Record<string, string>; staffNote: string | null };
+    location: { name: string; address: string | null; phone: string | null; email: string | null; openingHours: Record<string, string>; staffNote: string | null; punchPhoto?: boolean };
   }>(`/api/locations/${locationId}/info`);
   if (!data) return null;
   const l = data.location;
   const hours = DAYS.filter((d) => l.openingHours[d]);
-  if (!l.address && !l.phone && !l.email && !hours.length && !l.staffNote) return null;
+  if (!l.address && !l.phone && !l.email && !hours.length && !l.staffNote && !l.punchPhoto) return null;
   const tp = pl.academy.profile;
   return (
     <div className="a-card">
@@ -111,6 +111,7 @@ function LocationInfo() {
           </span>
         </div>
       )}
+      {l.punchPhoto && <span className="a-sub">{tp.punchPhoto}</span>}
     </div>
   );
 }

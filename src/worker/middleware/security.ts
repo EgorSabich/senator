@@ -11,7 +11,7 @@ export const securityHeaders: MiddlewareHandler = async (c, next) => {
   h.set('X-Content-Type-Options', 'nosniff');
   h.set('X-Frame-Options', 'DENY');
   h.set('Referrer-Policy', 'same-origin');
-  h.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  h.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
   h.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   if (c.req.path.startsWith('/api/')) {
     h.set('Cache-Control', 'no-store');

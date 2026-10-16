@@ -16,6 +16,7 @@ import { checklistAdminRoutes, checklistRoutes } from './routes/checklists';
 import { requireSameOrigin, requireSession } from './auth/session';
 import { runNightlyBackup } from './jobs/backup';
 import { anonymizeExpiredUsers } from './jobs/anonymize';
+import { expirePunchPhotos } from './jobs/punchPhotos';
 
 const app = new Hono<AppEnv>();
 
@@ -86,7 +87,8 @@ export default {
       (async () => {
         const backup = await runNightlyBackup(env, now);
         const anonymized = await anonymizeExpiredUsers(env.DB, now);
-        console.log(JSON.stringify({ job: 'nightly', backup, anonymized }));
+        const punchPhotos = await expirePunchPhotos(env.DB, env.PHOTOS, now).catch((e) => `error: ${String(e)}`);
+        console.log(JSON.stringify({ job: 'nightly', backup, anonymized, punchPhotos }));
       })(),
     );
   },

@@ -12,6 +12,7 @@ import type { AppEnv } from '../env';
 import { ApiError, badRequest, newId, readJson } from '../lib/http';
 import { pinLookup, verifySecret } from '../auth/crypto';
 import { clearSessionCookie } from '../auth/session';
+import { decodePunchPhoto } from '../jobs/punchPhotos';
 
 export const terminalRoutes = new Hono<AppEnv>();
 // Session is enforced in index.ts.
@@ -54,7 +55,60 @@ terminalRoutes.get('/status', async (c) => {
   const t = await loadTerminal(c);
   const now = Date.now();
   await c.env.DB.prepare(`UPDATE terminals SET last_seen_at = ? WHERE id = ?`).bind(now, t.id).run();
-  return c.json({ terminal: { name: t.name, location: t.locationName }, serverTime: now, onShift: await onShift(c.env.DB, t.locationId, now) });
+  const rules = await locationRules(c.env.DB, t.locationId);
+  return c.json({ terminal: { name: t.name, location: t.locationName }, serverTime: now, photo: rules.punchPhoto, onShift: await onShift(c.env.DB, t.locationId, now) });
+});
+
+/** Too many wrong PINs in a row on this terminal (live entries only; the phone is in the restaurant). */
+async function checkPaused(db: D1Database, terminalId: string, now: number) {
+  const recent = await db
+    .prepare(`SELECT outcome FROM time_punches WHERE terminal_id = ? AND offline = 0 AND created_at > ? ORDER BY created_at DESC LIMIT ?`)
+    .bind(terminalId, now - AUTH.terminalPauseSeconds * 1000, AUTH.terminalFailLimit)
+    .all<{ outcome: string }>();
+  if (recent.results.length >= AUTH.terminalFailLimit && recent.results.every((r) => r.outcome === 'unknown_pin')) {
+    throw new ApiError(429, 'terminal_paused');
+  }
+}
+
+/** Active employee of this location with this PIN, or null. */
+async function personByPin(db: D1Database, secret: string, pin: string, locationId: string) {
+  if (checkPin(pin) === 'pin_format') return null;
+  const lookup = await pinLookup(pin, secret);
+  return db
+    .prepare(
+      `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName FROM users u
+       WHERE u.pin_lookup = ? AND u.status = 'active' AND u.role = 'employee'
+         AND EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ? AND ul.is_active = 1)`,
+    )
+    .bind(lookup, locationId)
+    .first<{ id: string; firstName: string; lastName: string }>();
+}
+
+/**
+ * D40: shows who the PIN belongs to and what will happen (start or end of shift) before anything is saved.
+ * The person confirms with the slider, which sends /punch. Wrong PINs count towards the terminal pause.
+ */
+terminalRoutes.post('/preview', async (c) => {
+  const t = await loadTerminal(c);
+  const db = c.env.DB;
+  const body = await readJson<{ pin?: unknown }>(c.req.raw);
+  const pin = typeof body.pin === 'string' ? body.pin.trim() : '';
+  const now = Date.now();
+  await checkPaused(db, t.id, now);
+  const person = await personByPin(db, c.env.AUTH_SECRET, pin, t.locationId);
+  if (!person) {
+    await record(db, t.id, `pv${newId('x').slice(-30)}`, null, now, false, 'unknown_pin', null);
+    return c.json({ outcome: 'unknown_pin' as const });
+  }
+  const rules = await locationRules(db, t.locationId);
+  const open = await db
+    .prepare(`SELECT clock_in_at AS clockInAt FROM time_entries WHERE user_id = ? AND clock_out_at IS NULL ORDER BY clock_in_at DESC LIMIT 1`)
+    .bind(person.id)
+    .first<{ clockInAt: number }>();
+  const name = `${person.firstName} ${person.lastName.trim().charAt(0)}.`;
+  if (open && now - open.clockInAt < DOUBLE_TAP_SECONDS * 1000) return c.json({ outcome: 'duplicate' as const, name, since: open.clockInAt });
+  if (open && now - open.clockInAt <= rules.staleHours * 3600_000) return c.json({ outcome: 'out' as const, name, since: open.clockInAt });
+  return c.json({ outcome: 'in' as const, name, missingExit: Boolean(open) });
 });
 
 type Outcome = 'in' | 'out' | 'duplicate' | 'unknown_pin' | 'rejected';
@@ -62,7 +116,7 @@ type Outcome = 'in' | 'out' | 'duplicate' | 'unknown_pin' | 'rejected';
 terminalRoutes.post('/punch', async (c) => {
   const t = await loadTerminal(c);
   const db = c.env.DB;
-  const body = await readJson<{ pin?: unknown; clientId?: unknown; at?: unknown; offline?: unknown }>(c.req.raw);
+  const body = await readJson<{ pin?: unknown; clientId?: unknown; at?: unknown; offline?: unknown; photo?: unknown }>(c.req.raw);
   const pin = typeof body.pin === 'string' ? body.pin.trim() : '';
   const clientId = typeof body.clientId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(body.clientId) ? body.clientId : null;
   if (!clientId) throw badRequest('invalid_input');
@@ -79,16 +133,7 @@ terminalRoutes.post('/punch', async (c) => {
     .first<{ outcome: Outcome; at: number; firstName: string | null }>();
   if (prev) return c.json({ outcome: prev.outcome, at: prev.at, firstName: prev.firstName, repeated: true });
 
-  // Pause after several wrong PINs in a row (only live punches count; the phone is in the restaurant).
-  if (!offline) {
-    const recent = await db
-      .prepare(`SELECT outcome FROM time_punches WHERE terminal_id = ? AND offline = 0 AND created_at > ? ORDER BY created_at DESC LIMIT ?`)
-      .bind(t.id, now - AUTH.terminalPauseSeconds * 1000, AUTH.terminalFailLimit)
-      .all<{ outcome: string }>();
-    if (recent.results.length >= AUTH.terminalFailLimit && recent.results.every((r) => r.outcome === 'unknown_pin')) {
-      throw new ApiError(429, 'terminal_paused');
-    }
-  }
+  if (!offline) await checkPaused(db, t.id, now);
 
   let at = now;
   if (offline) {
@@ -100,19 +145,7 @@ terminalRoutes.post('/punch', async (c) => {
     at = Math.min(claimed, now);
   }
 
-  if (checkPin(pin) === 'pin_format') {
-    await record(db, t.id, clientId, null, at, offline, 'unknown_pin', null);
-    return c.json({ outcome: 'unknown_pin' as Outcome, at, firstName: null });
-  }
-  const lookup = await pinLookup(pin, c.env.AUTH_SECRET);
-  const person = await db
-    .prepare(
-      `SELECT u.id, u.first_name AS firstName FROM users u
-       WHERE u.pin_lookup = ? AND u.status = 'active' AND u.role = 'employee'
-         AND EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ? AND ul.is_active = 1)`,
-    )
-    .bind(lookup, t.locationId)
-    .first<{ id: string; firstName: string }>();
+  const person = await personByPin(db, c.env.AUTH_SECRET, pin, t.locationId);
   if (!person) {
     await record(db, t.id, clientId, null, at, offline, 'unknown_pin', null);
     return c.json({ outcome: 'unknown_pin' as Outcome, at, firstName: null });
@@ -134,10 +167,11 @@ terminalRoutes.post('/punch', async (c) => {
     await record(db, t.id, clientId, person.id, at, offline, 'duplicate', open.id);
     return c.json({ outcome: 'duplicate' as Outcome, at: open.clockInAt, firstName: person.firstName });
   }
+  const photoKey = rules.punchPhoto ? await storePhoto(c.env.PHOTOS, body.photo, t.id, clientId) : null;
   if (open && at - open.clockInAt <= rules.staleHours * 3600_000) {
     await db.batch([
       db.prepare(`UPDATE time_entries SET clock_out_at = ?, out_source = ?, out_terminal_id = ? WHERE id = ?`).bind(at, source, t.id, open.id),
-      recordStatement(db, t.id, clientId, person.id, at, offline, 'out', open.id),
+      recordStatement(db, t.id, clientId, person.id, at, offline, 'out', open.id, photoKey),
     ]);
     return c.json({ outcome: 'out' as Outcome, at, firstName: person.firstName, since: open.clockInAt, minutes: Math.round((at - open.clockInAt) / 60000) });
   }
@@ -151,18 +185,41 @@ terminalRoutes.post('/punch', async (c) => {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(id, t.locationId, person.id, businessDate(at, rules.dayStartHour), at, source, t.id, now),
-    recordStatement(db, t.id, clientId, person.id, at, offline, 'in', id),
+    recordStatement(db, t.id, clientId, person.id, at, offline, 'in', id, photoKey),
   ]);
   return c.json({ outcome: 'in' as Outcome, at, firstName: person.firstName, missingExit: Boolean(open) });
 });
 
-function recordStatement(db: D1Database, terminalId: string, clientId: string, userId: string | null, at: number, offline: boolean, outcome: Outcome, entryId: string | null) {
+function recordStatement(
+  db: D1Database,
+  terminalId: string,
+  clientId: string,
+  userId: string | null,
+  at: number,
+  offline: boolean,
+  outcome: Outcome,
+  entryId: string | null,
+  photoKey: string | null = null,
+) {
   return db
     .prepare(
-      `INSERT INTO time_punches (id, client_id, terminal_id, user_id, at, offline, outcome, entry_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO time_punches (id, client_id, terminal_id, user_id, at, offline, outcome, entry_id, photo_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (terminal_id, client_id) DO NOTHING`,
     )
-    .bind(newId('tp'), clientId, terminalId, userId, at, offline ? 1 : 0, outcome, entryId, Date.now());
+    .bind(newId('tp'), clientId, terminalId, userId, at, offline ? 1 : 0, outcome, entryId, photoKey, Date.now());
+}
+
+/** Saves the punch photo (D40) when the location asks for it; a missing or bad photo never blocks the punch. */
+async function storePhoto(bucket: R2Bucket, photo: unknown, terminalId: string, clientId: string): Promise<string | null> {
+  const bytes = decodePunchPhoto(photo);
+  if (!bytes) return null;
+  const key = `punch-photos/${terminalId}/${clientId}.jpg`;
+  try {
+    await bucket.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+    return key;
+  } catch {
+    return null;
+  }
 }
 
 async function record(db: D1Database, terminalId: string, clientId: string, userId: string | null, at: number, offline: boolean, outcome: Outcome, entryId: string | null) {

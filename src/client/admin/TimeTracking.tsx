@@ -416,7 +416,7 @@ function EntryEditor({ entry, date, dayStartHour, onSave, onDelete }: { entry: E
   }
   return (
     <form onSubmit={submit} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 10 }}>
         <div className="field">
           <label htmlFor={`${uid}-in`}>{t.in}</label>
           <TimeField id={`${uid}-in`} value={inT} onChange={setIn} onComplete={() => outRef.current?.focus()} required autoFocus={!entry} />
@@ -454,7 +454,8 @@ function EntryEditor({ entry, date, dayStartHour, onSave, onDelete }: { entry: E
 
 function DayDialog(props: { locationId: string; person: Person; date: string; dayStartHour: number; entries: Entry[]; onClose: () => void; onChanged: () => Promise<void> }) {
   const [adding, setAdding] = useState(props.entries.length === 0);
-  const [punches, setPunches] = useState<{ id: string; at: number; outcome: string; person: string | null; offline: number }[] | null>(null);
+  const [punches, setPunches] = useState<{ id: string; at: number; outcome: string; person: string | null; offline: number; hasPhoto?: number }[] | null>(null);
+  const [bigPhoto, setBigPhoto] = useState<string | null>(null);
   useEffect(() => {
     void api<{ punches: typeof punches }>(`/api/admin/locations/${props.locationId}/time/punches?date=${props.date}`)
       .then((r) => setPunches(r.punches))
@@ -510,11 +511,19 @@ function DayDialog(props: { locationId: string; person: Person; date: string; da
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div className="label">{t.punches}</div>
           {mine.map((p) => (
-            <span key={p.id} className="muted" style={{ fontSize: 13 }}>
-              {formatClock(p.at)} · {t.outcomes[p.outcome] ?? p.outcome}
-              {p.offline ? ` · ${t.sources.offline}` : ''}
+            <span key={p.id} className="muted punch-row" style={{ fontSize: 13 }}>
+              {p.hasPhoto ? (
+                <button type="button" className="punch-thumb" onClick={() => setBigPhoto(bigPhoto === p.id ? null : p.id)} aria-label={t.punchPhoto}>
+                  <img src={`/api/admin/time/punches/${p.id}/photo`} alt="" loading="lazy" />
+                </button>
+              ) : null}
+              <span>
+                {formatClock(p.at)} · {t.outcomes[p.outcome] ?? p.outcome}
+                {p.offline ? ` · ${t.sources.offline}` : ''}
+              </span>
             </span>
           ))}
+          {bigPhoto && <img className="punch-big" src={`/api/admin/time/punches/${bigPhoto}/photo`} alt={t.punchPhoto} onClick={() => setBigPhoto(null)} />}
         </div>
       )}
     </Modal>

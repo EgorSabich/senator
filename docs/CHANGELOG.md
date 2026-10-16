@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.4 — 2026-10-16 — Terminal: name check with a slider, optional punch photo
+
+- D40: after the PIN the terminal shows "Imię N." and what will happen (start / end of shift with hours so far); the person slides to confirm or taps "To nie ja"; it closes itself after 10 s. Without internet the slider shows a generic text and the punch goes to the queue as before. Wrong PINs at this step count towards the terminal pause.
+- Lokale → "Zdjęcie przy odbiciu" (off by default): the front camera opens only on the confirmation screen, a 240 px JPEG is sent with the punch (offline too), stored privately in R2 and shown as a thumbnail in the day's punches in Czas pracy (only with `time.manage`); deleted after 60 days by the nightly job and together with the person. Staff see in Konto that photos are taken. Migration 0008. A missing camera never blocks a punch.
+- Security headers: camera allowed for the app's own origin only.
+- Clock and date on the terminal sit lower; shift editor fields no longer overflow the dialog.
+- Tests: 96 integration (new 10-terminal-confirm); time walkthrough covers the slider, "To nie ja", photo (fake camera) and offline confirm.
+
 ## 0.6.3 — 2026-10-16 — Navigation, lessons in Wiedza, compact panel menu
 
 - D39: "Wstecz" returns to the same place (scroll per history entry, Menu keeps category and search); soft page transitions (View Transitions, off with reduced motion); pages show the last loaded data at once and refresh in the background.
