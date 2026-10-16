@@ -11,7 +11,7 @@ import { auditStatement } from '../lib/audit';
 import { ApiError, badRequest, newId, notFound, readJson, str } from '../lib/http';
 import { generateTempPassword, hashSecret } from '../auth/crypto';
 import { revokeUserSessions } from '../auth/session';
-import { loadAccess, requireOwner, requirePermission } from '../auth/access';
+import { loadAccess, requirePermission, scopedUserIds, userInScope, type Access } from '../auth/access';
 import { MANDATORY_KINDS, progressFor, visibleContent } from '../lib/learning';
 
 export const timeAdminRoutes = new Hono<AppEnv>();
@@ -47,6 +47,7 @@ timeAdminRoutes.get('/locations/:locId/time', async (c) => {
   const days = dateRange(from, to);
   const last = days[days.length - 1]!;
 
+  const scope = await scopedUserIds(db, access, locId);
   const [people, entries] = await db.batch([
     db
       .prepare(
@@ -82,16 +83,17 @@ timeAdminRoutes.get('/locations/:locId/time', async (c) => {
     )
     .bind(locId, from, last)
     .all<{ userId: string; date: string; startMin: number; endMin: number }>();
+  const mine = <T extends { userId?: string; id?: string }>(rows: T[], key: 'userId' | 'id' = 'userId') => (scope ? rows.filter((r) => scope.has(String(r[key]))) : rows);
   return c.json({
     days,
     now: Date.now(),
-    plan: plan.results,
+    plan: mine(plan.results),
     wages,
-    rates,
+    rates: mine(rates),
     ...(await locationRules(db, locId)),
-    people: people!.results,
-    entries: entries!.results,
-    openBefore: stale.results,
+    people: mine(people!.results as { id: string }[], 'id'),
+    entries: mine(entries!.results as { userId: string }[]),
+    openBefore: mine(stale.results),
   });
 });
 
@@ -128,6 +130,7 @@ timeAdminRoutes.post('/locations/:locId/time/entries', async (c) => {
   const body = await readJson<{ userId?: unknown; clockInAt?: unknown; clockOutAt?: unknown; note?: unknown }>(c.req.raw);
   const userId = str(body.userId, 80);
   if (!userId) throw badRequest('invalid_input');
+  if (!(await userInScope(db, access, locId, userId))) throw new ApiError(403, 'outside_divisions');
   const person = await db
     .prepare(
       `SELECT u.id FROM users u WHERE u.id = ? AND u.role = 'employee' AND u.status <> 'anonymized'
@@ -160,6 +163,7 @@ async function loadEntry(c: { env: AppEnv['Bindings']; var: AppEnv['Variables'] 
   const e = await db.prepare(`${ENTRY_SELECT} WHERE e.id = ?`).bind(id).first<EntryRow>();
   if (!e || !access.locations.has(e.locationId)) throw notFound();
   requirePermission(access, e.locationId, 'time.manage');
+  if (!(await userInScope(db, access, e.locationId, e.userId))) throw new ApiError(403, 'outside_divisions');
   return e;
 }
 
@@ -216,15 +220,16 @@ timeAdminRoutes.get('/locations/:locId/time/punches', async (c) => {
   if (!isIsoDate(date)) throw badRequest('invalid_input');
   const { results } = await db
     .prepare(
-      `SELECT p.id, p.at, p.offline, p.outcome, t.name AS terminal, (p.photo_key IS NOT NULL) AS hasPhoto,
+      `SELECT p.id, p.at, p.offline, p.outcome, t.name AS terminal, (p.photo_key IS NOT NULL) AS hasPhoto, p.user_id AS userId,
               CASE WHEN u.id IS NULL THEN NULL ELSE u.first_name || ' ' || u.last_name END AS person
        FROM time_punches p JOIN terminals t ON t.id = p.terminal_id LEFT JOIN users u ON u.id = p.user_id
        WHERE t.location_id = ? AND p.at >= ? AND p.at < ? ORDER BY p.at`,
     )
     .bind(locId, Date.parse(addDays(date, -1) + 'T00:00:00Z'), Date.parse(addDays(date, 2) + 'T00:00:00Z'))
-    .all<{ at: number }>();
+    .all<{ at: number; userId: string | null }>();
   const { dayStartHour } = await locationRules(db, locId);
-  return c.json({ punches: results.filter((p) => businessDate(p.at, dayStartHour) === date) });
+  const scope = await scopedUserIds(db, access, locId);
+  return c.json({ punches: results.filter((p) => businessDate(p.at, dayStartHour) === date && (!scope || (p.userId && scope.has(p.userId)))) });
 });
 
 /** Punch photo (D40), only for people who manage time at that location. */
@@ -232,11 +237,12 @@ timeAdminRoutes.get('/time/punches/:id/photo', async (c) => {
   const db = c.env.DB;
   const access = await loadAccess(db, c.var.user);
   const p = await db
-    .prepare(`SELECT p.photo_key AS photoKey, t.location_id AS locationId FROM time_punches p JOIN terminals t ON t.id = p.terminal_id WHERE p.id = ?`)
+    .prepare(`SELECT p.photo_key AS photoKey, p.user_id AS userId, t.location_id AS locationId FROM time_punches p JOIN terminals t ON t.id = p.terminal_id WHERE p.id = ?`)
     .bind(c.req.param('id'))
-    .first<{ photoKey: string | null; locationId: string }>();
+    .first<{ photoKey: string | null; userId: string | null; locationId: string }>();
   if (!p || !p.photoKey) throw notFound();
   requirePermission(access, p.locationId, 'time.manage');
+  if (!p.userId || !(await userInScope(db, access, p.locationId, p.userId))) throw notFound();
   const obj = await c.env.PHOTOS.get(p.photoKey);
   if (!obj) throw notFound();
   return new Response(obj.body, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store' } });
@@ -257,15 +263,15 @@ timeAdminRoutes.get('/locations/:locId/terminals', async (c) => {
     )
     .bind(Date.now(), locId)
     .all();
-  return c.json({ terminals: results, canManage: access.role === 'owner' });
+  return c.json({ terminals: results, canManage: canManageTerminals(access, locId) });
 });
 
 timeAdminRoutes.post('/locations/:locId/terminals', async (c) => {
   const locId = c.req.param('locId');
   const db = c.env.DB;
   const access = await loadAccess(db, c.var.user);
-  requireOwner(access);
   if (!access.locations.has(locId)) throw notFound();
+  if (!canManageTerminals(access, locId)) throw new ApiError(403, 'forbidden');
   const body = await readJson<{ name?: unknown }>(c.req.raw);
   const name = str(body.name, 60);
   if (!name) throw badRequest('name_required');
@@ -293,12 +299,12 @@ timeAdminRoutes.post('/locations/:locId/terminals', async (c) => {
 async function loadTerminalAdmin(c: { env: AppEnv['Bindings']; var: AppEnv['Variables'] }, id: string) {
   const db = c.env.DB;
   const access = await loadAccess(db, c.var.user);
-  requireOwner(access);
   const t = await db
     .prepare(`SELECT t.id, t.location_id AS locationId, t.user_id AS userId, t.name, u.login FROM terminals t JOIN users u ON u.id = t.user_id WHERE t.id = ?`)
     .bind(id)
     .first<{ id: string; locationId: string; userId: string; name: string; login: string }>();
   if (!t || !access.locations.has(t.locationId)) throw notFound();
+  if (!canManageTerminals(access, t.locationId)) throw new ApiError(403, 'forbidden');
   return t;
 }
 
@@ -339,6 +345,11 @@ export function rateOn(rates: { validFrom: string; rateGrosze: number }[], date:
   return r;
 }
 
+/** Terminal accounts: owner or a zarządzający (locations.manage). */
+function canManageTerminals(access: Access, locId: string) {
+  return access.role === 'owner' || Boolean(access.locations.get(locId)?.has('locations.manage'));
+}
+
 async function employeeOf(db: D1Database, userId: string, locId: string) {
   return db
     .prepare(
@@ -357,7 +368,7 @@ timeAdminRoutes.put('/locations/:locId/users/:id/rate', async (c) => {
   const access = await loadAccess(db, c.var.user);
   requirePermission(access, locId, 'wages.manage');
   const person = await employeeOf(db, c.req.param('id'), locId);
-  if (!person) throw notFound();
+  if (!person || !(await userInScope(db, access, locId, person.id))) throw notFound();
   const body = await readJson<{ rate?: unknown; validFrom?: unknown }>(c.req.raw);
   const rate = typeof body.rate === 'number' ? body.rate : typeof body.rate === 'string' ? Number(body.rate.replace(',', '.')) : NaN;
   if (!Number.isFinite(rate) || rate < 0 || rate > 10_000) throw badRequest('rate_invalid');
@@ -383,7 +394,7 @@ timeAdminRoutes.get('/locations/:locId/users/:id/summary', async (c) => {
   const access = await loadAccess(db, c.var.user);
   requirePermission(access, locId, 'employees.view');
   const person = await employeeOf(db, c.req.param('id'), locId);
-  if (!person) throw notFound();
+  if (!person || !(await userInScope(db, access, locId, person.id))) throw notFound();
   const { results: posRows } = await db
     .prepare(`SELECT position FROM user_locations WHERE user_id = ? AND location_id = ?`)
     .bind(person.id, locId)

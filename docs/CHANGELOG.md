@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0 — 2026-10-16 — Leadership roles, "Dziś"
+
+- D44 roles in "Kadra kierownicza" (was Menedżerowie): Zarządzający (everything, incl. adding leaders, Lokale, the log; new permissions `managers.manage`, `locations.manage`, `audit.view`), Menedżer sali (kelnerzy, host, call center), Szef kuchni, Szef baru, Szef mistrzów shishy. A role is a preset of permissions + divisions (stored as `role:…` and `division:…`), single permissions can still be changed; nobody but the owner or another zarządzający changes one's own permissions.
+- Divisions now limit: staff list and card, adding staff (only own positions), PIN/deactivation, rates, time tracking (calendar, manual shifts, punches, photos), materials (new ones get the divisions; shared "for everyone" ones are read-only; others hidden), programs, checklist results, menu editing (kitchen / bar). Grafik: everyone sees the whole team, plans and publishes only their divisions.
+- D45 "Dziś" (first item of the panel): who is on shift vs plan, late arrivals, absent, missing exits, today's checklists; per divisions; refreshes every minute. On the phone: Dziś · Pracownicy · Czas pracy · Grafik · Więcej (Menu under Więcej).
+- New locations stay owner-only.
+- Tests: 111 integration (new 14-roles), UI walkthrough `tests/ui/roles_walkthrough.py`.
+
 ## 0.7.2 — 2026-10-16 — Grafik and form fixes
 
 - Grafik: "Tydzień / Miesiąc" switch (month = whole calendar month, compact times, publish for the month); column "Godziny" on the right with planned hours and number of shifts per person; Friday and Saturday highlighted; Enter saves a shift; notes on shifts removed; status of a shift as a badge.

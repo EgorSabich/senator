@@ -14,6 +14,7 @@ import { terminalRoutes } from './routes/terminal';
 import { timeAdminRoutes } from './routes/time';
 import { checklistAdminRoutes, checklistRoutes } from './routes/checklists';
 import { scheduleAdminRoutes, scheduleRoutes } from './routes/schedule';
+import { todayAdminRoutes } from './routes/today';
 import { requireSameOrigin, requireSession } from './auth/session';
 import { runNightlyBackup } from './jobs/backup';
 import { anonymizeExpiredUsers } from './jobs/anonymize';
@@ -49,6 +50,7 @@ admin.route('/', programAdminRoutes);
 admin.route('/', timeAdminRoutes);
 admin.route('/', checklistAdminRoutes);
 admin.route('/', scheduleAdminRoutes);
+admin.route('/', todayAdminRoutes);
 app.route('/api/admin', admin);
 
 // Staff (waiter) views; every path here needs a session.

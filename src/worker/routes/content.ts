@@ -11,7 +11,7 @@ import type { AppEnv } from '../env';
 import { auditStatement } from '../lib/audit';
 import { ApiError, badRequest, newId, notFound, readJson, str } from '../lib/http';
 import { indexStatements, unindexStatement } from '../lib/search';
-import { loadAccess, requireOwner, requirePermission, type Access } from '../auth/access';
+import { allowedDivisions, loadAccess, requireOwner, requirePermission, requirePositionsInScope, type Access } from '../auth/access';
 import { storeUpload } from './media';
 import { confirmMatches, purgeContentStatements } from '../lib/purge';
 import { CONTENT_BUNDLE_FORMAT, CONTENT_IMPORT_CHUNK } from '../../shared/contentBundle';
@@ -50,12 +50,30 @@ function requireEdit(access: Access, locationId: string | null): void {
   else requirePermission(access, locationId, 'content.edit');
 }
 
-async function loadItem(db: D1Database, access: Access, id: string): Promise<ItemRow> {
+/**
+ * D44: with divisions, a material can be read when it is for everyone or for one of them,
+ * and changed only when all its positions are inside them (a chef edits kitchen materials, not shared ones).
+ */
+function scopeVerdict(access: Access, locationId: string | null, positions: string[]): 'edit' | 'read' | 'none' {
+  if (locationId === null) return access.role === 'owner' ? 'edit' : 'read';
+  const scope = allowedDivisions(access, locationId);
+  if (!scope) return 'edit';
+  if (positions.length && positions.every((p) => scope.has(p))) return 'edit';
+  if (!positions.length || positions.some((p) => scope.has(p))) return 'read';
+  return 'none';
+}
+
+async function loadItem(db: D1Database, access: Access, id: string, mode: 'edit' | 'read' = 'edit'): Promise<ItemRow & { editable: boolean }> {
   const item = await db.prepare(`SELECT ${ITEM_COLUMNS} FROM content_items WHERE id = ?`).bind(id).first<ItemRow>();
   if (!item) throw notFound();
   if (item.locationId !== null && !access.locations.has(item.locationId)) throw notFound();
-  requireEdit(access, item.locationId);
-  return item;
+  if (mode === 'edit') requireEdit(access, item.locationId);
+  else if (item.locationId !== null) requirePermission(access, item.locationId, 'content.edit');
+  const { results } = await db.prepare(`SELECT position FROM content_item_positions WHERE content_item_id = ?`).bind(item.id).all<{ position: string }>();
+  const verdict = scopeVerdict(access, item.locationId, results.map((r) => r.position));
+  if (verdict === 'none') throw notFound();
+  if (mode === 'edit' && verdict !== 'edit') throw new ApiError(403, 'outside_divisions');
+  return { ...item, editable: verdict === 'edit' };
 }
 
 async function uniqueSlug(db: D1Database, locationId: string | null, title: string): Promise<string> {
@@ -108,17 +126,25 @@ contentAdminRoutes.get('/locations/:locId/content', async (c) => {
     .bind(...(kind ? [locId, kind] : [locId]))
     .all<Record<string, unknown>>();
 
-  return c.json({
-    items: results.map((r) => ({
-      ...r,
-      requiresAck: Boolean(r.requiresAck),
-      imported: Boolean(r.imported),
-      shared: r.locationId === null,
-      editable: r.locationId !== null || access.role === 'owner',
-      hasDraft: r.draftUpdatedAt !== null,
-      positions: r.positions ? String(r.positions).split(',') : [],
-    })),
-  });
+  const items = results
+    .map((r) => {
+      const positions = r.positions ? String(r.positions).split(',') : [];
+      const verdict = scopeVerdict(access, (r.locationId as string | null) ?? null, positions);
+      return {
+        ...r,
+        requiresAck: Boolean(r.requiresAck),
+        imported: Boolean(r.imported),
+        shared: r.locationId === null,
+        editable: verdict === 'edit',
+        hasDraft: r.draftUpdatedAt !== null,
+        positions,
+        verdict,
+      };
+    })
+    .filter((r) => r.verdict !== 'none')
+    .map(({ verdict: _v, ...r }) => r);
+  const scope = allowedDivisions(access, locId);
+  return c.json({ items, divisions: scope ? [...scope] : null });
 });
 
 contentAdminRoutes.post('/locations/:locId/content', async (c) => {
@@ -147,6 +173,10 @@ contentAdminRoutes.post('/locations/:locId/content', async (c) => {
       )
       .bind(id, locationId, kind, title, await uniqueSlug(db, locationId, title), section, isDocument ? 1 : 0, title, JSON.stringify(emptyDoc()), now, c.var.user.id, now, now),
     auditStatement(db, { actorId: c.var.user.id, locationId, action: 'content.create', entityType: 'content', entityId: id, after: { kind, title, shared } }),
+    // D44: a chef's new material is for the kitchen from the start
+    ...[...(locationId ? (allowedDivisions(access, locationId) ?? []) : [])].map((p) =>
+      db.prepare(`INSERT INTO content_item_positions (content_item_id, position) VALUES (?, ?)`).bind(id, p),
+    ),
   ]);
   return c.json({ id }, 201);
 });
@@ -156,7 +186,7 @@ contentAdminRoutes.post('/locations/:locId/content', async (c) => {
 contentAdminRoutes.get('/content/:id', async (c) => {
   const db = c.env.DB;
   const access = await loadAccess(db, c.var.user);
-  const item = await loadItem(db, access, c.req.param('id'));
+  const item = await loadItem(db, access, c.req.param('id'), 'read');
   const { results: versions } = await db
     .prepare(
       `SELECT v.id, v.version_no AS versionNo, v.title, v.change_level AS changeLevel, v.change_note AS changeNote, v.created_at AS createdAt,
@@ -195,6 +225,7 @@ contentAdminRoutes.get('/content/:id', async (c) => {
       attachment: item.attachmentKey ? { src: `/media/${item.attachmentKey}`, name: item.attachmentName } : null,
       positions: positions.map((p) => p.position),
       sortOrder: item.sortOrder,
+      editable: item.editable,
       checklistMode: item.kind === 'checklist' ? item.checklistMode : null,
       currentAcknowledgements: ackCount?.n ?? 0,
     },
@@ -209,7 +240,7 @@ contentAdminRoutes.get('/content/:id', async (c) => {
 contentAdminRoutes.get('/content/:id/versions/:versionId', async (c) => {
   const db = c.env.DB;
   const access = await loadAccess(db, c.var.user);
-  const item = await loadItem(db, access, c.req.param('id'));
+  const item = await loadItem(db, access, c.req.param('id'), 'read');
   const v = await db
     .prepare(
       `SELECT id, version_no AS versionNo, title, body_json AS bodyJson, body_text AS bodyText, change_level AS changeLevel,
@@ -289,6 +320,7 @@ contentAdminRoutes.put('/content/:id', async (c) => {
   }
   if (body.positions !== undefined) {
     const positions = parsePositions(body.positions);
+    requirePositionsInScope(access, item.locationId, positions);
     statements.push(db.prepare(`DELETE FROM content_item_positions WHERE content_item_id = ?`).bind(item.id));
     for (const p of positions) {
       statements.push(db.prepare(`INSERT INTO content_item_positions (content_item_id, position) VALUES (?, ?)`).bind(item.id, p));
@@ -313,6 +345,7 @@ contentAdminRoutes.post('/content/positions', async (c) => {
   if (!Array.isArray(body.ids) || !body.ids.length || body.ids.length > 200 || !body.ids.every((i) => typeof i === 'string')) throw badRequest('invalid_input');
   const positions = parsePositions(body.positions);
   const ids = [...new Set(body.ids as string[])];
+  for (const loc of access.locations.keys()) requirePositionsInScope(access, loc, positions);
   const statements: D1PreparedStatement[] = [];
   for (const id of ids) {
     const item = await loadItem(db, access, id); // checks the right to edit it
@@ -521,7 +554,10 @@ contentAdminRoutes.post('/locations/:locId/content/import', async (c) => {
       skipped.push(title);
       continue;
     }
-    const positions = raw.positions === undefined ? [] : parsePositions(raw.positions);
+    const scope = allowedDivisions(access, locId);
+    let positions = raw.positions === undefined ? [] : parsePositions(raw.positions);
+    if (scope && !positions.length) positions = [...scope];
+    requirePositionsInScope(access, locId, positions);
     const section = str(raw.section, 120);
     const sortOrder = Number.isInteger(raw.sortOrder) ? Number(raw.sortOrder) : 0;
     const isDocument = kind !== 'lesson'; // Service Book is mandatory to read too (D38)

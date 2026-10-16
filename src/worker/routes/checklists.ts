@@ -12,7 +12,7 @@ import { locationRules } from '../lib/location';
 import type { AppEnv } from '../env';
 import { auditStatement } from '../lib/audit';
 import { ApiError, badRequest, newId, notFound, readJson } from '../lib/http';
-import { loadAccess, requireLocation, requirePermission, type Access } from '../auth/access';
+import { allowedDivisions, loadAccess, requireLocation, requirePermission, scopedUserIds, type Access } from '../auth/access';
 import { isVisibleFor, userPositions, visibleContent } from '../lib/learning';
 
 export const checklistRoutes = new Hono<AppEnv>();
@@ -296,12 +296,23 @@ checklistAdminRoutes.get('/locations/:locId/checklists/day', async (c) => {
   const date = c.req.query('date');
   if (!isIsoDate(date)) throw badRequest('invalid_input');
   const db = c.env.DB;
-  const lists = await visibleContent(db, locId, null, ['checklist']);
+  const access = await loadAccess(db, c.var.user);
+  const scope = allowedDivisions(access, locId);
+  const lists = await visibleContent(db, locId, scope ? [...scope] : null, ['checklist']);
+  const people = await scopedUserIds(db, access, locId);
   const out = [];
   for (const l of lists) {
     const cl = await loadChecklist(db, l.id);
     const v = await dayView(db, cl, date, locId);
-    if (v.total) out.push({ id: l.id, title: l.title, ...v });
+    if (!v.total) continue;
+    // D44: only people of my divisions
+    const keep = (userId: string) => !people || people.has(userId);
+    out.push({
+      id: l.id,
+      title: l.title,
+      ...v,
+      people: v.people?.filter((p) => keep(p.userId)),
+    });
   }
   return c.json({ date, checklists: out });
 });
@@ -316,7 +327,10 @@ checklistAdminRoutes.get('/locations/:locId/checklists/stats', async (c) => {
   const days = dateRange(from, to);
   const last = days[days.length - 1]!;
   const db = c.env.DB;
-  const lists = await visibleContent(db, locId, null, ['checklist']);
+  const access = await loadAccess(db, c.var.user);
+  const scope = allowedDivisions(access, locId);
+  const lists = await visibleContent(db, locId, scope ? [...scope] : null, ['checklist']);
+  const people = await scopedUserIds(db, access, locId);
   const totals = new Map<string, number>();
   const loaded = new Map<string, ChecklistRow>();
   for (const l of lists) {
@@ -373,7 +387,7 @@ checklistAdminRoutes.get('/locations/:locId/checklists/stats', async (c) => {
       .map((l) => ({ id: l.id, title: l.title, total: totals.get(l.id), mode: loaded.get(l.id)?.mode ?? 'shared' })),
     perDay: perDayRows,
     closed: closed!.results,
-    people: perPerson!.results,
+    people: (perPerson!.results as { userId: string }[]).filter((p) => !people || people.has(p.userId)),
   });
 });
 

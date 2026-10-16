@@ -38,7 +38,7 @@ with sync_playwright() as p:
     page.get_by_label("Nowe hasło").fill("NoweHasloEgora2026")
     page.get_by_label("Powtórz").fill("NoweHasloEgora2026")
     page.get_by_role("button", name="Zapisz").click()
-    page.get_by_role("heading", name="Pracownicy").wait_for()
+    page.get_by_role("heading", name="Dziś", exact=True).wait_for()
 
     # import
     page.get_by_role("link", name="Materiały").first.click()

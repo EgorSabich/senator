@@ -1,5 +1,6 @@
 import { TimeTracking } from './TimeTracking';
 import { Schedule } from './Schedule';
+import { Today } from './Today';
 import { ChecklistStats } from './ChecklistStats';
 import { createContext, useContext, useMemo, useState } from 'react';
 import type { Me } from '../api';
@@ -50,16 +51,17 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
 
   // Main items (bottom bar on phones) first; the rest sits under "Więcej" (D39).
   const nav = [
+    { path: '/panel/dzis', label: pl.admin.nav.today, icon: 'sun', show: ctx.can('time.manage') || ctx.can('schedule.manage'), main: true },
     { path: '/panel/pracownicy', label: pl.admin.nav.employees, icon: 'people', show: ctx.can('employees.view'), main: true },
     { path: '/panel/czas', label: pl.admin.nav.time, icon: 'clock', show: ctx.can('time.manage'), main: true },
     { path: '/panel/grafik', label: pl.admin.nav.schedule, icon: 'calendar', show: ctx.can('schedule.manage'), main: true },
-    { path: '/panel/menu', label: pl.admin.nav.menu, icon: 'menu', show: ctx.can('menu.edit'), main: true },
+    { path: '/panel/menu', label: pl.admin.nav.menu, icon: 'menu', show: ctx.can('menu.edit') },
     { path: '/panel/materialy', label: pl.admin.nav.content, icon: 'book', show: ctx.can('content.edit') },
     { path: '/panel/programy', label: pl.admin.nav.programs, icon: 'learn', show: ctx.can('content.edit') },
     { path: '/panel/listy', label: pl.admin.nav.checklists, icon: 'checklist', show: ctx.can('checklists.view') },
-    { path: '/panel/menedzerowie', label: pl.admin.nav.managers, icon: 'key', show: isOwner },
-    { path: '/panel/lokale', label: pl.admin.nav.locations, icon: 'pin', show: isOwner },
-    { path: '/panel/dziennik', label: pl.admin.nav.audit, icon: 'list', show: isOwner },
+    { path: '/panel/menedzerowie', label: pl.admin.nav.managers, icon: 'key', show: ctx.can('managers.manage') },
+    { path: '/panel/lokale', label: pl.admin.nav.locations, icon: 'pin', show: ctx.can('locations.manage') },
+    { path: '/panel/dziennik', label: pl.admin.nav.audit, icon: 'list', show: ctx.can('audit.view') },
   ].filter((n) => n.show) as { path: string; label: string; icon: string; show: boolean; main?: boolean }[];
   const mainNav = nav.filter((n) => n.main);
   const moreNav = nav.filter((n) => !n.main);
@@ -78,10 +80,11 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
   else if (path === '/panel/wiecej') page = <More items={moreNav} />;
   else if (path.startsWith('/panel/czas') && ctx.can('time.manage')) page = <TimeTracking />;
   else if (path.startsWith('/panel/grafik') && ctx.can('schedule.manage')) page = <Schedule />;
+  else if (path.startsWith('/panel/dzis') && (ctx.can('time.manage') || ctx.can('schedule.manage'))) page = <Today />;
   else if (path.startsWith('/panel/listy') && ctx.can('checklists.view')) page = <ChecklistStats />;
-  else if (path.startsWith('/panel/menedzerowie') && isOwner) page = <Managers />;
-  else if (path.startsWith('/panel/lokale') && isOwner) page = <Locations />;
-  else if (path.startsWith('/panel/dziennik') && isOwner) page = <Audit />;
+  else if (path.startsWith('/panel/menedzerowie') && ctx.can('managers.manage')) page = <Managers />;
+  else if (path.startsWith('/panel/lokale') && ctx.can('locations.manage')) page = <Locations />;
+  else if (path.startsWith('/panel/dziennik') && ctx.can('audit.view')) page = <Audit />;
   else if (nav[0]) page = <Redirect to={nav[0].path} />;
 
   async function logout() {

@@ -5,6 +5,8 @@ import { Hono } from 'hono';
 import {
   DEFAULT_MANAGER_PERMISSIONS,
   DIVISION_SCOPE_PREFIX,
+  MANAGER_ROLES,
+  ROLE_PREFIX,
   PERMISSIONS,
   POSITIONS,
   type Permission,
@@ -15,7 +17,7 @@ import { auditStatement } from '../lib/audit';
 import { ApiError, badRequest, newId, notFound, readJson, str } from '../lib/http';
 import { generateTempPassword, generateTempPin, hashSecret } from '../auth/crypto';
 import { revokeUserSessions } from '../auth/session';
-import { loadAccess, requireManageableUser, requireOwner, requirePermission } from '../auth/access';
+import { allowedDivisions, loadAccess, requireManageableUser, requireOwner, requireOwnerOr, requirePermission, scopedUserIds, type Access } from '../auth/access';
 import { confirmMatches, purgeUserStatements } from '../lib/purge';
 import { deleteKeys } from '../jobs/punchPhotos';
 
@@ -135,15 +137,15 @@ adminRoutes.get('/locations/:id/settings', async (c) => {
     )
     .bind(id, now - l.staleHours * 3600_000)
     .first<Record<string, number>>();
-  return c.json({ location: locationView(l), counts, canEdit: access.role === 'owner' });
+  return c.json({ location: locationView(l), counts, canEdit: access.role === 'owner' || Boolean(access.locations.get(id)?.has('locations.manage')) });
 });
 
 adminRoutes.put('/locations/:id/settings', async (c) => {
   const db = c.env.DB;
   const access = await loadAccess(db, c.var.user);
-  requireOwner(access);
   const id = c.req.param('id');
   if (!access.locations.has(id)) throw notFound();
+  if (access.role !== 'owner') requirePermission(access, id, 'locations.manage');
   const before = await db.prepare(`${LOCATION_SELECT} WHERE id = ?`).bind(id).first<LocationRow>();
   if (!before) throw notFound();
   const body = await readJson<Record<string, unknown>>(c.req.raw);
@@ -213,6 +215,7 @@ adminRoutes.get('/locations/:locId/employees', async (c) => {
   const locId = c.req.param('locId');
   const access = await loadAccess(c.env.DB, c.var.user);
   requirePermission(access, locId, 'employees.view');
+  const scope = allowedDivisions(access, locId);
   const now = Date.now();
   const { results } = await c.env.DB.prepare(
     `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName, u.login, u.role, u.status,
@@ -223,8 +226,9 @@ adminRoutes.get('/locations/:locId/employees', async (c) => {
      ORDER BY u.last_name, u.first_name`,
   )
     .bind(now, locId)
-    .all();
-  return c.json({ employees: results });
+    .all<{ position: string; role: string }>();
+  // D44: a chef sees the kitchen, a floor manager the floor… (managers themselves only for unscoped people)
+  return c.json({ employees: scope ? results.filter((r) => r.role === 'employee' && scope.has(r.position)) : results, divisions: scope ? [...scope] : null });
 });
 
 adminRoutes.post('/locations/:locId/employees', async (c) => {
@@ -239,6 +243,8 @@ adminRoutes.post('/locations/:locId/employees', async (c) => {
   const position = typeof body.position === 'string' && (POSITIONS as readonly string[]).includes(body.position) ? body.position : null;
   if (!firstName || !lastName) throw badRequest('name_required');
   if (!position) throw badRequest('position_invalid');
+  const scope = allowedDivisions(access, locId);
+  if (scope && !scope.has(position)) throw new ApiError(403, 'outside_divisions');
   if (body.startDate !== undefined && body.startDate !== null && !isIsoDate(body.startDate)) throw badRequest('start_date_invalid');
 
   const id = newId('usr');
@@ -395,7 +401,9 @@ function parsePermissions(v: unknown): Permission[] {
   const out = [...new Set(v)];
   const ok = (p: unknown) =>
     typeof p === 'string' &&
-    ((PERMISSIONS as readonly string[]).includes(p) || (p.startsWith(DIVISION_SCOPE_PREFIX) && (POSITIONS as readonly string[]).includes(p.slice(DIVISION_SCOPE_PREFIX.length))));
+    ((PERMISSIONS as readonly string[]).includes(p) ||
+      (p.startsWith(DIVISION_SCOPE_PREFIX) && (POSITIONS as readonly string[]).includes(p.slice(DIVISION_SCOPE_PREFIX.length))) ||
+      (p.startsWith(ROLE_PREFIX) && p.slice(ROLE_PREFIX.length) in MANAGER_ROLES));
   if (!out.every(ok)) {
     throw badRequest('permissions_invalid');
   }
@@ -405,13 +413,14 @@ function parsePermissions(v: unknown): Permission[] {
 adminRoutes.post('/managers', async (c) => {
   const db = c.env.DB;
   const access = await loadAccess(db, c.var.user);
-  requireOwner(access);
+  requireOwnerOr(access, 'managers.manage');
   const body = await readJson<{ firstName?: unknown; lastName?: unknown; locationId?: unknown; permissions?: unknown }>(c.req.raw);
   const firstName = str(body.firstName, 60);
   const lastName = str(body.lastName, 80);
   const locationId = str(body.locationId, 80);
   if (!firstName || !lastName) throw badRequest('name_required');
   if (!locationId || !access.locations.has(locationId)) throw badRequest('location_invalid');
+  if (access.role !== 'owner') requirePermission(access, locationId, 'managers.manage');
   const permissions = body.permissions === undefined ? DEFAULT_MANAGER_PERMISSIONS : parsePermissions(body.permissions);
 
   const id = newId('usr');
@@ -441,11 +450,13 @@ adminRoutes.post('/managers', async (c) => {
 adminRoutes.put('/managers/:id/permissions', async (c) => {
   const db = c.env.DB;
   const access = await loadAccess(db, c.var.user);
-  requireOwner(access);
+  requireOwnerOr(access, 'managers.manage');
   const managerId = c.req.param('id');
+  if (managerId === c.var.user.id) throw new ApiError(403, 'own_permissions');
   const body = await readJson<{ locationId?: unknown; permissions?: unknown }>(c.req.raw);
   const locationId = str(body.locationId, 80);
   if (!locationId || !access.locations.has(locationId)) throw badRequest('location_invalid');
+  if (access.role !== 'owner') requirePermission(access, locationId, 'managers.manage');
   const permissions = parsePermissions(body.permissions);
   const manager = await db.prepare(`SELECT id FROM users WHERE id = ? AND role = 'manager'`).bind(managerId).first();
   if (!manager) throw new ApiError(404, 'not_found');
@@ -478,23 +489,26 @@ adminRoutes.put('/managers/:id/permissions', async (c) => {
 
 adminRoutes.get('/audit', async (c) => {
   const access = await loadAccess(c.env.DB, c.var.user);
-  requireOwner(access);
+  requireOwnerOr(access, 'audit.view');
   const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 100) || 100, 1), 500);
+  // a zarządzający sees the log of the locations where he holds audit.view (D44)
+  const locs = access.role === 'owner' ? null : [...access.locations.entries()].filter(([, p]) => p.has('audit.view')).map(([l]) => l);
   const { results } = await c.env.DB.prepare(
     `SELECT a.id, a.action, a.entity_type AS entityType, a.entity_id AS entityId, a.location_id AS locationId,
             a.before_json AS beforeJson, a.after_json AS afterJson, a.created_at AS createdAt,
             u.first_name AS actorFirstName, u.last_name AS actorLastName
      FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id
+     ${locs ? `WHERE a.location_id IN (${locs.map(() => '?').join(', ')})` : ''}
      ORDER BY a.created_at DESC LIMIT ?`,
   )
-    .bind(limit)
+    .bind(...(locs ?? []), limit)
     .all();
   return c.json({ entries: results });
 });
 
 adminRoutes.get('/managers', async (c) => {
   const access = await loadAccess(c.env.DB, c.var.user);
-  requireOwner(access);
+  requireOwnerOr(access, 'managers.manage');
   const now = Date.now();
   const { results: managers } = await c.env.DB.prepare(
     `SELECT id, first_name AS firstName, last_name AS lastName, login, status, last_login_at AS lastLoginAt,
@@ -510,8 +524,9 @@ adminRoutes.get('/managers', async (c) => {
   return c.json({
     managers: managers.map((m) => {
       const byLoc: Record<string, string[]> = {};
-      for (const p of perms) if (p.userId === m.id) (byLoc[p.locationId] ??= []).push(p.permission);
-      return { ...m, permissions: byLoc };
-    }),
+      for (const p of perms) if (p.userId === m.id && (access.role === 'owner' || access.locations.get(p.locationId)?.has('managers.manage'))) (byLoc[p.locationId] ??= []).push(p.permission);
+      return { ...m, permissions: byLoc, self: m.id === c.var.user.id };
+    })
+      .filter((m) => access.role === 'owner' || Object.keys(m.permissions).length > 0),
   });
 });

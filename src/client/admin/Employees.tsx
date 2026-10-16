@@ -44,11 +44,13 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const canManage = can('employees.manage');
+  const [divisions, setDivisions] = useState<string[] | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await api<{ employees: Employee[] }>(`/api/admin/locations/${locationId}/employees`);
+      const res = await api<{ employees: Employee[]; divisions?: string[] | null }>(`/api/admin/locations/${locationId}/employees`);
       setList(res.employees);
+      setDivisions(res.divisions ?? null);
     } catch (e) {
       setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
     }
@@ -339,6 +341,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
       </div>
       {adding && (
         <AddEmployee
+          divisions={divisions}
           locationId={locationId}
           onClose={() => setAdding(false)}
           onCreated={async (info, id) => {
@@ -396,10 +399,20 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AddEmployee({ locationId, onClose, onCreated }: { locationId: string; onClose: () => void; onCreated: (info: SecretInfo, id: string) => void }) {
+function AddEmployee({
+  locationId,
+  divisions,
+  onClose,
+  onCreated,
+}: {
+  locationId: string;
+  divisions: string[] | null;
+  onClose: () => void;
+  onCreated: (info: SecretInfo, id: string) => void;
+}) {
   const [firstName, setFirst] = useState('');
   const [lastName, setLast] = useState('');
-  const [position, setPosition] = useState('waiter');
+  const [position, setPosition] = useState(divisions?.[0] ?? 'waiter');
   const [startDate, setStart] = useState(new Date().toISOString().slice(0, 10));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -453,7 +466,7 @@ function AddEmployee({ locationId, onClose, onCreated }: { locationId: string; o
         <div className="field">
           <label htmlFor="pos">{t.position}</label>
           <select id="pos" value={position} onChange={(e) => setPosition(e.target.value)}>
-            {POSITIONS.filter((p) => p !== 'shift_manager').map((p) => (
+            {POSITIONS.filter((p) => p !== 'shift_manager' && (!divisions || divisions.includes(p))).map((p) => (
               <option key={p} value={p}>
                 {pl.admin.positions[p]}
               </option>

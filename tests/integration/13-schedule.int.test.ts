@@ -83,8 +83,10 @@ describe('planning and publishing', () => {
     const wk = await chef.get(`/api/admin/locations/${SENATOR}/schedule?week=${next}`);
     expect(wk.status).toBe(200);
     expect(wk.data.divisions).toEqual(['kitchen']);
-    expect(wk.data.people.every((p: { divisions: string[] }) => p.divisions.every((d) => d === 'kitchen'))).toBe(true);
-    expect(wk.data.shifts.some((s: { userId: string }) => s.userId === waiterId)).toBe(false);
+    expect(wk.data.editable).toEqual(['kitchen']);
+    // D44: everyone with the schedule sees the whole team
+    expect(wk.data.shifts.some((s: { userId: string }) => s.userId === waiterId)).toBe(true);
+    expect(wk.data.unpublished).toBe(0);
     expect((await chef.post(`/api/admin/locations/${SENATOR}/schedule/shifts`, { userId: waiterId, date: next, start: '08:00', end: '16:00' })).status).toBe(403);
     expect((await chef.post(`/api/admin/locations/${SENATOR}/schedule/shifts`, { userId: cookId, date: next, start: '08:00', end: '16:00' })).status).toBe(201);
     // the waiter's copied draft next-next week is not published by the chef

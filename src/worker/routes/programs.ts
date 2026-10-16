@@ -9,7 +9,7 @@ import { POSITIONS } from '../../shared/constants';
 import type { AppEnv } from '../env';
 import { auditStatement } from '../lib/audit';
 import { badRequest, newId, notFound, readJson, str } from '../lib/http';
-import { loadAccess, requirePermission, type Access } from '../auth/access';
+import { allowedDivisions, loadAccess, requireDivision, requirePermission, type Access } from '../auth/access';
 
 export const programAdminRoutes = new Hono<AppEnv>();
 // Session is enforced by the /api/admin router (index.ts).
@@ -23,16 +23,20 @@ async function loadProgram(db: D1Database, access: Access, id: string) {
     .first<{ id: string; locationId: string; name: string; position: string; isDefault: number }>();
   if (!p || !access.locations.has(p.locationId)) throw notFound();
   requirePermission(access, p.locationId, 'content.edit');
+  const scope = allowedDivisions(access, p.locationId);
+  if (scope && !scope.has(p.position)) throw notFound(); // D44: programs of other divisions stay hidden
   return p;
 }
 
 async function loadModule(db: D1Database, access: Access, id: string) {
   const m = await db
-    .prepare(`SELECT m.id, m.program_id AS programId, p.location_id AS locationId FROM modules m JOIN programs p ON p.id = m.program_id WHERE m.id = ?`)
+    .prepare(`SELECT m.id, m.program_id AS programId, p.location_id AS locationId, p.position FROM modules m JOIN programs p ON p.id = m.program_id WHERE m.id = ?`)
     .bind(id)
-    .first<{ id: string; programId: string; locationId: string }>();
+    .first<{ id: string; programId: string; locationId: string; position: string }>();
   if (!m || !access.locations.has(m.locationId)) throw notFound();
   requirePermission(access, m.locationId, 'content.edit');
+  const scope = allowedDivisions(access, m.locationId);
+  if (scope && !scope.has(m.position)) throw notFound();
   return m;
 }
 
@@ -76,7 +80,8 @@ programAdminRoutes.get('/locations/:locId/programs', async (c) => {
   )
     .bind(locId)
     .all<Record<string, unknown>>();
-  return c.json({ programs: results.map((r) => ({ ...r, isDefault: Boolean(r.isDefault) })) });
+  const scope = allowedDivisions(access, locId);
+  return c.json({ programs: results.filter((r) => !scope || scope.has(String(r.position))).map((r) => ({ ...r, isDefault: Boolean(r.isDefault) })) });
 });
 
 programAdminRoutes.post('/locations/:locId/programs', async (c) => {
@@ -89,6 +94,7 @@ programAdminRoutes.post('/locations/:locId/programs', async (c) => {
   const position = POSITIONS.find((p) => p === body.position);
   if (!name) throw badRequest('program_name_required');
   if (!position) throw badRequest('position_invalid');
+  requireDivision(access, locId, position);
   const hasDefault = await db.prepare(`SELECT 1 FROM programs WHERE location_id = ? AND position = ? AND is_default = 1`).bind(locId, position).first();
   const id = newId('prg');
   await db.batch([

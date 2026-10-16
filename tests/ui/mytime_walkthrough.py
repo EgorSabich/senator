@@ -14,7 +14,7 @@ with sync_playwright() as pw:
     o.goto(BASE+"/"); o.get_by_label("Login").fill("egor.wlasciciel"); o.get_by_label("PIN lub hasło").fill("TymczasoweHaslo1")
     o.get_by_role("button",name="Zaloguj się").click(); o.get_by_role("heading",name="Ustaw swoje hasło").wait_for()
     o.get_by_label("Obecne hasło").fill("TymczasoweHaslo1"); o.get_by_label("Nowe hasło").fill("NoweHasloEgora2026"); o.get_by_label("Powtórz").fill("NoweHasloEgora2026")
-    o.get_by_role("button",name="Zapisz").click(); o.get_by_role("heading",name="Pracownicy").wait_for()
+    o.get_by_role("button",name="Zapisz").click(); o.get_by_role("heading",name="Dziś",exact=True).wait_for()
     r=o.request; loc=r.get(BASE+"/api/admin/locations").json()["locations"][0]["id"]
     tt=r.post(BASE+f"/api/admin/locations/{loc}/terminals",data={"name":"Telefon sala"},headers=H).json()
     e=r.post(BASE+f"/api/admin/locations/{loc}/employees",data={"firstName":"Zofia","lastName":"Nowak","position":"waiter"},headers=H).json()

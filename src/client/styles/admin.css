@@ -1535,3 +1535,129 @@ input[type='checkbox']:disabled {
 .sch-grid .group-row .sch-hours-col {
   background: transparent;
 }
+.sch-cell:disabled {
+  cursor: default;
+}
+.sch-cell:disabled:hover {
+  background: none;
+}
+
+/* Dziś (D45) */
+.today-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 720px) {
+  .today-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.today-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+}
+.today-tile-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.today-tile-value {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.today-tile-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.today-tile.ok .today-tile-value {
+  color: var(--ok-fg);
+}
+.today-tile.bad {
+  border-color: var(--bad-border);
+}
+.today-tile.bad .today-tile-value {
+  color: var(--bad-fg);
+}
+.today-tile.warn {
+  border-color: var(--warn-border);
+}
+.today-tile.warn .today-tile-value {
+  color: var(--warn-fg);
+}
+.today-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.today-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.today-head .label {
+  margin: 0;
+}
+.today-head a {
+  font-size: 13px;
+  font-weight: 600;
+}
+.today-group {
+  display: flex;
+  flex-direction: column;
+}
+.today-group-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 8px 0 4px;
+}
+.today-row {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+}
+.today-time {
+  white-space: nowrap;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding-left: 8px;
+  border-left: 3px solid var(--c, transparent);
+}
+.today-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.today-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.today-list-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+}

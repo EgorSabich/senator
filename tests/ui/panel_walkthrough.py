@@ -31,7 +31,7 @@ with sync_playwright() as p:
     page.get_by_label("Powtórz").fill("NoweHasloEgora2026")
     shot(page, "02-change")
     page.get_by_role("button", name="Zapisz").click()
-    page.get_by_role("heading", name="Pracownicy").wait_for()
+    page.get_by_role("heading", name="Dziś", exact=True).wait_for()
 
     # add employee
     page.get_by_role("button", name="Dodaj pracownika").first.click()

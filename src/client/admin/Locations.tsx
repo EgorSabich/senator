@@ -24,7 +24,7 @@ interface LocationSettings {
 }
 
 export function Locations() {
-  const { refreshMe, locationId } = usePanel();
+  const { refreshMe, locationId, isOwner } = usePanel();
   const [list, setList] = useState<{ id: string; name: string }[] | null>(null);
   const [selected, setSelected] = useState<string>(locationId);
   const [name, setName] = useState('');
@@ -57,7 +57,15 @@ export function Locations() {
       <ErrorBox message={error} />
       <div className="btn-row" role="tablist" aria-label={t.title}>
         {list?.map((l) => (
-          <button key={l.id} role="tab" className="chip" aria-selected={selected === l.id} aria-pressed={selected === l.id} onClick={() => setSelected(l.id)} style={{ minHeight: 42, fontSize: 15 }}>
+          <button
+            key={l.id}
+            role="tab"
+            className="chip"
+            aria-selected={selected === l.id}
+            aria-pressed={selected === l.id}
+            onClick={() => setSelected(l.id)}
+            style={{ minHeight: 42, fontSize: 15 }}
+          >
             {l.name}
           </button>
         ))}
@@ -73,15 +81,17 @@ export function Locations() {
           }}
         />
       )}
-      <form onSubmit={submit} className="card" style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', maxWidth: 920 }}>
-        <div className="field" style={{ flex: '1 1 220px' }}>
-          <label htmlFor="locname">{t.newLocation}</label>
-          <input id="locname" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder={t.name} />
-        </div>
-        <Btn kind="primary" type="submit" disabled={!name.trim()}>
-          {t.add}
-        </Btn>
-      </form>
+      {isOwner && (
+        <form onSubmit={submit} className="card" style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', maxWidth: 920 }}>
+          <div className="field" style={{ flex: '1 1 220px' }}>
+            <label htmlFor="locname">{t.newLocation}</label>
+            <input id="locname" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder={t.name} />
+          </div>
+          <Btn kind="primary" type="submit" disabled={!name.trim()}>
+            {t.add}
+          </Btn>
+        </form>
+      )}
     </>
   );
 }
@@ -179,7 +189,13 @@ function LocationSettingsView({ id, onSaved }: { id: string; onSaved: () => Prom
         {DAYS.map((d) => (
           <div key={d} className="loc-day">
             <label htmlFor={`loc-h-${d}`}>{t.days[d]}</label>
-            <input id={`loc-h-${d}`} value={form.openingHours[d] ?? ''} onChange={(e) => set('openingHours', { ...form.openingHours, [d]: e.target.value })} maxLength={40} placeholder="08:00–02:00" />
+            <input
+              id={`loc-h-${d}`}
+              value={form.openingHours[d] ?? ''}
+              onChange={(e) => set('openingHours', { ...form.openingHours, [d]: e.target.value })}
+              maxLength={40}
+              placeholder="08:00–02:00"
+            />
           </div>
         ))}
       </fieldset>

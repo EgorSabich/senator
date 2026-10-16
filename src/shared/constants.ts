@@ -16,6 +16,9 @@ export const PERMISSIONS = [
   'checklists.view',
   'wages.manage',
   'schedule.manage',
+  'managers.manage',
+  'locations.manage',
+  'audit.view',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -26,6 +29,33 @@ export const DEFAULT_MANAGER_PERMISSIONS: Permission[] = ['employees.view', 'tra
  * No division entries = all divisions. Used by Grafik (and later Rekrutacja).
  */
 export const DIVISION_SCOPE_PREFIX = 'division:';
+/** Name of the role preset a manager was given (shown in Menedżerowie), stored like "role:head_chef". */
+export const ROLE_PREFIX = 'role:';
+
+const LEAD: Permission[] = [
+  'employees.view',
+  'employees.manage',
+  'training.assign',
+  'results.view',
+  'content.edit',
+  'time.manage',
+  'checklists.view',
+  'wages.manage',
+  'schedule.manage',
+];
+
+/**
+ * Leadership roles (D44). Each is a preset of permissions + divisions; the owner can still adjust single permissions.
+ * Divisions limit staff data, materials, programs, checklists, rates and editing the schedule (everyone sees the whole schedule).
+ */
+export const MANAGER_ROLES = {
+  general_manager: { permissions: 'all', divisions: [] as string[] },
+  floor_manager: { permissions: LEAD, divisions: ['waiter', 'host', 'call_center'] },
+  head_chef: { permissions: [...LEAD, 'menu.edit'], divisions: ['kitchen'] },
+  head_bartender: { permissions: [...LEAD, 'menu.edit'], divisions: ['bartender'] },
+  head_hookah: { permissions: LEAD, divisions: ['hookah_master'] },
+} as const;
+export type ManagerRole = keyof typeof MANAGER_ROLES;
 
 /** Positions. MVP trains only waiters; others exist for documents and future modules. */
 export const POSITIONS = ['waiter', 'host', 'shift_manager', 'bartender', 'kitchen', 'hookah_master', 'call_center'] as const;

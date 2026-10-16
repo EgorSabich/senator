@@ -30,6 +30,7 @@ interface Detail {
     attachment: { src: string; name: string } | null;
     positions: string[];
     checklistMode: 'individual' | 'shared' | null;
+    editable?: boolean;
     currentAcknowledgements: number;
   };
   draft: { title: string; body: RtNode; updatedAt: number } | null;
@@ -183,6 +184,7 @@ export function ContentEditor({ id }: { id: string }) {
           </Btn>
         </div>
       </div>
+      {item.editable === false && <div className="notice warn-notice">{t.readOnlyOutside}</div>}
       <ErrorBox message={error} />
       {notice && (
         <div className="notice" role="status">

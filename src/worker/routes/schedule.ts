@@ -124,9 +124,10 @@ scheduleAdminRoutes.get('/locations/:locId/schedule', async (c) => {
       .bind(locId, days[0], last),
   ]);
   const { dow, hour } = await rulesOf(db, locId);
+  // D44: everyone with the schedule sees the whole team; editing stays within one's divisions
   const inScope = (d: string) => !allowed || allowed.has(d);
-  const rows = (shifts!.results as ShiftRow[]).filter((s) => inScope(s.division));
-  const ppl = (await people(db, locId)).map((p) => ({ ...p, divisions: p.divisions.filter(inScope) })).filter((p) => p.divisions.length);
+  const rows = shifts!.results as ShiftRow[];
+  const ppl = await people(db, locId);
   return c.json({
     week: monday ?? weekStart(days[0]!),
     days,
@@ -135,9 +136,10 @@ scheduleAdminRoutes.get('/locations/:locId/schedule', async (c) => {
     unavailability: unav!.results,
     templates: (templates!.results as { division: string }[]).filter((t) => inScope(t.division)),
     actual: entries!.results,
-    unpublished: rows.filter(changed).length,
+    unpublished: rows.filter((r) => inScope(r.division) && changed(r)).length,
     deadline: monday ? unavailabilityDeadline(monday, dow, hour) : null,
     divisions: allowed ? [...allowed] : null,
+    editable: allowed ? [...allowed] : null,
   });
 });
 

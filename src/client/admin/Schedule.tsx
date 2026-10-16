@@ -53,6 +53,8 @@ interface WeekView {
   unpublished: number;
   deadline: number | null;
   divisions: string[] | null;
+  /** divisions I may plan (null = all) — everyone sees the whole team (D44) */
+  editable?: string[] | null;
 }
 
 const short = (p: { firstName: string; lastName: string }) => `${p.firstName} ${p.lastName.trim().charAt(0)}.`;
@@ -301,7 +303,13 @@ export function Schedule() {
                         const act = data.actual.filter((a) => a.userId === p.id && a.date === d);
                         return (
                           <td key={d} className={`${d === today ? 'today' : ''}${isWeekend(d) ? ' weekend' : ''}${off ? ' sch-off' : ''}`}>
-                            <button type="button" className="sch-cell" onClick={() => setCell({ person: p, division: g, date: d })} aria-label={t.cellLabel(short(p), d)}>
+                            <button
+                              type="button"
+                              className="sch-cell"
+                              disabled={Boolean(data.editable && !data.editable.includes(g))}
+                              onClick={() => setCell({ person: p, division: g, date: d })}
+                              aria-label={t.cellLabel(short(p), d)}
+                            >
                               {own.map((s) => (
                                 <span
                                   key={s.id}

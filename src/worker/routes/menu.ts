@@ -32,7 +32,7 @@ import type { AppEnv } from '../env';
 import { auditStatement } from '../lib/audit';
 import { ApiError, badRequest, newId, notFound, readJson, str } from '../lib/http';
 import { indexStatements, unindexStatement } from '../lib/search';
-import { loadAccess, requireLocation, requirePermission, type Access } from '../auth/access';
+import { allowedDivisions, loadAccess, requireLocation, requirePermission, type Access } from '../auth/access';
 import { storeBytes, storeUpload } from './media';
 import { confirmMatches, purgeMenuItemStatements } from '../lib/purge';
 
@@ -96,6 +96,20 @@ function requireMenuView(access: Access, locationId: string): void {
   const perms = access.locations.get(locationId);
   if (!perms) throw notFound();
   if (!perms.has('menu.edit')) throw new ApiError(403, 'forbidden');
+}
+
+/** D44: a head chef edits the kitchen menu, a head bartender the bar; unscoped people both. */
+function menuSections(access: Access, locationId: string): Set<string> | null {
+  const scope = allowedDivisions(access, locationId);
+  if (!scope) return null;
+  const out = new Set<string>();
+  if (scope.has('kitchen')) out.add('kitchen');
+  if (scope.has('bartender')) out.add('bar');
+  return out;
+}
+function requireMenuSection(access: Access, locationId: string, section: string): void {
+  const allowed = menuSections(access, locationId);
+  if (allowed && !allowed.has(section)) throw new ApiError(403, 'outside_divisions');
 }
 
 async function loadItem(db: D1Database, access: Access, id: string): Promise<ItemRow> {
@@ -262,7 +276,9 @@ menuAdminRoutes.get('/locations/:locId/menu', async (c) => {
       .bind(locId),
   ]);
   const notes = Object.fromEntries((sections!.results as { section: string; note: string | null }[]).map((s) => [s.section, s.note]));
+  const editable = menuSections(access, locId);
   return c.json({
+    editableSections: editable ? [...editable] : [...MENU_SECTIONS],
     sections: Object.fromEntries(MENU_SECTIONS.map((s) => [s, { note: notes[s] ?? null }])),
     categories: categories!.results,
     items: (items!.results as Record<string, unknown>[]).map((r) => {
@@ -292,6 +308,7 @@ menuAdminRoutes.post('/locations/:locId/menu/categories', async (c) => {
   const section = MENU_SECTIONS.find((s) => s === body.section);
   const name = str(body.name, 80);
   if (!section) throw badRequest('section_invalid');
+  requireMenuSection(access, locId, section);
   if (!name) throw badRequest('category_name_required');
   const dup = await db.prepare(`SELECT 1 FROM menu_categories WHERE location_id = ? AND section = ? AND name = ?`).bind(locId, section, name).first();
   if (dup) throw new ApiError(409, 'category_exists');
@@ -313,6 +330,7 @@ menuAdminRoutes.put('/menu/categories/:id', async (c) => {
     .first<{ id: string; locationId: string; section: string; name: string; sortOrder: number }>();
   if (!cat || !access.locations.has(cat.locationId)) throw notFound();
   requirePermission(access, cat.locationId, 'menu.edit');
+  requireMenuSection(access, cat.locationId, cat.section);
   const body = await readJson<{ name?: unknown; sortOrder?: unknown }>(c.req.raw);
   const name = body.name === undefined ? cat.name : str(body.name, 80);
   if (!name) throw badRequest('category_name_required');
@@ -336,6 +354,7 @@ menuAdminRoutes.put('/locations/:locId/menu/sections/:section', async (c) => {
   requirePermission(access, locId, 'menu.edit');
   const section = MENU_SECTIONS.find((s) => s === c.req.param('section'));
   if (!section) throw notFound();
+  requireMenuSection(access, locId, section);
   const body = await readJson<{ note?: unknown }>(c.req.raw);
   if (body.note !== null && typeof body.note !== 'string') throw badRequest('invalid_input');
   const note = typeof body.note === 'string' && body.note.trim() ? body.note.replace(/\r\n?/g, '\n').trim() : null;
@@ -356,6 +375,7 @@ menuAdminRoutes.post('/locations/:locId/menu/items', async (c) => {
   requirePermission(access, locId, 'menu.edit');
   const body = await readJson<Record<string, unknown>>(c.req.raw);
   const cat = await categoryOf(db, locId, body.categoryId);
+  requireMenuSection(access, locId, cat.section);
   const texts = parseTexts(body, textsOf({}));
   const ingredients = parseIngredients(body.ingredients);
   const max = await db.prepare(`SELECT COALESCE(MAX(sort_order), 0) AS m FROM menu_items WHERE category_id = ?`).bind(cat.id).first<{ m: number }>();
@@ -427,6 +447,7 @@ menuAdminRoutes.put('/menu/items/:id', async (c) => {
   const access = await loadAccess(db, c.var.user);
   const row = await loadItem(db, access, c.req.param('id'));
   requirePermission(access, row.locationId, 'menu.edit');
+  requireMenuSection(access, row.locationId, row.section);
   const body = await readJson<{ texts?: Record<string, unknown>; ingredients?: unknown; categoryId?: unknown; changeLevel?: unknown; changeNote?: unknown }>(c.req.raw);
   const before = textsOf(row);
   const texts = parseTexts(body.texts ?? {}, before);
@@ -474,6 +495,7 @@ menuAdminRoutes.put('/menu/items/:id/allergens', async (c) => {
   const access = await loadAccess(db, c.var.user);
   const row = await loadItem(db, access, c.req.param('id'));
   requirePermission(access, row.locationId, 'menu.edit');
+  requireMenuSection(access, row.locationId, row.section);
   if (row.section !== 'kitchen') throw badRequest('allergens_kitchen_only');
   const body = await readJson<{ allergens?: Record<string, unknown>; diets?: Record<string, unknown>; changeNote?: unknown }>(c.req.raw);
   if (!body.allergens || typeof body.allergens !== 'object' || !body.diets || typeof body.diets !== 'object') throw badRequest('invalid_input');
@@ -527,6 +549,7 @@ menuAdminRoutes.post('/menu/items/:id/photo', async (c) => {
   const access = await loadAccess(db, c.var.user);
   const row = await loadItem(db, access, c.req.param('id'));
   requirePermission(access, row.locationId, 'menu.edit');
+  requireMenuSection(access, row.locationId, row.section);
   const body = await c.req.parseBody();
   const file = body.file;
   if (!(file instanceof File)) throw badRequest('file_required');
@@ -543,6 +566,7 @@ menuAdminRoutes.delete('/menu/items/:id/photo', async (c) => {
   const access = await loadAccess(db, c.var.user);
   const row = await loadItem(db, access, c.req.param('id'));
   requirePermission(access, row.locationId, 'menu.edit');
+  requireMenuSection(access, row.locationId, row.section);
   if (!row.photoKey) return c.json({ ok: true });
   // The file stays in R2 (history); only the link is removed.
   await db.batch([
@@ -558,6 +582,7 @@ for (const [path, active] of [['archive', false], ['restore', true]] as const) {
     const access = await loadAccess(db, c.var.user);
     const row = await loadItem(db, access, c.req.param('id'));
     requirePermission(access, row.locationId, 'menu.edit');
+  requireMenuSection(access, row.locationId, row.section);
     if (Boolean(row.isActive) === active) return c.json({ ok: true });
     await db.batch([
       db.prepare(`UPDATE menu_items SET is_active = ?, updated_at = ? WHERE id = ?`).bind(active ? 1 : 0, Date.now(), row.id),
@@ -574,6 +599,7 @@ menuAdminRoutes.delete('/menu/items/:id', async (c) => {
   const access = await loadAccess(db, c.var.user);
   const row = await loadItem(db, access, c.req.param('id'));
   requirePermission(access, row.locationId, 'menu.edit');
+  requireMenuSection(access, row.locationId, row.section);
   if (row.isActive) throw new ApiError(409, 'delete_needs_archive');
   const body = await readJson<{ confirm?: unknown }>(c.req.raw);
   if (!confirmMatches(body.confirm, row.nameGuest ?? '')) throw badRequest('delete_confirm_mismatch');
@@ -648,6 +674,10 @@ menuAdminRoutes.post('/locations/:locId/menu/import', async (c) => {
     const catName = str(raw.category, 80);
     const importKey = str(raw.importKey, 300);
     if (!section || !catName || !importKey) throw badRequest('bundle_invalid');
+    if (menuSections(access, locId) && !menuSections(access, locId)!.has(section)) {
+      result.skipped.push(str(raw.nameGuest, 160) || importKey);
+      continue;
+    }
     const texts = parseTexts(raw, textsOf({}));
     const ingredients = parseIngredients(raw.ingredients);
 

@@ -63,6 +63,39 @@ export function requireDivision(access: Access, locationId: string, division: st
   if (d && !d.has(division)) throw new ApiError(403, 'forbidden');
 }
 
+/** Does a person (by positions at the location) fall into the actor's divisions? Owner / unscoped: always. */
+export async function userInScope(db: D1Database, access: Access, locationId: string, userId: string): Promise<boolean> {
+  const scope = allowedDivisions(access, locationId);
+  if (!scope) return true;
+  const { results } = await db.prepare(`SELECT position FROM user_locations WHERE user_id = ? AND location_id = ?`).bind(userId, locationId).all<{ position: string }>();
+  return results.some((r) => scope.has(r.position));
+}
+
+/** Ids of people at the location the actor may see in staff data (null = everyone). */
+export async function scopedUserIds(db: D1Database, access: Access, locationId: string): Promise<Set<string> | null> {
+  const scope = allowedDivisions(access, locationId);
+  if (!scope) return null;
+  const { results } = await db
+    .prepare(`SELECT DISTINCT user_id AS id FROM user_locations WHERE location_id = ? AND position IN (${[...scope].map(() => '?').join(', ')})`)
+    .bind(locationId, ...scope)
+    .all<{ id: string }>();
+  return new Set(results.map((r) => r.id));
+}
+
+/** Material/program positions must stay inside the actor's divisions (an empty list = "everyone" is not allowed then). */
+export function requirePositionsInScope(access: Access, locationId: string | null, positions: string[]): void {
+  if (locationId === null) return;
+  const scope = allowedDivisions(access, locationId);
+  if (!scope) return;
+  if (!positions.length || positions.some((p) => !scope.has(p))) throw new ApiError(403, 'outside_divisions');
+}
+
+/** Owner, or a manager holding `permission` in at least one location (D44: zarządzający). */
+export function requireOwnerOr(access: Access, permission: Permission): void {
+  if (access.role === 'owner') return;
+  if (![...access.locations.values()].some((p) => p.has(permission))) throw new ApiError(403, 'forbidden');
+}
+
 export const isDivision = (v: unknown): v is string => typeof v === 'string' && (POSITIONS as readonly string[]).includes(v);
 
 export function requireLocation(access: Access, locationId: string): void {
@@ -116,7 +149,9 @@ export async function requireManageableUser(
     .prepare(`SELECT DISTINCT location_id AS loc FROM user_locations WHERE user_id = ?`)
     .bind(targetId)
     .all<{ loc: string }>();
-  const shared = results.find((r) => access.locations.get(r.loc)?.has(permission));
+  const candidates = results.filter((r) => access.locations.get(r.loc)?.has(permission));
+  let shared: { loc: string } | undefined;
+  for (const r of candidates) if (await userInScope(db, access, r.loc, targetId)) shared = r;
   if (!shared) {
     // Visible to the actor at all? Then 403, otherwise hide it.
     if (results.some((r) => access.locations.has(r.loc))) throw new ApiError(403, 'forbidden');
