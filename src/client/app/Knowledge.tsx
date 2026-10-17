@@ -26,22 +26,49 @@ interface DocItem {
 const t = pl.academy.knowledge;
 const KIND_ORDER = ['regulation', 'sop', 'checklist'];
 
-export function Knowledge({ tab }: { tab: 'sb' | 'library' | 'lessons' }) {
+interface SbData {
+  tabs: { id: string; title: string }[];
+  items: (SbItem & { tabId: string })[];
+}
+
+/** Wiedza: one chip per book this person has (Service Book for waiters, Bar Book…), then lessons and documents. */
+export function Knowledge({ tab, tabId }: { tab: 'sb' | 'library' | 'lessons'; tabId?: string }) {
+  const { locationId } = useAcademy();
+  const { data, error } = useApi<SbData>(`/api/locations/${locationId}/service-book`);
+  const books = data?.tabs ?? [];
+  // "/wiedza" opens the first book; with no books it is the lessons
+  const book = tab === 'sb' ? (books.find((b) => b.id === tabId) ?? (tabId ? null : books[0] ?? null)) : null;
+  const shown = tab === 'sb' && data && !book ? 'lessons' : tab;
   return (
     <main className="a-main">
       <h1 className="a-title">{t.title}</h1>
       <nav className="a-chips" aria-label={t.title}>
-        <a className="a-chip" href="/wiedza" onClick={onNav('/wiedza')} aria-current={tab === 'sb' ? 'page' : undefined}>
-          {t.serviceBook}
-        </a>
-        <a className="a-chip" href="/wiedza/lekcje" onClick={onNav('/wiedza/lekcje')} aria-current={tab === 'lessons' ? 'page' : undefined}>
+        {books.map((b) => {
+          const href = b.id === books[0]?.id ? '/wiedza' : `/wiedza/k/${b.id}`;
+          return (
+            <a key={b.id} className="a-chip" href={href} onClick={onNav(href)} aria-current={shown === 'sb' && book?.id === b.id ? 'page' : undefined}>
+              {b.title}
+            </a>
+          );
+        })}
+        <a className="a-chip" href="/wiedza/lekcje" onClick={onNav('/wiedza/lekcje')} aria-current={shown === 'lessons' ? 'page' : undefined}>
           {t.lessons}
         </a>
-        <a className="a-chip" href="/wiedza/regulaminy" onClick={onNav('/wiedza/regulaminy')} aria-current={tab === 'library' ? 'page' : undefined}>
+        <a className="a-chip" href="/wiedza/regulaminy" onClick={onNav('/wiedza/regulaminy')} aria-current={shown === 'library' ? 'page' : undefined}>
           {t.library}
         </a>
       </nav>
-      {tab === 'sb' ? <ServiceBook /> : tab === 'lessons' ? <Lessons /> : <Library />}
+      {shown === 'sb' ? (
+        <>
+          <Problem message={error} />
+          {!data && !error && <Loading />}
+          {book && <Book items={(data?.items ?? []).filter((i) => i.tabId === book.id)} />}
+        </>
+      ) : shown === 'lessons' ? (
+        <Lessons />
+      ) : (
+        <Library />
+      )}
     </main>
   );
 }
@@ -93,30 +120,25 @@ function Lessons() {
   );
 }
 
-function ServiceBook() {
-  const { locationId } = useAcademy();
-  const { data, error } = useApi<{ items: SbItem[] }>(`/api/locations/${locationId}/service-book`);
+function Book({ items }: { items: SbItem[] }) {
   return (
     <>
-      <Problem message={error} />
-      {!data && !error && <Loading />}
-      {data && data.items.length === 0 && <p className="a-sub">{t.empty}</p>}
-      {data &&
-        groupBySection(data.items).map(([section, items]) => (
-          <section key={section} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {section && <h2 className="a-label">{section}</h2>}
-            <div className="a-list">
-              {items.map((i) => (
-                <a key={i.id} className="a-row" href={contentHref(i.id)} onClick={onNav(contentHref(i.id))}>
-                  <span className="grow">
-                    <span className="t">{i.title}</span>
-                  </span>
-                  {i.status !== 'new' && <StatusPill status={i.status} updated={i.updated} />}
-                </a>
-              ))}
-            </div>
-          </section>
-        ))}
+      {items.length === 0 && <p className="a-sub">{t.empty}</p>}
+      {groupBySection(items).map(([section, list]) => (
+        <section key={section} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {section && <h2 className="a-label">{section}</h2>}
+          <div className="a-list">
+            {list.map((i) => (
+              <a key={i.id} className="a-row" href={contentHref(i.id)} onClick={onNav(contentHref(i.id))}>
+                <span className="grow">
+                  <span className="t">{i.title}</span>
+                </span>
+                {i.status !== 'new' && <StatusPill status={i.status} updated={i.updated} />}
+              </a>
+            ))}
+          </div>
+        </section>
+      ))}
     </>
   );
 }

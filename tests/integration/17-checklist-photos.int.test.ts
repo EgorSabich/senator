@@ -67,11 +67,14 @@ describe('photo items', () => {
     expect((await getRaw(owner, `/api/admin/checklists/marks/${by.photoId}/photo`)).status).toBe(404);
   });
 
-  it('shared lists ignore photo items', async () => {
-    await owner.put(`/api/admin/content/${listId}`, { checklistMode: 'shared' });
+  it('a "one for the shift" item can need a photo too (2026-10-17)', async () => {
     const v = await a.get(`/api/checklists/${listId}/today`);
-    expect(v.data.items.some((i: { photo?: boolean }) => i.photo)).toBe(false);
-    expect((await a.post(`/api/checklists/${listId}/marks`, { key: v.data.items[0].key })).status).toBe(200);
-    await owner.put(`/api/admin/content/${listId}`, { checklistMode: 'individual' });
+    const key = v.data.items[0].key;
+    await owner.put(`/api/admin/content/${listId}`, { checklistSharedKeys: [key] });
+    const v2 = await a.get(`/api/checklists/${listId}/today`);
+    expect(v2.data.items[0]).toMatchObject({ shared: true, photo: true });
+    expect((await a.post(`/api/checklists/${listId}/marks`, { key })).data.error).toBe('photo_required');
+    expect((await a.post(`/api/checklists/${listId}/marks`, { key, photo: JPEG })).status).toBe(200);
+    await owner.put(`/api/admin/content/${listId}`, { checklistSharedKeys: [] });
   });
 });

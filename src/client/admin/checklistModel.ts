@@ -6,6 +6,8 @@ export interface Item {
   uid: string;
   text: string;
   photo: boolean;
+  /** one person ticks it for the whole shift (otherwise everyone ticks it) */
+  shared: boolean;
   origKey: string | null;
 }
 export interface Section {
@@ -32,7 +34,7 @@ function nodeText(n: RtNode): string {
 }
 
 /** Same walk as checklistItems(): headings start sections, every list item (nested too) is one task. */
-export function docToModel(doc: RtNode | null, photoKeys: string[]): Pick<Model, 'sections' | 'extra'> {
+export function docToModel(doc: RtNode | null, photoKeys: string[], sharedKeys: string[] = []): Pick<Model, 'sections' | 'extra'> {
   const sections: Section[] = [];
   const extra: RtNode[] = [];
   const items: Item[] = [];
@@ -54,7 +56,7 @@ export function docToModel(doc: RtNode | null, photoKeys: string[]): Pick<Model,
         .replace(/\s+/g, ' ')
         .trim();
       if (text) {
-        const it: Item = { uid: uid(), text, photo: false, origKey: null };
+        const it: Item = { uid: uid(), text, photo: false, shared: false, origKey: null };
         section().items.push(it);
         items.push(it);
       }
@@ -70,7 +72,7 @@ export function docToModel(doc: RtNode | null, photoKeys: string[]): Pick<Model,
   }
   // keys exactly as the server counts them (section + text + repeats)
   const keys = checklistItems(doc);
-  if (keys.length === items.length) items.forEach((it, i) => ((it.origKey = keys[i]!.key), (it.photo = photoKeys.includes(keys[i]!.key))));
+  if (keys.length === items.length) items.forEach((it, i) => ((it.origKey = keys[i]!.key), (it.photo = photoKeys.includes(keys[i]!.key)), (it.shared = sharedKeys.includes(keys[i]!.key))));
   return { sections: sections.length ? sections : [{ uid: uid(), name: '', items: [] }], extra };
 }
 

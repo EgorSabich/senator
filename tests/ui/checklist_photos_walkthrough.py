@@ -60,8 +60,8 @@ with sync_playwright() as pw:
     # panel: checklist photo
     o.goto(BASE+"/panel/listy"); o.locator(".cl-fold").first.wait_for(); o.wait_for_timeout(400); o.screenshot(path=f"{OUT}/i10a-panel-folded.png", full_page=True)
     o.locator(".cl-fold:not(.open) .fold-head").first.click(); o.wait_for_timeout(700); o.screenshot(path=f"{OUT}/i10-panel-list-photo.png", full_page=True)
-    o.locator(".cl-photo-btn").first.click(); o.locator(".cl-photo-big").wait_for(); o.wait_for_timeout(700)
-    assert o.evaluate("document.querySelector('.cl-photo-big').naturalWidth")>0
+    o.locator(".cl-photo-btn").first.click(); o.locator(".lightbox img").wait_for(); o.wait_for_timeout(700)
+    assert o.evaluate("document.querySelector('.lightbox img').naturalWidth")>0
     o.screenshot(path=f"{OUT}/i11-panel-photo-lightbox.png"); o.keyboard.press("Escape"); o.wait_for_timeout(300)
     b.close()
 print("\n".join(errors) if errors else "NO_ERRORS")

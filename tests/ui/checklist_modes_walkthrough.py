@@ -58,7 +58,7 @@ with sync_playwright() as pw:
     assert a.locator(".a-task.done").count()==0, "Adam sees Zofia's marks"
     a.get_by_role("button",name=re.compile("Uzupełnij serwetki")).click(); a.wait_for_timeout(400); a.screenshot(path=f"{OUT}/c06-adam.png", full_page=True)
     # panel day view
-    o.goto(BASE+"/panel/listy"); o.get_by_text("Postęp osób na zmianie").wait_for(); o.wait_for_timeout(500)
+    o.goto(BASE+"/panel/listy"); o.get_by_text("Postęp osób na zmianie").first.wait_for(); o.wait_for_timeout(500)
     assert o.get_by_text("4 z 4").count()>=1 and o.get_by_text("1 z 4").count()>=1 and o.get_by_text("0 z 4").count()>=1
     o.screenshot(path=f"{OUT}/c07-panel-day.png", full_page=True)
     o.get_by_role("tab",name="Statystyka").click(); o.wait_for_timeout(900); o.screenshot(path=f"{OUT}/c08-panel-stats.png", full_page=True)

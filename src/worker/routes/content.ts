@@ -14,6 +14,7 @@ import { indexStatements, unindexStatement } from '../lib/search';
 import { allowedDivisions, loadAccess, requireOwner, requirePermission, requirePositionsInScope, type Access } from '../auth/access';
 import { storeUpload } from './media';
 import { deleteKeys } from '../jobs/punchPhotos';
+import { DEFAULT_TAB } from '../lib/learning';
 import { confirmMatches, purgeContentStatements } from '../lib/purge';
 import { CONTENT_BUNDLE_FORMAT, CONTENT_IMPORT_CHUNK } from '../../shared/contentBundle';
 
@@ -23,6 +24,8 @@ export const contentAdminRoutes = new Hono<AppEnv>();
 interface ItemRow {
   checklistMode: string;
   checklistPhotoKeys: string | null;
+  checklistSharedKeys: string | null;
+  tabId: string | null;
   id: string;
   locationId: string | null;
   kind: string;
@@ -45,7 +48,7 @@ interface ItemRow {
 const ITEM_COLUMNS = `id, location_id AS locationId, kind, title, slug, section, status, current_version_id AS currentVersionId,
   requires_ack AS requiresAck, external_url AS externalUrl, attachment_key AS attachmentKey, attachment_name AS attachmentName,
   draft_title AS draftTitle, draft_body_json AS draftBodyJson, draft_updated_at AS draftUpdatedAt, sort_order AS sortOrder,
-  updated_at AS updatedAt, checklist_mode AS checklistMode, checklist_photo_keys AS checklistPhotoKeys`;
+  updated_at AS updatedAt, checklist_mode AS checklistMode, checklist_photo_keys AS checklistPhotoKeys, checklist_shared_keys AS checklistSharedKeys, tab_id AS tabId`;
 
 function requireEdit(access: Access, locationId: string | null): void {
   if (locationId === null) requireOwner(access);
@@ -104,6 +107,124 @@ function parseExternalUrl(v: unknown): string | null {
   return v.trim();
 }
 
+/* ───────── Wiedza tabs (2026-10-17) ───────── */
+
+interface TabRow {
+  id: string;
+  locationId: string | null;
+  title: string;
+  positions: string | null;
+  sortOrder: number;
+}
+
+/** A tab a page can be put in: shared tabs for any page, a location's tabs only for that location's pages. */
+async function tabForItem(db: D1Database, access: Access, tabId: unknown, itemLocationId: string | null): Promise<TabRow> {
+  if (typeof tabId !== 'string') throw badRequest('invalid_input');
+  const tab = await db
+    .prepare(`SELECT id, location_id AS locationId, title, positions, sort_order AS sortOrder FROM knowledge_tabs WHERE id = ?`)
+    .bind(tabId)
+    .first<TabRow>();
+  if (!tab || (tab.locationId !== null && tab.locationId !== itemLocationId)) throw badRequest('tab_invalid');
+  if (tab.locationId !== null && !access.locations.has(tab.locationId)) throw badRequest('tab_invalid');
+  return tab;
+}
+
+/** A leader edits a tab when every position it is for is inside their divisions (owner: also shared tabs). */
+function canEditTab(access: Access, tab: TabRow): boolean {
+  if (tab.locationId === null) return access.role === 'owner';
+  if (!access.locations.get(tab.locationId)?.has('content.edit') && access.role !== 'owner') return false;
+  return scopeVerdict(access, tab.locationId, tab.positions ? tab.positions.split(',') : []) === 'edit';
+}
+
+function parseTabInput(body: { title?: unknown; positions?: unknown }) {
+  const title = str(body.title, 60);
+  if (!title) throw badRequest('title_required');
+  const positions = parsePositions(body.positions ?? []);
+  return { title, positions };
+}
+
+contentAdminRoutes.get('/locations/:locId/knowledge-tabs', async (c) => {
+  const locId = c.req.param('locId');
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  requirePermission(access, locId, 'content.edit');
+  const { results } = await db
+    .prepare(
+      `SELECT kt.id, kt.location_id AS locationId, kt.title, kt.positions, kt.sort_order AS sortOrder,
+              (SELECT COUNT(*) FROM content_items ci WHERE ci.kind = 'service_book' AND ci.status != 'archived' AND COALESCE(ci.tab_id, '${DEFAULT_TAB}') = kt.id
+                 AND (ci.location_id = ?1 OR ci.location_id IS NULL)) AS pages
+       FROM knowledge_tabs kt WHERE kt.location_id = ?1 OR kt.location_id IS NULL ORDER BY kt.sort_order, kt.title`,
+    )
+    .bind(locId)
+    .all<TabRow & { pages: number }>();
+  return c.json({
+    tabs: results
+      .filter((t) => scopeVerdict(access, t.locationId ?? locId, t.positions ? t.positions.split(',') : []) !== 'none')
+      .map((t) => ({ ...t, positions: t.positions ? t.positions.split(',') : [], shared: t.locationId === null, builtIn: t.id === DEFAULT_TAB, editable: canEditTab(access, t) })),
+  });
+});
+
+contentAdminRoutes.post('/locations/:locId/knowledge-tabs', async (c) => {
+  const locId = c.req.param('locId');
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  requirePermission(access, locId, 'content.edit');
+  const { title, positions } = parseTabInput(await readJson(c.req.raw));
+  requirePositionsInScope(access, locId, positions);
+  const id = newId('kt');
+  const now = Date.now();
+  const max = await db.prepare(`SELECT MAX(sort_order) AS m FROM knowledge_tabs WHERE location_id = ? OR location_id IS NULL`).bind(locId).first<{ m: number | null }>();
+  await db.batch([
+    db
+      .prepare(`INSERT INTO knowledge_tabs (id, location_id, title, positions, sort_order, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(id, locId, title, positions.length ? positions.join(',') : null, (max?.m ?? 0) + 1, c.var.user.id, now, now),
+    auditStatement(db, { actorId: c.var.user.id, locationId: locId, action: 'knowledge_tab.create', entityType: 'knowledge_tab', entityId: id, after: { title, positions } }),
+  ]);
+  return c.json({ id }, 201);
+});
+
+async function loadTab(db: D1Database, access: Access, id: string): Promise<TabRow> {
+  const tab = await db
+    .prepare(`SELECT id, location_id AS locationId, title, positions, sort_order AS sortOrder FROM knowledge_tabs WHERE id = ?`)
+    .bind(id)
+    .first<TabRow>();
+  if (!tab || (tab.locationId !== null && !access.locations.has(tab.locationId))) throw notFound();
+  if (!canEditTab(access, tab)) throw new ApiError(403, tab.locationId === null ? 'forbidden' : 'outside_divisions');
+  return tab;
+}
+
+contentAdminRoutes.put('/knowledge-tabs/:id', async (c) => {
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  const tab = await loadTab(db, access, c.req.param('id'));
+  const body = await readJson<{ title?: unknown; positions?: unknown; sortOrder?: unknown }>(c.req.raw);
+  const { title, positions } = parseTabInput({ title: body.title ?? tab.title, positions: body.positions ?? (tab.positions ? tab.positions.split(',') : []) });
+  requirePositionsInScope(access, tab.locationId, positions);
+  const sortOrder = Number.isInteger(body.sortOrder) ? (body.sortOrder as number) : tab.sortOrder;
+  await db.batch([
+    db
+      .prepare(`UPDATE knowledge_tabs SET title = ?, positions = ?, sort_order = ?, updated_at = ? WHERE id = ?`)
+      .bind(title, positions.length ? positions.join(',') : null, sortOrder, Date.now(), tab.id),
+    auditStatement(db, { actorId: c.var.user.id, locationId: tab.locationId, action: 'knowledge_tab.update', entityType: 'knowledge_tab', entityId: tab.id, before: { title: tab.title, positions: tab.positions }, after: { title, positions } }),
+  ]);
+  return c.json({ ok: true });
+});
+
+/** Only an empty tab goes (pages first move elsewhere or are deleted); the built-in Service Book stays. */
+contentAdminRoutes.delete('/knowledge-tabs/:id', async (c) => {
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  const tab = await loadTab(db, access, c.req.param('id'));
+  if (tab.id === DEFAULT_TAB) throw new ApiError(409, 'tab_builtin');
+  const used = await db.prepare(`SELECT COUNT(*) AS n FROM content_items WHERE tab_id = ?`).bind(tab.id).first<{ n: number }>();
+  if (used && used.n > 0) throw new ApiError(409, 'tab_not_empty', { pages: used.n });
+  await db.batch([
+    db.prepare(`DELETE FROM knowledge_tabs WHERE id = ?`).bind(tab.id),
+    auditStatement(db, { actorId: c.var.user.id, locationId: tab.locationId, action: 'knowledge_tab.delete', entityType: 'knowledge_tab', entityId: tab.id, before: { title: tab.title } }),
+  ]);
+  return c.json({ ok: true });
+});
+
 /* ───────── List & create ───────── */
 
 contentAdminRoutes.get('/locations/:locId/content', async (c) => {
@@ -120,7 +241,8 @@ contentAdminRoutes.get('/locations/:locId/content', async (c) => {
               ci.draft_title AS draftTitle, ci.draft_updated_at AS draftUpdatedAt, ci.updated_at AS updatedAt,
               ci.external_url AS externalUrl, ci.attachment_name AS attachmentName, ci.import_key IS NOT NULL AS imported,
               (SELECT version_no FROM content_versions v WHERE v.id = ci.current_version_id) AS versionNo,
-              (SELECT group_concat(position) FROM content_item_positions p WHERE p.content_item_id = ci.id) AS positions
+              (SELECT group_concat(position) FROM content_item_positions p WHERE p.content_item_id = ci.id) AS positions,
+              CASE WHEN ci.kind = 'service_book' THEN COALESCE(ci.tab_id, '${DEFAULT_TAB}') END AS tabId
        FROM content_items ci
        WHERE (ci.location_id = ? OR ci.location_id IS NULL) ${kind ? 'AND ci.kind = ?' : ''}
        ORDER BY ci.kind, ci.section, ci.sort_order, ci.title`,
@@ -153,7 +275,7 @@ contentAdminRoutes.post('/locations/:locId/content', async (c) => {
   const locId = c.req.param('locId');
   const db = c.env.DB;
   const access = await loadAccess(db, c.var.user);
-  const body = await readJson<{ kind?: unknown; title?: unknown; section?: unknown; shared?: unknown }>(c.req.raw);
+  const body = await readJson<{ kind?: unknown; title?: unknown; section?: unknown; shared?: unknown; tabId?: unknown }>(c.req.raw);
   const shared = body.shared === true;
   if (shared) requireOwner(access);
   else requirePermission(access, locId, 'content.edit');
@@ -163,6 +285,7 @@ contentAdminRoutes.post('/locations/:locId/content', async (c) => {
   if (!title) throw badRequest('title_required');
   const section = str(body.section, 120);
   const locationId = shared ? null : locId;
+  const tab = kind === 'service_book' && body.tabId !== undefined && body.tabId !== null ? await tabForItem(db, access, body.tabId, locationId) : null;
   const id = newId('ci');
   const now = Date.now();
   const isDocument = kind !== 'lesson'; // Service Book is mandatory to read too (D38)
@@ -170,10 +293,10 @@ contentAdminRoutes.post('/locations/:locId/content', async (c) => {
     db
       .prepare(
         `INSERT INTO content_items (id, location_id, kind, title, slug, section, status, requires_ack, draft_title, draft_body_json,
-           draft_updated_at, draft_updated_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)`,
+           draft_updated_at, draft_updated_by, created_at, updated_at, tab_id)
+         VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, locationId, kind, title, await uniqueSlug(db, locationId, title), section, isDocument ? 1 : 0, title, JSON.stringify(emptyDoc()), now, c.var.user.id, now, now),
+      .bind(id, locationId, kind, title, await uniqueSlug(db, locationId, title), section, isDocument ? 1 : 0, title, JSON.stringify(emptyDoc()), now, c.var.user.id, now, now, tab && tab.id !== DEFAULT_TAB ? tab.id : null),
     auditStatement(db, { actorId: c.var.user.id, locationId, action: 'content.create', entityType: 'content', entityId: id, after: { kind, title, shared } }),
     // D44: a chef's new material is for the kitchen from the start
     ...[...(locationId ? (allowedDivisions(access, locationId) ?? []) : [])].map((p) =>
@@ -230,6 +353,8 @@ contentAdminRoutes.get('/content/:id', async (c) => {
       editable: item.editable,
       checklistMode: item.kind === 'checklist' ? item.checklistMode : null,
       checklistPhotoKeys: item.kind === 'checklist' && item.checklistPhotoKeys ? (JSON.parse(item.checklistPhotoKeys) as string[]) : [],
+      checklistSharedKeys: item.kind === 'checklist' && item.checklistSharedKeys ? (JSON.parse(item.checklistSharedKeys) as string[]) : [],
+      tabId: item.kind === 'service_book' ? (item.tabId ?? DEFAULT_TAB) : null,
       currentAcknowledgements: ackCount?.n ?? 0,
     },
     draft: item.draftBodyJson
@@ -273,6 +398,8 @@ contentAdminRoutes.put('/content/:id', async (c) => {
     sortOrder?: unknown;
     checklistMode?: unknown;
     checklistPhotoKeys?: unknown;
+    checklistSharedKeys?: unknown;
+    tabId?: unknown;
   }>(c.req.raw);
   const now = Date.now();
   const statements: D1PreparedStatement[] = [];
@@ -322,13 +449,23 @@ contentAdminRoutes.put('/content/:id', async (c) => {
     statements.push(db.prepare(`UPDATE content_items SET checklist_mode = ?, updated_at = ? WHERE id = ?`).bind(body.checklistMode, now, item.id));
     settingsChange.checklistMode = body.checklistMode;
   }
-  if (body.checklistPhotoKeys !== undefined) {
-    const keys = body.checklistPhotoKeys;
+  if (body.tabId !== undefined) {
+    if (item.kind !== 'service_book') throw badRequest('invalid_input');
+    const tab = await tabForItem(db, access, body.tabId, item.locationId);
+    statements.push(db.prepare(`UPDATE content_items SET tab_id = ?, updated_at = ? WHERE id = ?`).bind(tab.id === DEFAULT_TAB ? null : tab.id, now, item.id));
+    settingsChange.tab = tab.title;
+  }
+  for (const [field, column] of [
+    ['checklistPhotoKeys', 'checklist_photo_keys'],
+    ['checklistSharedKeys', 'checklist_shared_keys'],
+  ] as const) {
+    const keys = body[field];
+    if (keys === undefined) continue;
     if (item.kind !== 'checklist' || !Array.isArray(keys) || keys.length > 300 || !keys.every((k) => typeof k === 'string' && /^[0-9a-f]{16}$/.test(k)))
       throw badRequest('invalid_input');
     const unique = [...new Set(keys as string[])];
-    statements.push(db.prepare(`UPDATE content_items SET checklist_photo_keys = ?, updated_at = ? WHERE id = ?`).bind(unique.length ? JSON.stringify(unique) : null, now, item.id));
-    settingsChange.checklistPhotoKeys = unique.length;
+    statements.push(db.prepare(`UPDATE content_items SET ${column} = ?, updated_at = ? WHERE id = ?`).bind(unique.length ? JSON.stringify(unique) : null, now, item.id));
+    settingsChange[field] = unique.length;
   }
   if (body.positions !== undefined) {
     const positions = parsePositions(body.positions);

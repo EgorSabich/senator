@@ -108,31 +108,35 @@ todayAdminRoutes.get('/locations/:locId/today', async (c) => {
   const checklists = [];
   for (const l of lists) {
     const row = await db
-      .prepare(`SELECT v.body_json AS body, ci.checklist_mode AS mode FROM content_items ci JOIN content_versions v ON v.id = ci.current_version_id WHERE ci.id = ?`)
+      .prepare(`SELECT v.body_json AS body, ci.checklist_shared_keys AS shared FROM content_items ci JOIN content_versions v ON v.id = ci.current_version_id WHERE ci.id = ?`)
       .bind(l.id)
-      .first<{ body: string; mode: string }>();
+      .first<{ body: string; shared: string | null }>();
     let body: RtNode | null = null;
+    let sharedKeys = new Set<string>();
     try {
       body = row ? (JSON.parse(row.body) as RtNode) : null;
+      sharedKeys = new Set(row?.shared ? (JSON.parse(row.shared) as string[]) : []);
     } catch {
       body = null;
     }
-    const total = checklistItems(body).length;
+    const items = checklistItems(body);
+    const total = items.length;
     if (!total) continue;
-    const marks = await db
-      .prepare(`SELECT user_id AS userId, COUNT(*) AS n FROM checklist_marks WHERE content_item_id = ? AND business_date = ? GROUP BY user_id`)
-      .bind(l.id, date)
-      .all<{ userId: string; n: number }>();
-    const closed = await db.prepare(`SELECT 1 FROM checklist_days WHERE content_item_id = ? AND business_date = ?`).bind(l.id, date).first();
-    if (row?.mode === 'individual') {
-      // people working today who should do it
-      const who = new Set([...real.map((e) => e.userId)].filter((id) => isVisibleFor(l.positions, ppl.get(id)?.positions ?? [])));
-      for (const m of marks.results) who.add(m.userId);
-      const done = [...who].filter((id) => (marks.results.find((m) => m.userId === id)?.n ?? 0) >= total).length;
-      checklists.push({ id: l.id, title: l.title, mode: 'individual', people: who.size, peopleDone: done, done: marks.results.reduce((a, m) => a + m.n, 0), total: total * Math.max(who.size, 1) });
-    } else {
-      checklists.push({ id: l.id, title: l.title, mode: 'shared', done: marks.results.reduce((a, m) => a + m.n, 0), total, closed: Boolean(closed) });
-    }
+    const keys = new Set(items.map((i) => i.key));
+    const marks = (
+      await db
+        .prepare(`SELECT user_id AS userId, item_key AS itemKey FROM checklist_marks WHERE content_item_id = ? AND business_date = ?`)
+        .bind(l.id, date)
+        .all<{ userId: string; itemKey: string }>()
+    ).results.filter((m) => keys.has(m.itemKey));
+    // per item mode (2026-10-17): a person is done when their own items and the shift's shared items are all ticked
+    const sharedDone = new Set(marks.filter((m) => sharedKeys.has(m.itemKey)).map((m) => m.itemKey)).size;
+    const who = new Set([...real.map((e) => e.userId)].filter((id) => isVisibleFor(l.positions, ppl.get(id)?.positions ?? [])));
+    for (const m of marks) who.add(m.userId);
+    const doneOf = (id: string) => marks.filter((m) => m.userId === id && !sharedKeys.has(m.itemKey)).length + sharedDone;
+    const peopleDone = [...who].filter((id) => doneOf(id) >= total).length;
+    const done = who.size ? [...who].reduce((a, id) => a + doneOf(id), 0) : sharedDone;
+    checklists.push({ id: l.id, title: l.title, mode: 'individual', people: who.size, peopleDone, done, total: total * Math.max(who.size, 1) });
   }
 
   return c.json({

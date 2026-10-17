@@ -183,6 +183,8 @@ export const contentItems = sqliteTable(
     checklistMode: text('checklist_mode').notNull().default('individual'),
     /** Individual checklists (2026-10-17): JSON array of item keys that need a photo when ticked. */
     checklistPhotoKeys: text('checklist_photo_keys'),
+    /** 2026-10-17: per item — JSON array of item keys that one person ticks for the whole shift; the rest: everyone ticks. */
+    checklistSharedKeys: text('checklist_shared_keys'),
     /** Service Book–type pages (2026-10-17): the Wiedza tab they belong to; null = the built-in Service Book tab. */
     tabId: text('tab_id'),
     createdAt: createdAt(),

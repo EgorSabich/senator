@@ -7,6 +7,13 @@
 
 
 
+
+## 0.9.4 — 2026-10-17
+
+- Checklists: who ticks is chosen per item — „Każdy” (everyone on shift, e.g. „Przebierz się”) or „Jeden za zmianę” (one tick for the team, others see who). Migration 0014 (`checklist_shared_keys`); every existing item became „Każdy” (owner). „Wymaga zdjęcia” works for both kinds. Lists are no longer closed for the day (old closings stay in history). Panel day view, Statystyka and Dziś count personal items per person and shared items once.
+- Checklists go to the archive from the editor („Do archiwum”); „Archiwum” in edit mode: „Przywróć”, „Usuń na zawsze”.
+- From 0.10.0, unchanged: Wiedza tabs per position (Service Book for waiters and runners; leaders' own tabs in Materiały → „Zakładki Wiedzy”), Grafik export PNG / PDF A4 landscape, punch cards with entry and exit photos side by side. Checklist photos now open in the same smooth viewer.
+
 ## 0.9.3 — 2026-10-17
 
 - „Listy” in the panel: „Edytuj listy” and „Importuj (JSON)” right there (owner). Edit mode: division chips → list of checklists (draft / published) → „Nowa lista” or a list edited point by point: name, mode, positions, sections (rename, reorder, remove), items (text, ↑ ↓, remove, „+ Dodaj punkt”), „Wymaga zdjęcia” per item (individual lists). „Zapisz” publishes at once; a rewritten photo item keeps its photo; a warning when today's ticks of rewritten items will go. Notes and paragraphs of a list stay above the sections.

@@ -3,7 +3,8 @@ import { addDays, businessDate, formatClock } from '../../shared/time';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { ErrorBox, Fold, LogoLoader } from '../ui';
-import { Btn, Icon, Modal } from './common';
+import { Btn, Icon } from './common';
+import { PhotoLightbox } from './TimeTracking';
 import { usePanel } from './Panel';
 import { ChecklistEditor, ChecklistManager, DivisionChips, inDivision, listDivisions } from './ChecklistEditor';
 import { ContentImport } from './ContentImport';
@@ -16,10 +17,11 @@ interface DayItem {
   key: string;
   section: string | null;
   text: string;
-  mark: { userId: string; name: string; at: number } | null;
+  mark: { userId: string; name: string; at: number; photoId?: string | null } | null;
   count?: number;
   by?: { name: string; at: number; photoId?: string | null }[];
   photo?: boolean;
+  shared?: boolean;
 }
 interface DayChecklist {
   id: string;
@@ -35,7 +37,7 @@ interface DayChecklist {
 }
 interface Stats {
   days: string[];
-  checklists: { id: string; title: string; total: number; mode: 'individual' | 'shared'; positions?: string[] }[];
+  checklists: { id: string; title: string; total: number; shared?: number; positions?: string[] }[];
   perDay: { id: string; date: string; done: number; people?: number }[];
   closed: { id: string; date: string; done: number; total: number; closedBy: string | null }[];
   people: { userId: string; name: string; items: number; days: number }[];
@@ -159,11 +161,7 @@ function Control({ division, setDivision }: { division: string; setDivision: (d:
   const statsLists = stats?.checklists.filter((c) => inDivision(c.positions ?? [], division)) ?? [];
   return (
     <>
-      {photo && (
-        <Modal title={photo.title} onClose={() => setPhoto(null)}>
-          <img className="cl-photo-big" src={`/api/admin/checklists/marks/${photo.id}/photo`} alt={photo.title} />
-        </Modal>
-      )}
+      {photo && <PhotoLightbox src={`/api/admin/checklists/marks/${photo.id}/photo`} caption={photo.title} onClose={() => setPhoto(null)} />}
       <div className="btn-row" role="tablist">
         {(['day', 'stats'] as const).map((x) => (
           <button key={x} role="tab" className="chip" aria-selected={tab === x} aria-pressed={tab === x} onClick={() => setTab(x)}>
@@ -193,20 +191,14 @@ function Control({ division, setDivision }: { division: string; setDivision: (d:
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
                   <strong style={{ fontSize: 17 }}>{cl.title}</strong>
                   <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontWeight: 700 }}>{cl.mode === 'individual' ? t.average(pct) : t.done(cl.done, cl.total)}</span>
-                    {cl.mode === 'individual' ? (
-                      <span className="badge neutral">{t.individual}</span>
-                    ) : cl.closed ? (
-                      <span className="badge ok">{t.closedBy(cl.closed.closedByName ?? '—', formatClock(cl.closed.closedAt))}</span>
-                    ) : (
-                      <span className="badge neutral">{t.open}</span>
-                    )}
+                    <span style={{ fontWeight: 700 }}>{t.average(pct)}</span>
+                    {cl.closed && <span className="badge ok">{t.closedBy(cl.closed.closedByName ?? '—', formatClock(cl.closed.closedAt))}</span>}
                   </span>
                 </div>
                 <div className="cl-bar" aria-hidden="true">
                   <div style={{ width: `${pct}%` }} />
                 </div>
-                {cl.mode === 'individual' && (
+                {(
                   <div className="cl-people">
                     <div className="label">{t.peopleToday}</div>
                     {(cl.people ?? []).length === 0 ? (
@@ -232,7 +224,7 @@ function Control({ division, setDivision }: { division: string; setDivision: (d:
                 {sectionsOf(cl.items).map((sec, si) => {
                   const key = `${cl.id}:${si}`;
                   const crowd = cl.people?.length ?? 0;
-                  const isDone = (it: DayItem) => (cl.mode === 'individual' ? crowd > 0 && (it.count ?? 0) >= crowd : Boolean(it.mark));
+                  const isDone = (it: DayItem) => (it.shared ? (it.count ?? 0) > 0 : crowd > 0 && (it.count ?? 0) >= crowd);
                   const done = sec.items.filter(isDone).length;
                   const all = done === sec.items.length;
                   const open = foldState[key] ?? !all;
@@ -248,7 +240,7 @@ function Control({ division, setDivision }: { division: string; setDivision: (d:
                     >
                       <div className="cl-items">
                         {sec.items.map((it) =>
-                          cl.mode === 'individual' ? (
+                          !it.shared ? (
                             <div key={it.key} className={`cl-item${isDone(it) ? ' done' : ''}`}>
                               <span className="cl-dot" aria-hidden="true" />
                               <span className="cl-text">
@@ -273,10 +265,25 @@ function Control({ division, setDivision }: { division: string; setDivision: (d:
                               </span>
                             </div>
                           ) : (
-                            <div key={it.key} className={`cl-item${it.mark ? ' done' : ''}`}>
+                            <div key={it.key} className={`cl-item${isDone(it) ? ' done' : ''}`}>
                               <span className="cl-dot" aria-hidden="true" />
-                              <span className="cl-text">{it.text}</span>
-                              <span className="cl-who">{it.mark ? `${it.mark.name} · ${formatClock(it.mark.at)}` : t.notDone}</span>
+                              <span className="cl-text">
+                                {it.text}
+                                <span className="muted"> · {t.sharedItem}{it.photo ? `, ${t.photoNeeded}` : ''}</span>
+                              </span>
+                              <span className="cl-who">
+                                {(() => {
+                                  const b = it.by?.[0];
+                                  if (!b) return t.notDone;
+                                  return b.photoId ? (
+                                    <button type="button" className="cl-photo-btn" onClick={() => setPhoto({ id: b.photoId!, title: `${b.name} · ${formatClock(b.at)}` })}>
+                                      <Icon name="camera" size={13} /> {short(b.name)} · {formatClock(b.at)}
+                                    </button>
+                                  ) : (
+                                    `${short(b.name)} · ${formatClock(b.at)}`
+                                  );
+                                })()}
+                              </span>
                             </div>
                           ),
                         )}
@@ -356,7 +363,7 @@ function Control({ division, setDivision }: { division: string; setDivision: (d:
                           {stats.days.map((d) => {
                             const row = stats.perDay.find((x) => x.id === c.id && x.date === d);
                             const done = row?.done ?? 0;
-                            const base = c.mode === 'individual' ? c.total * Math.max(row?.people ?? 1, 1) : c.total;
+                            const base = (c.total - (c.shared ?? 0)) * Math.max(row?.people ?? 1, 1) + (c.shared ?? 0);
                             const closed = stats.closed.find((x) => x.id === c.id && x.date === d);
                             return (
                               <td key={d}>

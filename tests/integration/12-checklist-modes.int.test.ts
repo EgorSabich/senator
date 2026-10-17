@@ -46,7 +46,7 @@ describe('individual checklist', () => {
     const vb = await b.get(`/api/checklists/${listId}/today`);
     expect(vb.data.done).toBe(1);
     expect(vb.data.items.filter((i: { mark: unknown }) => i.mark).length).toBe(1);
-    expect((await a.post(`/api/checklists/${listId}/close`)).data.error).toBe('checklist_individual');
+    expect((await a.post(`/api/checklists/${listId}/close`)).data.error).toBe('checklist_no_closing');
     const today = (await a.get(`/api/locations/${SENATOR}/checklists/today`)).data.checklists.find((c: { id: string }) => c.id === listId);
     expect(today).toMatchObject({ mode: 'individual', done: 3, total: 3 });
     // undo own mark only
@@ -65,7 +65,7 @@ describe('individual checklist', () => {
     ]);
     expect(cl.items[0]).toMatchObject({ count: 1 });
     const stats = await owner.get(`/api/admin/locations/${SENATOR}/checklists/stats?from=${date}&to=${date}`);
-    expect(stats.data.checklists.find((c: { id: string }) => c.id === listId).mode).toBe('individual');
+    expect(stats.data.checklists.find((c: { id: string }) => c.id === listId).shared).toBe(0);
     expect(stats.data.perDay.find((r: { id: string }) => r.id === listId)).toMatchObject({ done: 3, people: 3 });
   });
 

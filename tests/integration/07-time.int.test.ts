@@ -153,40 +153,46 @@ describe('daily checklists', () => {
     const created = await owner.post(`/api/admin/locations/${SENATOR}/content`, { kind: 'checklist', title: 'Lista testowa zamknięcia' });
     checklistId = created.data.id;
     expect((await owner.get(`/api/admin/content/${checklistId}`)).data.item.checklistMode).toBe('individual'); // D42 default
-    await owner.put(`/api/admin/content/${checklistId}`, { body: doc, positions: ['waiter'], checklistMode: 'shared' });
+    await owner.put(`/api/admin/content/${checklistId}`, { body: doc, positions: ['waiter'] });
     expect((await owner.post(`/api/admin/content/${checklistId}/publish`, {})).status).toBe(200);
   });
 
-  it('marks only while on shift; one item, one person; close with items left', async () => {
-    const today = await anna.get(`/api/locations/${SENATOR}/checklists/today`);
-    expect(today.status).toBe(200);
-    expect(today.data.onShift.since).toBeGreaterThan(0);
-    expect(today.data.checklists.find((x: { id: string }) => x.id === checklistId)).toMatchObject({ done: 0, total: 3, closed: false });
+  it('per item (2026-10-17): "one for the shift" items are ticked once, personal ones by each; no closing', async () => {
     const list = await anna.get(`/api/checklists/${checklistId}/today`);
     expect(list.data.total).toBe(3);
-    const [k1, k2] = list.data.items.map((i: { key: string }) => i.key);
+    const [k1, k2, k3] = list.data.items.map((i: { key: string }) => i.key);
+    expect((await owner.put(`/api/admin/content/${checklistId}`, { checklistSharedKeys: [k1, k2] })).status).toBe(200);
+    expect((await owner.get(`/api/admin/content/${checklistId}`)).data.item.checklistSharedKeys).toEqual([k1, k2]);
 
-    // Celina never clocked in
     expect((await anna.post(`/api/checklists/${checklistId}/marks`, { key: k1 })).status).toBe(200);
     expect((await bartek.post(`/api/checklists/${checklistId}/marks`, { key: k1 })).data).toMatchObject({ error: 'item_taken', details: { name: 'Anna Zegar' } });
     expect((await bartek.post(`/api/checklists/${checklistId}/marks`, { key: k2 })).status).toBe(200);
     expect((await bartek.req('DELETE', `/api/checklists/${checklistId}/marks/${k1}`)).status).toBe(404); // not his
-    expect((await bartek.req('DELETE', `/api/checklists/${checklistId}/marks/${k2}`)).status).toBe(200);
-    expect((await bartek.post(`/api/checklists/${checklistId}/marks`, { key: k2 })).status).toBe(200);
+    // personal item: both tick it
+    expect((await anna.post(`/api/checklists/${checklistId}/marks`, { key: k3 })).status).toBe(200);
+    expect((await bartek.post(`/api/checklists/${checklistId}/marks`, { key: k3 })).status).toBe(200);
+    expect((await anna.post(`/api/checklists/${checklistId}/close`)).data.error).toBe('checklist_no_closing');
 
-    expect((await anna.post(`/api/checklists/${checklistId}/close`)).status).toBe(200);
-    expect((await bartek.post(`/api/checklists/${checklistId}/marks`, { key: list.data.items[2].key })).data.error).toBe('checklist_closed');
+    const a = await anna.get(`/api/checklists/${checklistId}/today`);
+    expect(a.data).toMatchObject({ done: 3, total: 3 });
+    expect(a.data.items.map((i: { shared: boolean; mark: { name: string } | null }) => [i.shared, i.mark?.name])).toEqual([
+      [true, 'Anna Zegar'],
+      [true, 'Bartek Zegar'],
+      [false, 'Anna Zegar'],
+    ]);
 
     const date = list.data.date;
     const day = await owner.get(`/api/admin/locations/${SENATOR}/checklists/day?date=${date}`);
     const cl = day.data.checklists.find((x: { id: string }) => x.id === checklistId);
-    expect(cl.done).toBe(2);
-    expect(cl.closed).toMatchObject({ doneCount: 2, totalCount: 3, closedByName: 'Anna Zegar' });
-    expect(cl.items.map((i: { mark: { name: string } | null }) => i.mark?.name ?? null)).toEqual(['Anna Zegar', 'Bartek Zegar', null]);
+    const ab = cl.people.filter((p: { name: string }) => ['Anna Zegar', 'Bartek Zegar'].includes(p.name));
+    expect(ab.map((p: { done: number; total: number }) => [p.done, p.total])).toEqual([
+      [3, 3],
+      [3, 3],
+    ]);
+    expect(cl.items.map((i: { count: number }) => i.count)).toEqual([1, 1, 2]);
     const stats = await owner.get(`/api/admin/locations/${SENATOR}/checklists/stats?from=${date}&to=${date}`);
-    expect(stats.data.people.map((p: { name: string; items: number }) => [p.name, p.items])).toEqual(expect.arrayContaining([['Anna Zegar', 1], ['Bartek Zegar', 1]]));
-    expect((await owner.req('DELETE', `/api/admin/locations/${SENATOR}/checklists/${checklistId}/days/${date}`)).status).toBe(200);
-    expect((await bartek.post(`/api/checklists/${checklistId}/marks`, { key: list.data.items[2].key })).status).toBe(200);
+    expect(stats.data.checklists.find((x: { id: string }) => x.id === checklistId)).toMatchObject({ total: 3, shared: 2 });
+    expect(stats.data.people.map((p: { name: string; items: number }) => [p.name, p.items])).toEqual(expect.arrayContaining([['Anna Zegar', 2], ['Bartek Zegar', 2]]));
   });
 
   it('refuses marks from someone not on shift', async () => {

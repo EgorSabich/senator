@@ -1,8 +1,8 @@
 /**
  * Daily checklists (D36, D42). Every list item of a published checklist is a task for the business day.
- * Staff mark the items they did, but only while on shift (clocked in on the terminal). Two modes:
- * - "shared": one item, one person; the list may be closed for the day with items left;
- * - "individual": everyone on shift does every item; the panel shows each person's progress, nothing to close.
+ * Staff mark the items they did, but only while on shift (clocked in on the terminal).
+ * Since 2026-10-17 the mode is per item: "Każdy" (everyone ticks it) or "Jeden za zmianę" (one tick for the shift);
+ * lists are no longer closed for the day (old closings stay in history).
  */
 import { Hono } from 'hono';
 import { checklistItems } from '../../shared/checklist';
@@ -28,23 +28,27 @@ interface ChecklistRow {
   positions: string | null;
   mode: 'individual' | 'shared';
   photoKeysJson: string | null;
+  sharedKeysJson: string | null;
 }
 
-/** Item keys that need a photo — individual lists only. */
-function photoKeys(cl: ChecklistRow): Set<string> {
-  if (cl.mode !== 'individual' || !cl.photoKeysJson) return new Set();
+function keySet(json: string | null): Set<string> {
+  if (!json) return new Set();
   try {
-    const v = JSON.parse(cl.photoKeysJson) as unknown;
+    const v = JSON.parse(json) as unknown;
     return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
   } catch {
     return new Set();
   }
 }
+/** Item keys that need a photo when ticked (any item, 2026-10-17). */
+const photoKeys = (cl: ChecklistRow) => keySet(cl.photoKeysJson);
+/** Items one person ticks for the whole shift; every other item each person ticks for themselves (2026-10-17). */
+const sharedKeys = (cl: ChecklistRow) => keySet(cl.sharedKeysJson);
 
 async function loadChecklist(db: D1Database, id: string): Promise<ChecklistRow & { body: RtNode | null }> {
   const row = await db
     .prepare(
-      `SELECT ci.id, ci.location_id AS locationId, ci.title, ci.status, ci.current_version_id AS currentVersionId, ci.checklist_mode AS mode, ci.checklist_photo_keys AS photoKeysJson,
+      `SELECT ci.id, ci.location_id AS locationId, ci.title, ci.status, ci.current_version_id AS currentVersionId, ci.checklist_mode AS mode, ci.checklist_photo_keys AS photoKeysJson, ci.checklist_shared_keys AS sharedKeysJson,
               (SELECT group_concat(position) FROM content_item_positions p WHERE p.content_item_id = ci.id) AS positions,
               v.body_json AS bodyJson
        FROM content_items ci LEFT JOIN content_versions v ON v.id = ci.current_version_id
@@ -88,17 +92,20 @@ async function expectedPeople(db: D1Database, cl: ChecklistRow, date: string, lo
 }
 
 /**
- * Items of the day with their marks.
- * Shared: each item's single mark and the closing record. Individual: `viewerId`'s own marks (staff view),
- * or — for the panel (viewerId null) — how many people did each item and every person's progress.
+ * Items of the day with their marks (2026-10-17: the mode is per item).
+ * - "Każdy" item: everyone on shift ticks it for themselves;
+ * - "Jeden za zmianę" item: one tick for the whole shift, others see who did it.
+ * Staff view (viewerId): own ticks of personal items + any tick of shared items.
+ * Panel (viewerId null): per item how many people did it / who did the shared one, and each person's progress
+ * (their personal ticks + the shift's shared ticks).
  */
 async function dayView(db: D1Database, cl: ChecklistRow & { body: RtNode | null }, date: string, locationId: string, viewerId: string | null = null) {
   const items = checklistItems(cl.body);
   const [marksRes, day] = await db.batch([
     db
       .prepare(
-        `SELECT m.item_key AS itemKey, m.item_text AS itemText, m.section, m.user_id AS userId, m.marked_at AS markedAt, m.id AS markId, (m.photo_key IS NOT NULL) AS hasPhoto,
-                u.first_name || ' ' || u.last_name AS name
+        `SELECT m.item_key AS itemKey, m.item_text AS itemText, m.section, m.user_id AS userId, m.marked_at AS markedAt, m.id AS markId,
+                (m.photo_key IS NOT NULL) AS hasPhoto, u.first_name || ' ' || u.last_name AS name
          FROM checklist_marks m JOIN users u ON u.id = m.user_id
          WHERE m.content_item_id = ? AND m.business_date = ? AND m.location_id = ? ORDER BY m.marked_at`,
       )
@@ -113,52 +120,48 @@ async function dayView(db: D1Database, cl: ChecklistRow & { body: RtNode | null 
       .bind(cl.id, date, locationId),
   ]);
   const marks = marksRes!.results as MarkRow[];
-
-  if (cl.mode === 'individual') {
-    const needPhoto = photoKeys(cl);
-    const known = new Set(items.map((i) => i.key));
-    const mine = new Map(marks.filter((m) => m.userId === viewerId).map((m) => [m.itemKey, m]));
-    const byItem = new Map<string, MarkRow[]>();
-    for (const m of marks) if (known.has(m.itemKey)) byItem.set(m.itemKey, [...(byItem.get(m.itemKey) ?? []), m]);
-    const people = new Map<string, { userId: string; name: string; done: number; total: number; lastAt: number | null }>();
-    if (viewerId === null) for (const p of await expectedPeople(db, cl, date, locationId)) people.set(p.userId, { ...p, done: 0, total: items.length, lastAt: null });
-    for (const m of marks) {
-      if (!known.has(m.itemKey)) continue;
-      const p = people.get(m.userId) ?? { userId: m.userId, name: m.name, done: 0, total: items.length, lastAt: null };
-      p.done += 1;
-      p.lastAt = Math.max(p.lastAt ?? 0, m.markedAt);
-      people.set(m.userId, p);
-    }
-    const view = items.map((it) => {
-      const own = mine.get(it.key);
-      const all = byItem.get(it.key) ?? [];
-      return {
-        key: it.key,
-        section: it.section,
-        text: it.text,
-        photo: needPhoto.has(it.key),
-        mark: own ? { userId: own.userId, name: own.name, at: own.markedAt, photo: Boolean(own.hasPhoto) } : null,
-        ...(viewerId === null ? { count: all.length, by: all.map((m) => ({ name: m.name, at: m.markedAt, photoId: m.hasPhoto ? m.markId : null })) } : {}),
-      };
-    });
-    const list = [...people.values()].sort((x, y) => y.done - x.done || x.name.localeCompare(y.name, 'pl'));
-    const done = viewerId === null ? list.reduce((a, p) => a + p.done, 0) : mine.size;
-    const total = viewerId === null ? items.length * list.length : items.length;
-    return { mode: cl.mode, items: view, done, total, itemCount: items.length, people: viewerId === null ? list : undefined, closed: null };
-  }
-
-  const byKey = new Map(marks.map((m) => [m.itemKey, m]));
-  const view = items.map((it) => {
-    const m = byKey.get(it.key);
-    return { key: it.key, section: it.section, text: it.text, mark: m ? { userId: m.userId, name: m.name, at: m.markedAt } : null };
-  });
-  // Marks of items that were later removed from the checklist stay visible in history.
+  const needPhoto = photoKeys(cl);
+  const shared = sharedKeys(cl);
   const known = new Set(items.map((i) => i.key));
-  for (const m of byKey.values()) {
-    if (!known.has(m.itemKey)) view.push({ key: m.itemKey, section: m.section, text: m.itemText, mark: { userId: m.userId, name: m.name, at: m.markedAt } });
-  }
+  const byItem = new Map<string, MarkRow[]>();
+  for (const m of marks) if (known.has(m.itemKey)) byItem.set(m.itemKey, [...(byItem.get(m.itemKey) ?? []), m]);
+  const sharedDone = items.filter((it) => shared.has(it.key) && byItem.get(it.key)?.length).length;
+
+  const view = items.map((it) => {
+    const all = byItem.get(it.key) ?? [];
+    const isShared = shared.has(it.key);
+    const own = isShared ? all[0] : all.find((m) => m.userId === viewerId);
+    return {
+      key: it.key,
+      section: it.section,
+      text: it.text,
+      shared: isShared,
+      photo: needPhoto.has(it.key),
+      mark: own && (isShared || viewerId !== null) ? { userId: own.userId, name: own.name, at: own.markedAt, photo: Boolean(own.hasPhoto), photoId: own.hasPhoto ? own.markId : null } : null,
+      ...(viewerId === null ? { count: all.length, by: all.map((m) => ({ name: m.name, at: m.markedAt, photoId: m.hasPhoto ? m.markId : null })) } : {}),
+    };
+  });
   const closed = (day!.results[0] as { closedAt: number; doneCount: number; totalCount: number; closedByName: string | null } | undefined) ?? null;
-  return { mode: cl.mode, items: view, done: view.filter((v) => v.mark).length, total: view.length, itemCount: items.length, people: undefined, closed };
+
+  if (viewerId !== null) {
+    const done = view.filter((v) => v.mark).length;
+    return { mode: cl.mode, items: view, done, total: items.length, itemCount: items.length, people: undefined, closed };
+  }
+  // panel: everyone expected that day, each with their own progress
+  const personal = items.filter((it) => !shared.has(it.key));
+  const people = new Map<string, { userId: string; name: string; done: number; total: number; lastAt: number | null }>();
+  for (const p of await expectedPeople(db, cl, date, locationId)) people.set(p.userId, { userId: p.userId, name: p.name, done: sharedDone, total: items.length, lastAt: null });
+  for (const m of marks) {
+    if (!known.has(m.itemKey)) continue;
+    const p = people.get(m.userId) ?? { userId: m.userId, name: m.name, done: sharedDone, total: items.length, lastAt: null };
+    if (!shared.has(m.itemKey)) p.done += 1;
+    p.lastAt = Math.max(p.lastAt ?? 0, m.markedAt);
+    people.set(m.userId, p);
+  }
+  const list = [...people.values()].sort((x, y) => y.done - x.done || x.name.localeCompare(y.name, 'pl'));
+  const done = list.length ? list.reduce((a, p) => a + p.done, 0) : sharedDone;
+  const total = list.length ? items.length * list.length : shared.size ? items.filter((i) => shared.has(i.key)).length : 0;
+  return { mode: cl.mode, items: view, done, total, itemCount: items.length, personalCount: personal.length, people: list, closed };
 }
 
 async function openShift(db: D1Database, userId: string, locationId: string, now: number) {
@@ -240,7 +243,7 @@ checklistRoutes.post('/checklists/:id/marks', async (c) => {
   const body = await readJson<{ key?: unknown; photo?: unknown }>(c.req.raw);
   const item = checklistItems(cl.body).find((i) => i.key === body.key);
   if (!item) throw badRequest('item_unknown');
-  const individual = cl.mode === 'individual';
+  const individual = !sharedKeys(cl).has(item.key);
   // An item that needs a photo is ticked only together with one.
   let photo: Uint8Array | null = null;
   if (photoKeys(cl).has(item.key)) {
@@ -302,7 +305,7 @@ checklistRoutes.delete('/checklists/:id/marks/:key', async (c) => {
 checklistRoutes.post('/checklists/:id/close', async (c) => {
   const db = c.env.DB;
   const { cl, locId, day } = await staffChecklist(c, c.req.param('id'));
-  if (cl.mode === 'individual') throw new ApiError(409, 'checklist_individual');
+  throw new ApiError(409, 'checklist_no_closing'); // owner, 2026-10-17: lists are not closed any more
   await requireShift(c, locId);
   const date = businessDate(Date.now(), day);
   await requireOpenDay(db, cl.id, date);
@@ -368,11 +371,15 @@ checklistAdminRoutes.get('/locations/:locId/checklists/stats', async (c) => {
   const lists = await visibleContent(db, locId, scope ? [...scope] : null, ['checklist']);
   const people = await scopedUserIds(db, access, locId);
   const totals = new Map<string, number>();
+  const sharedCount = new Map<string, number>();
   const loaded = new Map<string, ChecklistRow>();
   for (const l of lists) {
     const cl = await loadChecklist(db, l.id);
     loaded.set(l.id, cl);
-    totals.set(l.id, checklistItems(cl.body).length);
+    const its = checklistItems(cl.body);
+    totals.set(l.id, its.length);
+    const sk = sharedKeys(cl);
+    sharedCount.set(l.id, its.filter((i) => sk.has(i.key)).length);
   }
   const [perDay, perPerson, closed] = await db.batch([
     db
@@ -411,7 +418,7 @@ checklistAdminRoutes.get('/locations/:locId/checklists/stats', async (c) => {
   const markerRows = markers!.results as { id: string; date: string; userId: string }[];
   const perDayRows = (perDay!.results as { id: string; date: string; done: number }[]).map((r) => {
     const cl = loaded.get(r.id);
-    if (cl?.mode !== 'individual') return r;
+    if (!cl) return r;
     const people = new Set(workedRows.filter((w) => w.date === r.date && isVisibleFor(cl.positions, w.positions ? w.positions.split(',') : [])).map((w) => w.userId));
     for (const m of markerRows) if (m.id === r.id && m.date === r.date) people.add(m.userId);
     return { ...r, people: people.size };
@@ -420,7 +427,7 @@ checklistAdminRoutes.get('/locations/:locId/checklists/stats', async (c) => {
     days,
     checklists: lists
       .filter((l) => (totals.get(l.id) ?? 0) > 0)
-      .map((l) => ({ id: l.id, title: l.title, total: totals.get(l.id), mode: loaded.get(l.id)?.mode ?? 'shared', positions: l.positions ? l.positions.split(',') : [] })),
+      .map((l) => ({ id: l.id, title: l.title, total: totals.get(l.id), shared: sharedCount.get(l.id) ?? 0, positions: l.positions ? l.positions.split(',') : [] })),
     perDay: perDayRows,
     closed: closed!.results,
     people: (perPerson!.results as { userId: string }[]).filter((p) => !people || people.has(p.userId)),

@@ -37,6 +37,7 @@ with sync_playwright() as pw:
     o.get_by_role("button",name="+ Dodaj punkt").first.click(); o.get_by_label("Punkt 1").fill("Ustaw stoły według planu sali")
     o.get_by_role("button",name="+ Dodaj punkt").first.click(); o.get_by_label("Punkt 2").fill("Sprawdź świece")
     o.get_by_role("button",name="Bez zdjęcia").first.click()
+    o.locator(".cle-section").first.locator(".cle-item").nth(1).get_by_role("button",name="Jeden za zmianę").click()
     o.get_by_role("button",name="+ Dodaj sekcję").click(); o.get_by_label("Nazwa sekcji").nth(1).fill("Stacja")
     o.locator(".cle-section").nth(1).get_by_label("Punkt 1").fill("Wypoleruj sztućce")
     o.wait_for_timeout(300); o.screenshot(path=f"{OUT}/e02-editor.png", full_page=True)
@@ -70,8 +71,15 @@ with sync_playwright() as pw:
     o.goto(BASE+"/panel/listy"); o.locator(".cl-fold").first.wait_for(); o.get_by_role("button",name="Kelnerzy").click(); o.wait_for_timeout(500)
     assert o.get_by_text("Zamknięcie baru").count()==0
     o.wait_for_timeout(600); o.screenshot(path=f"{OUT}/e05-control-waiters.png", full_page=True)
-    o.locator(".cl-photo-btn").first.click(); o.locator(".cl-photo-big").wait_for(); o.wait_for_timeout(500)
-    assert o.evaluate("document.querySelector('.cl-photo-big').naturalWidth")>0
+    o.locator(".cl-photo-btn").first.click(); o.locator(".lightbox img").wait_for(); o.wait_for_timeout(500)
+    assert o.evaluate("document.querySelector('.lightbox img').naturalWidth")>0
+    d=r.get(BASE+f"/api/admin/content/{cid}").json()["item"]; assert len(d["checklistSharedKeys"])==1, d
+    # archive and restore
+    o.goto(BASE+f"/panel/listy/edycja/{cid}"); o.get_by_role("button",name="Do archiwum").wait_for()
+    o.once("dialog", lambda dl: dl.accept()); o.get_by_role("button",name="Do archiwum").click(); o.wait_for_url(re.compile("/panel/listy/edycja$"))
+    o.get_by_role("button",name=re.compile("Archiwum")).click(); o.get_by_text("Otwarcie sali").wait_for(); o.wait_for_timeout(300); o.screenshot(path=f"{OUT}/e07-archive.png")
+    o.get_by_role("button",name="Przywróć").click(); o.wait_for_timeout(600)
+    o.get_by_role("button",name="Aktywne").click(); o.get_by_text("Otwarcie sali").wait_for()
     # phone width panel editor
     m=b.new_context(viewport={"width":390,"height":844},locale="pl-PL",device_scale_factor=2,is_mobile=True,has_touch=True).new_page(); watch(m)
     m.goto(BASE+"/"); m.get_by_label("Login").fill("egor.wlasciciel"); m.get_by_label("PIN lub hasło").fill("NoweHasloEgora2026"); m.get_by_role("button",name="Zaloguj się").click()

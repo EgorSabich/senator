@@ -3,6 +3,7 @@ mandatory document with checkbox + "Potwierdzam", locked module opening, Service
 Polish letters, offline reading. Then the owner's program editor on desktop.
 Needs a fresh server (scripts/ui-server.sh). Optional MENU_BUNDLE imports the real menu first.
 Screenshots go to $SHOTS_DIR. Prints NO_ERRORS when the browser saw no page errors."""
+import re
 import json
 import os
 import sys
@@ -90,7 +91,7 @@ with sync_playwright() as p:
     page.get_by_label("Nowy PIN (6 cyfr)").fill("583920")
     page.get_by_label("Powtórz").fill("583920")
     page.get_by_role("button", name="Zapisz").click()
-    page.get_by_role("heading", name="Dzień dobry, Anna").wait_for()
+    page.get_by_role("heading", name=re.compile("(Dzień dobry|Dobry wieczór|Dobranoc), Anna")).wait_for()
     page.wait_for_timeout(400)
     shot(page, "a01-start")
 

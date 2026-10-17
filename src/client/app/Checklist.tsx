@@ -21,7 +21,7 @@ interface DayView {
   mode: 'individual' | 'shared';
   me: string;
   onShift: { since: number } | null;
-  items: { key: string; section: string | null; text: string; photo?: boolean; mark: { userId: string; name: string; at: number; photo?: boolean } | null }[];
+  items: { key: string; section: string | null; text: string; photo?: boolean; shared?: boolean; mark: { userId: string; name: string; at: number; photo?: boolean } | null }[];
   done: number;
   total: number;
   closed: { closedAt: number; closedByName: string | null } | null;
@@ -46,8 +46,7 @@ export function TodayCard() {
               <span className="grow">
                 <span className="t">{c.title}</span>
                 <span className="s">
-                  {c.mode === 'individual' ? t.progressMine(c.done, c.total) : t.progress(c.done, c.total)}
-                  {c.mode === 'individual' ? '' : t.mine(c.mine)}
+                  {t.progressMine(c.done, c.total)}
                 </span>
               </span>
               {c.closed ? <span className="a-pill ok">{t.closed}</span> : <span className="a-ring" style={{ ['--p' as string]: Math.round((c.done / c.total) * 100) }} aria-hidden="true" />}
@@ -195,13 +194,13 @@ export function ChecklistDay({ id }: { id: string }) {
                 <Icon name="info" size={18} />
                 <span>{t.offShift}</span>
               </div>
-            ) : data.mode === 'individual' && data.done === data.total && data.total > 0 ? (
+            ) : data.done === data.total && data.total > 0 ? (
               <div className="a-note">
                 <Icon name="check" size={18} />
                 <span>{t.allDone}</span>
               </div>
             ) : (
-              <p className="a-sub">{data.mode === 'individual' ? t.introIndividual : t.intro}</p>
+              <p className="a-sub">{data.items.some((i) => i.shared) ? t.introMixed : t.introIndividual}</p>
             )}
             <Problem message={problem} />
             <input
@@ -248,7 +247,7 @@ export function ChecklistDay({ id }: { id: string }) {
                               {it.mark.photo ? ` · ${t.withPhoto}` : ''}
                             </span>
                           ) : (
-                            it.photo && <span className="s">{t.needsPhoto}</span>
+                            (it.photo || it.shared) && <span className="s">{[it.shared ? t.sharedItem : '', it.photo ? t.needsPhoto : ''].filter(Boolean).join(' · ')}</span>
                           )}
                         </span>
                         {it.photo && !it.mark && (
@@ -276,11 +275,6 @@ export function ChecklistDay({ id }: { id: string }) {
                 </Fold>
               );
             })}
-            {data.onShift && !data.closed && data.mode !== 'individual' && (
-              <button type="button" className="a-btn" onClick={() => void close()}>
-                {t.close}
-              </button>
-            )}
           </>
         )}
       </main>

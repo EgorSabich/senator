@@ -66,20 +66,22 @@ with sync_playwright() as pw:
     t.get_by_text("Do wysłania").wait_for(state="detached", timeout=40000); t.get_by_text("Online").wait_for(timeout=40000); t.screenshot(path=f"{OUT}/09-synced.png")
     # waiter checklist
     z=phones[0]; z.reload(); z.get_by_text("Jesteś na zmianie", exact=False).first.wait_for(); z.wait_for_timeout(800); z.screenshot(path=f"{OUT}/10-start-onshift.png", full_page=True)
-    z.locator("a[href^=\"/listy/\"]").first.click(); z.get_by_text("Odhacz zadania").wait_for()
+    z.locator("a[href^=\"/listy/\"]").first.click(); z.get_by_text("Odhacz t", exact=False).first.wait_for()
     z.get_by_role("button", name=re.compile("Wypoleruj")).click(); z.wait_for_timeout(500)
     z.get_by_role("button", name=re.compile("Złóż czarne")).click(); z.wait_for_timeout(700)
-    a=phones[1]; a.goto(BASE+f"/listy/{cid}"); a.get_by_text("Odhacz zadania").wait_for(); a.get_by_role("button", name=re.compile("Naładuj")).click(); a.wait_for_timeout(700)
-    z.reload(); z.get_by_text("Odhacz zadania").wait_for(); z.wait_for_timeout(600); z.screenshot(path=f"{OUT}/11-checklist.png", full_page=True)
-    z.once("dialog", lambda d: d.accept()); z.get_by_role("button", name="Zamknij listę na dziś").click(); z.get_by_text("Lista zamknięta").wait_for(); z.screenshot(path=f"{OUT}/12-closed.png")
+    a=phones[1]; a.goto(BASE+f"/listy/{cid}"); a.get_by_text("Odhacz t", exact=False).first.wait_for(); a.get_by_role("button", name=re.compile("Naładuj")).click(); a.wait_for_timeout(700)
+    z.reload(); z.get_by_text("Odhacz t", exact=False).first.wait_for(); z.wait_for_timeout(600); z.screenshot(path=f"{OUT}/11-checklist.png", full_page=True)
     # panel
     o.goto(BASE+"/panel/czas"); o.get_by_text("Teraz na zmianie").wait_for(); o.wait_for_timeout(900); o.screenshot(path=f"{OUT}/13-panel-time.png", full_page=True)
     o.locator(".time-grid td.today button.cell").first.click(); o.get_by_role("dialog").wait_for(); o.wait_for_timeout(500); o.screenshot(path=f"{OUT}/14-panel-day.png")
     o.get_by_role("dialog").get_by_label("Wyjście").first.fill("0130"); o.get_by_role("dialog").get_by_role("button", name="Zapisz").first.click(); o.wait_for_timeout(900)
     o.keyboard.press("Escape"); o.wait_for_timeout(300)
-    o.locator("tr", has_text="Adam W.").locator("td.today button.cell").first.click(); o.get_by_role("dialog").wait_for(); o.locator(".punch-thumb img").first.wait_for(); o.wait_for_timeout(600)
-    assert o.evaluate("[...document.querySelectorAll('.punch-thumb img')].every(i => i.naturalWidth > 0)"), "punch photo not loaded"
-    o.locator(".punch-thumb").first.click(); o.wait_for_timeout(400); o.screenshot(path=f"{OUT}/14b-panel-photo.png")
+    o.locator("tr", has_text="Adam W.").locator("td.today button.cell").first.click(); o.get_by_role("dialog").wait_for(); o.locator(".pcard-photo img").first.wait_for(); o.wait_for_timeout(600)
+    assert o.evaluate("[...document.querySelectorAll('.pcard-photo img')].every(i => i.naturalWidth > 0)"), "punch photo not loaded"
+    o.screenshot(path=f"{OUT}/14a-punch-cards.png")
+    o.locator(".pcard-photo").first.click(); o.locator(".lightbox img").wait_for(); o.wait_for_timeout(450); o.screenshot(path=f"{OUT}/14b-panel-photo.png")
+    o.keyboard.press("Escape"); o.wait_for_timeout(400)
+    assert o.locator(".lightbox").count()==0 and o.get_by_role("dialog").count()>=1, "Esc closes the photo first, the dialog stays"
     o.keyboard.press("Escape"); o.wait_for_timeout(300)
     # manual shift: typing 4 digits moves on to "Wyjście"
     o.locator(".time-grid td:not(.today) button.cell").first.click(); o.get_by_role("dialog").wait_for()

@@ -13,7 +13,7 @@ import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { navigate, onNav } from '../router';
 import { ErrorBox, LogoLoader } from '../ui';
-import { Btn, Modal } from './common';
+import { Btn, DeleteForeverModal, Modal } from './common';
 import { usePanel } from './Panel';
 
 const t = pl.admin.checklists.edit;
@@ -58,10 +58,12 @@ export function ChecklistManager({ division, setDivision }: { division: string; 
   const [scope, setScope] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [archive, setArchive] = useState(false);
+  const [deleting, setDeleting] = useState<ListRow | null>(null);
   const load = useCallback(async () => {
     try {
       const r = await api<{ items: ListRow[]; divisions: string[] | null }>(`/api/admin/locations/${locationId}/content?kind=checklist`);
-      setLists(r.items.filter((i) => i.status !== 'archived'));
+      setLists(r.items);
       setScope(r.divisions);
     } catch (e) {
       setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
@@ -71,16 +73,55 @@ export function ChecklistManager({ division, setDivision }: { division: string; 
     void load();
   }, [load]);
   const present = useMemo(() => [...new Set((lists ?? []).flatMap((l) => (l.positions.length ? listDivisions(l.positions) : [])))], [lists]);
-  const shown = (lists ?? []).filter((l) => inDivision(l.positions, division)).sort((a, b) => comparePl(a.draftTitle ?? a.title, b.draftTitle ?? b.title));
+  const shown = (lists ?? [])
+    .filter((l) => (archive ? l.status === 'archived' : l.status !== 'archived'))
+    .filter((l) => inDivision(l.positions, division)).sort((a, b) => comparePl(a.draftTitle ?? a.title, b.draftTitle ?? b.title));
 
   return (
     <>
       <ErrorBox message={error} />
       <DivisionChips value={division} onChange={setDivision} present={present} />
+      <div className="btn-row">
+        <button className="chip" aria-pressed={!archive} onClick={() => setArchive(false)}>
+          {t.active}
+        </button>
+        <button className="chip" aria-pressed={archive} onClick={() => setArchive(true)}>
+          {t.archived} · {(lists ?? []).filter((l) => l.status === 'archived').length}
+        </button>
+      </div>
       {lists === null && <LogoLoader />}
-      {lists && shown.length === 0 && <p className="muted">{t.none}</p>}
+      {lists && shown.length === 0 && <p className="muted">{archive ? t.noneArchived : t.none}</p>}
       <div className="list">
-        {shown.map((l) => (
+        {shown.map((l) =>
+          archive ? (
+            <div key={l.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: 14 }}>
+              <span>
+                <strong style={{ fontSize: 15 }}>{l.draftTitle ?? l.title}</strong>
+                <span className="muted" style={{ display: 'block', fontSize: 12 }}>
+                  {l.positions.length ? l.positions.map((p) => pl.admin.positions[p] ?? p).join(', ') : pl.admin.content.forAll}
+                </span>
+              </span>
+              {l.editable !== false && (
+                <span className="btn-row">
+                  <Btn
+                    onClick={async () => {
+                      try {
+                        await api(`/api/admin/content/${l.id}/restore`, { method: 'POST' });
+                        await load();
+                      } catch (e) {
+                        setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+                      }
+                    }}
+                  >
+                    {t.restore}
+                  </Btn>
+                  <Btn kind="danger" onClick={() => setDeleting(l)}>
+                    {t.deleteForever}
+                  </Btn>
+                </span>
+              )}
+            </div>
+          ) : (
           <button key={l.id} className="row-btn" onClick={() => navigate(`/panel/listy/edycja/${l.id}`)} disabled={l.editable === false}>
             <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8, width: '100%' }}>
               <strong style={{ fontSize: 15 }}>{l.draftTitle ?? l.title}</strong>
@@ -91,8 +132,22 @@ export function ChecklistManager({ division, setDivision }: { division: string; 
               {l.editable === false ? ` · ${t.readOnly}` : ''}
             </span>
           </button>
-        ))}
+          ),
+        )}
       </div>
+      {deleting && (
+        <DeleteForeverModal
+          title={pl.admin.deleteForever.itemTitle(deleting.title)}
+          impactPath={`/api/admin/content/${deleting.id}/deletion`}
+          lines={pl.admin.deleteForever.contentLines}
+          deletePath={`/api/admin/content/${deleting.id}`}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            setDeleting(null);
+            void load();
+          }}
+        />
+      )}
       <div>
         <Btn kind="primary" onClick={() => setCreating(true)}>
           {t.newList}
@@ -145,7 +200,7 @@ function NewList({ locationId, scope, division, onClose }: { locationId: string;
 /* ───────── One list, point by point ───────── */
 
 interface Detail {
-  item: { id: string; title: string; checklistMode: 'individual' | 'shared' | null; positions: string[]; checklistPhotoKeys?: string[]; editable?: boolean; status: string };
+  item: { id: string; title: string; checklistMode: 'individual' | 'shared' | null; positions: string[]; checklistPhotoKeys?: string[]; checklistSharedKeys?: string[]; editable?: boolean; status: string };
   draft: { title: string; body: RtNode } | null;
   current: { title: string; body: RtNode } | null;
 }
@@ -171,7 +226,7 @@ export function ChecklistEditor({ id }: { id: string }) {
         title: d.draft?.title ?? d.current?.title ?? d.item.title,
         mode: d.item.checklistMode ?? 'individual',
         positions: d.item.positions,
-        ...docToModel(body, d.item.checklistPhotoKeys ?? []),
+        ...docToModel(body, d.item.checklistPhotoKeys ?? [], d.item.checklistSharedKeys ?? []),
       };
       setModel(m);
       setSaved(JSON.stringify(m));
@@ -211,10 +266,11 @@ export function ChecklistEditor({ id }: { id: string }) {
       const doc = modelToDoc(model);
       const keys = checklistItems(doc);
       const flat = model.sections.flatMap((s) => s.items.filter((i) => i.text.trim()));
-      const photoKeys = model.mode === 'individual' ? keys.filter((_, i) => flat[i]?.photo).map((k) => k.key) : [];
+      const photoKeys = keys.filter((_, i) => flat[i]?.photo).map((k) => k.key);
+      const sharedKeys = keys.filter((_, i) => flat[i]?.shared).map((k) => k.key);
       await api(`/api/admin/content/${id}`, {
         method: 'PUT',
-        body: { title: model.title.trim(), body: doc, checklistMode: model.mode, positions: model.positions, checklistPhotoKeys: photoKeys },
+        body: { title: model.title.trim(), body: doc, checklistMode: 'individual', positions: model.positions, checklistPhotoKeys: photoKeys, checklistSharedKeys: sharedKeys },
       });
       try {
         await api(`/api/admin/content/${id}/publish`, { method: 'POST', body: { changeLevel: 'clarification' } });
@@ -245,6 +301,20 @@ export function ChecklistEditor({ id }: { id: string }) {
           ← {t.back}
         </a>
         <div className="btn-row">
+          <Btn
+            disabled={busy}
+            onClick={async () => {
+              if (!window.confirm(t.confirmArchive(model.title))) return;
+              try {
+                await api(`/api/admin/content/${id}/archive`, { method: 'POST' });
+                navigate('/panel/listy/edycja');
+              } catch (e) {
+                setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+              }
+            }}
+          >
+            {t.archive}
+          </Btn>
           <Btn kind="primary" disabled={busy || !dirty || !model.title.trim() || !allItems.length || (Boolean(scope) && !model.positions.length)} onClick={() => void save()}>
             {busy ? t.saving : t.save}
           </Btn>
@@ -262,16 +332,9 @@ export function ChecklistEditor({ id }: { id: string }) {
           <label htmlFor="cle-title">{t.listTitle}</label>
           <input id="cle-title" value={model.title} maxLength={160} onChange={(e) => set((m) => ({ ...m, title: e.target.value }))} />
         </div>
-        <div className="field">
-          <label htmlFor="cle-mode">{pl.admin.content.checklistMode}</label>
-          <select id="cle-mode" value={model.mode} onChange={(e) => set((m) => ({ ...m, mode: e.target.value as Model['mode'] }))}>
-            <option value="individual">{pl.admin.content.checklistModes.individual}</option>
-            <option value="shared">{pl.admin.content.checklistModes.shared}</option>
-          </select>
-          <span className="muted" style={{ fontSize: 12 }}>
-            {model.mode === 'individual' ? pl.admin.content.checklistModeHint.individual : pl.admin.content.checklistModeHint.shared}
-          </span>
-        </div>
+        <p className="muted" style={{ margin: 0, fontSize: 12 }}>
+          {t.modeHint}
+        </p>
         <fieldset className="cle-positions">
           <legend>{t.forWhom}</legend>
           <div className="btn-row">
@@ -345,16 +408,22 @@ export function ChecklistEditor({ id }: { id: string }) {
                   }}
                 />
                 <div className="cle-tools">
-                  {model.mode === 'individual' && (
-                    <button
-                      type="button"
-                      className="chip cle-photo"
-                      aria-pressed={it.photo}
-                      onClick={() => setSection(si, (x) => ({ ...x, items: x.items.map((y, k) => (k === ii ? { ...y, photo: !y.photo } : y)) }))}
-                    >
-                      {it.photo ? t.photoOn : t.photoOff}
+                  <div className="seg cle-mode" role="group" aria-label={t.whoTicks}>
+                    <button type="button" aria-pressed={!it.shared} onClick={() => setSection(si, (x) => ({ ...x, items: x.items.map((y, k) => (k === ii ? { ...y, shared: false } : y)) }))}>
+                      {t.everyone}
                     </button>
-                  )}
+                    <button type="button" aria-pressed={it.shared} onClick={() => setSection(si, (x) => ({ ...x, items: x.items.map((y, k) => (k === ii ? { ...y, shared: true } : y)) }))}>
+                      {t.oneForShift}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="chip cle-photo"
+                    aria-pressed={it.photo}
+                    onClick={() => setSection(si, (x) => ({ ...x, items: x.items.map((y, k) => (k === ii ? { ...y, photo: !y.photo } : y)) }))}
+                  >
+                    {it.photo ? t.photoOn : t.photoOff}
+                  </button>
                   <button type="button" className="cle-icon" aria-label={t.up} disabled={ii === 0} onClick={() => setSection(si, (x) => ({ ...x, items: move(x.items, ii, -1) }))}>
                     ↑
                   </button>
@@ -369,14 +438,13 @@ export function ChecklistEditor({ id }: { id: string }) {
             ))}
           </ol>
           <div>
-            <Btn onClick={() => setSection(si, (x) => ({ ...x, items: [...x.items, { uid: uid(), text: '', photo: false, origKey: null }] }))}>{t.addItem}</Btn>
+            <Btn onClick={() => setSection(si, (x) => ({ ...x, items: [...x.items, { uid: uid(), text: '', photo: false, shared: false, origKey: null }] }))}>{t.addItem}</Btn>
           </div>
         </section>
       ))}
       <div className="btn-row">
-        <Btn onClick={() => set((m) => ({ ...m, sections: [...m.sections, { uid: uid(), name: '', items: [{ uid: uid(), text: '', photo: false, origKey: null }] }] }))}>{t.addSection}</Btn>
+        <Btn onClick={() => set((m) => ({ ...m, sections: [...m.sections, { uid: uid(), name: '', items: [{ uid: uid(), text: '', photo: false, shared: false, origKey: null }] }] }))}>{t.addSection}</Btn>
       </div>
-      {model.mode === 'shared' && model.sections.some((s) => s.items.some((i) => i.photo)) && <p className="muted" style={{ fontSize: 12 }}>{t.photoOnlyIndividual}</p>}
       {changedTexts > 0 && rewritten > 0 && <p className="muted" style={{ fontSize: 12 }}>{t.changedWarning(changedTexts)}</p>}
       {model.extra.length > 0 && <p className="muted" style={{ fontSize: 12 }}>{t.extraKept}</p>}
     </div>

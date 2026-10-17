@@ -32,6 +32,7 @@ interface Detail {
     positions: string[];
     checklistMode: 'individual' | 'shared' | null;
     checklistPhotoKeys?: string[];
+    tabId?: string | null;
     editable?: boolean;
     currentAcknowledgements: number;
   };
@@ -234,6 +235,7 @@ export function ContentEditor({ id }: { id: string }) {
                 </span>
               </div>
             )}
+            {item.kind === 'service_book' && <TabSetting locationId={item.locationId ?? locationId} shared={item.shared} value={item.tabId ?? null} onSave={(tabId) => void saveSettings({ tabId })} />}
             {item.kind === 'checklist' && item.checklistMode === 'individual' && editor && (
               <PhotoItems editor={editor} keys={item.checklistPhotoKeys ?? []} onSave={(keys) => void saveSettings({ checklistPhotoKeys: keys })} />
             )}
@@ -621,3 +623,27 @@ function PhotoItems({ editor, keys, onSave }: { editor: Editor; keys: string[]; 
   );
 }
 
+/** Which Wiedza tab a Service Book–type page sits in. */
+function TabSetting({ locationId, shared, value, onSave }: { locationId: string; shared: boolean; value: string | null; onSave: (id: string) => void }) {
+  const [tabs, setTabs] = useState<{ id: string; title: string; shared: boolean }[] | null>(null);
+  useEffect(() => {
+    api<{ tabs: { id: string; title: string; shared: boolean }[] }>(`/api/admin/locations/${locationId}/knowledge-tabs`)
+      .then((r) => setTabs(r.tabs))
+      .catch(() => setTabs([]));
+  }, [locationId]);
+  if (!tabs || tabs.length < 2) return null;
+  return (
+    <div className="field">
+      <label htmlFor="ci-tab">{pl.admin.content.tabs.which}</label>
+      <select id="ci-tab" value={value ?? ''} onChange={(e) => onSave(e.target.value)}>
+        {tabs
+          .filter((x) => !shared || x.shared)
+          .map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.title}
+            </option>
+          ))}
+      </select>
+    </div>
+  );
+}

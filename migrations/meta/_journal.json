@@ -99,6 +99,13 @@
       "when": 1792193620514,
       "tag": "0013_knowledge_tabs",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1792201355338,
+      "tag": "0014_checklist_item_modes",
+      "breakpoints": true
     }
   ]
 }
