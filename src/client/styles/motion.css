@@ -141,7 +141,14 @@
 .page-enter > :nth-child(n + 5) {
   animation-delay: 200ms;
 }
-/* after an iPhone swipe back the page must simply be there — no second entrance */
+/* after an iPhone swipe back (or „back”) the page must simply be there — no second entrance */
+html[data-nav='back'] .a-main > *,
+html[data-nav='back'] .a-reader > *,
+html[data-nav='back'] .page-enter > *,
+html[data-nav='back'] .page > *,
+html[data-nav='back'] .a-list > .a-row,
+html[data-nav='back'] .a-menu-grid > *,
+html[data-nav='back'] .a-modules > .a-module,
 html[data-nav='swipe'] .a-main > *,
 html[data-nav='swipe'] .a-reader > *,
 html[data-nav='swipe'] .page-enter > *,
@@ -530,11 +537,18 @@ a.today-tile:active {
   }
 }
 
-/* iPhone: while the keyboard is open the bottom bars step aside (main.tsx toggles .kb-open) */
+/* iPhone: while the keyboard is open the bottom bars step aside (main.tsx toggles .kb-open from the visible area);
+   after it closes they sit at the real bottom of the screen even if Safari left the page shifted (--vv-shift) */
 @media (max-width: 760px) and (hover: none) {
   html.kb-open .tabbar,
-  html.kb-open .a-tabbar {
+  html.kb-open .a-tabbar,
+  html.kb-open .a-footer {
     display: none;
+  }
+  .tabbar,
+  .a-tabbar,
+  .a-footer {
+    transform: translate3d(0, var(--vv-shift, 0px), 0);
   }
 }
 
@@ -569,4 +583,25 @@ a.today-tile:active {
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+}
+
+/* ───────── Smoothness on phones (2026-10-17) ─────────
+   Shorter entrances, only the first rows of a long list move (the rest are already below the screen),
+   and the moving parts are prepared as their own layers. */
+@media (pointer: coarse) {
+  .a-main > *,
+  .a-reader > *,
+  .page-enter > * {
+    animation-duration: 260ms;
+  }
+  .a-list > :nth-child(n + 9),
+  .a-menu-grid > :nth-child(n + 9),
+  .a-modules > :nth-child(n + 9) {
+    animation: none;
+  }
+  .a-list > .a-row,
+  .a-menu-grid > *,
+  .a-modules > .a-module {
+    animation-duration: 260ms;
+  }
 }

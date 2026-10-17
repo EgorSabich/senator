@@ -4,15 +4,18 @@ import './styles/tokens.css';
 import './styles/motion.css';
 import { App } from './App';
 import { registerServiceWorker } from './pwa';
+import { hydrateCache } from './apiCache';
 
 const root = document.getElementById('root');
-if (root) {
-  createRoot(root).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  );
-}
+// the answers saved on the phone first (a few ms): the app opens with them instead of a loader
+void hydrateCache().then(() => {
+  if (root)
+    createRoot(root).render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+});
 
 registerServiceWorker();
 
@@ -26,28 +29,35 @@ for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) {
 // Double-tap zoom is switched off in CSS (touch-action: manipulation), which keeps fast taps working (PIN pad).
 
 /*
- * iPhone keyboard (2026-10-17): while typing, the bottom bars hide (they would ride on top of the keyboard);
- * when the keyboard closes, Safari sometimes leaves fixed bars shifted — a 1px nudge puts them back.
+ * iPhone keyboard (2026-10-17, second fix). Whether the keyboard is open is read from the visible area itself
+ * (visualViewport), not from the focused field: „Gotowe” on the keyboard closes it without leaving the field.
+ * - keyboard open → the bottom bars hide (they would ride on top of the keyboard);
+ * - keyboard closed → if Safari left the page shifted, the bars are moved to the real bottom of the screen
+ *   (--vv-shift), so they never stay hanging in the middle.
  */
-const isTyping = (el: Element | null) =>
-  !!el && (el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || (el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|file|range)$/.test((el as HTMLInputElement).type)) || (el as HTMLElement).isContentEditable);
-document.addEventListener('focusin', (e) => {
-  if (isTyping(e.target as Element)) document.documentElement.classList.add('kb-open');
-});
+const root2 = document.documentElement;
+let frame = 0;
+function syncKeyboard() {
+  frame = 0;
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const hidden = window.innerHeight - vv.height; // part of the screen covered (keyboard)
+  const open = hidden > 120;
+  root2.classList.toggle('kb-open', open);
+  // bottom of what is visible vs bottom of the layout the bars are pinned to
+  const shift = open ? 0 : Math.round(vv.offsetTop + vv.height - window.innerHeight);
+  root2.style.setProperty('--vv-shift', `${Math.abs(shift) > 1 ? shift : 0}px`);
+}
+const queue = () => {
+  if (!frame) frame = requestAnimationFrame(syncKeyboard);
+};
+window.visualViewport?.addEventListener('resize', queue);
+window.visualViewport?.addEventListener('scroll', queue);
+window.addEventListener('orientationchange', queue);
 document.addEventListener('focusout', () => {
-  window.setTimeout(() => {
-    if (isTyping(document.activeElement)) return;
-    document.documentElement.classList.remove('kb-open');
-    window.scrollBy(0, 1);
-    window.scrollBy(0, -1);
-  }, 80);
+  // the keyboard slides down after the field is left: check again when it is gone
+  window.setTimeout(queue, 100);
+  window.setTimeout(queue, 400);
 });
-window.visualViewport?.addEventListener('resize', () => {
-  const vv = window.visualViewport!;
-  // keyboard gone (viewport back to full height) — make sure nothing stays shifted
-  if (vv.height >= window.innerHeight - 2 && !isTyping(document.activeElement)) {
-    document.documentElement.classList.remove('kb-open');
-    window.scrollBy(0, 1);
-    window.scrollBy(0, -1);
-  }
-});
+document.addEventListener('focusin', () => window.setTimeout(queue, 350));
+queue();

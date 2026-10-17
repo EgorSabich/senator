@@ -51,7 +51,13 @@ export function useApi<T>(path: string | null) {
     setError(null);
     setCode(null);
     try {
+      const before = apiCache.get(path);
       const v = await api<T>(path);
+      // the same answer as on screen: keep the old object, so nothing redraws or animates again
+      if (before !== undefined && JSON.stringify(before) === JSON.stringify(v)) {
+        apiCache.set(path, before);
+        return;
+      }
       apiCache.set(path, v);
       setDataState(v);
     } catch (e) {

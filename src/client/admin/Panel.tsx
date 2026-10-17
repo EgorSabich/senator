@@ -8,8 +8,8 @@ import { Notifications } from './Notifications';
 import { Stats } from './Stats';
 import { Today } from './Today';
 import { ChecklistStats } from './ChecklistStats';
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { LiveBar } from '../ui';
+import { createContext, lazy, Suspense, useContext, useEffect, useMemo, useState } from 'react';
+import { LiveBar, LogoLoader } from '../ui';
 import type { Me } from '../api';
 import { api } from '../api';
 import { pl } from '../i18n/pl';
@@ -20,7 +20,8 @@ import { Managers } from './Managers';
 import { Locations } from './Locations';
 import { Audit } from './Audit';
 import { ContentList } from './ContentList';
-import { ContentEditor } from './ContentEditor';
+// the text editor is large: loaded only when a material is opened for editing
+const ContentEditor = lazy(() => import('./ContentEditor').then((m) => ({ default: m.ContentEditor })));
 import { Menu } from './Menu';
 import { Programs } from './Programs';
 import '../styles/richtext.css';
@@ -83,7 +84,12 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
 
   let page: React.ReactNode = null;
   let m: Record<string, string> | null;
-  if ((m = match('/panel/materialy/:id', path))) page = <ContentEditor id={m.id!} />;
+  if ((m = match('/panel/materialy/:id', path)))
+    page = (
+      <Suspense fallback={<LogoLoader />}>
+        <ContentEditor id={m.id!} />
+      </Suspense>
+    );
   else if (path.startsWith('/panel/materialy')) page = <ContentList />;
   else if ((m = match('/panel/programy/:id', path))) page = <Programs selectedId={m.id!} />;
   else if (path.startsWith('/panel/programy')) page = <Programs selectedId={null} />;

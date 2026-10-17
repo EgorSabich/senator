@@ -311,6 +311,7 @@ export const pl = {
       checklist: 'Lista kontrolna',
     } as Record<string, string>,
     reader: {
+      home: 'Na Start',
       back: 'Wróć',
       readDone: 'Przeczytane',
       readNext: 'Przeczytane — dalej',
@@ -661,6 +662,7 @@ export const pl = {
       add: '+ Własne powiadomienie',
       scopeNote: 'Każdy dział ma swoje ustawienia. Pracownicy nie mogą ich wyłączyć.',
       auto: (d: string) => `Automatyczne — ${d}`,
+      covers: (list: string) => `Dotyczy stanowisk: ${list}`,
       own: 'Własne powiadomienia',
       ownEmpty: 'Brak własnych powiadomień dla tego działu.',
       on: 'Włączone',

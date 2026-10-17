@@ -2,7 +2,7 @@
    Shell: cache-first for hashed assets, network-first for pages.
    Data: network-first for staff API GETs and /media, kept in a cache cleared on logout/login.
    Never cached: auth (except /api/auth/me), admin API, non-GET, error answers. */
-const SHELL = 'sa-shell-v3';
+const SHELL = 'sa-shell-v4';
 const DATA = 'sa-data-v1';
 
 self.addEventListener('install', (event) => {
@@ -36,6 +36,34 @@ async function networkFirst(request, cacheName, fallbackKey) {
     if (hit) return hit;
     throw err;
   }
+}
+
+async function shellFirst(request, event) {
+  const update = fetch(request)
+    .then(async (res) => {
+      if (res.ok && res.headers.get('content-type')?.includes('text/html')) {
+        const c = await caches.open(SHELL);
+        await c.put('/', res.clone());
+        precacheAssets(await res.clone().text());
+      }
+      return res;
+    })
+    .catch(() => null);
+  const hit = await caches.match('/', { cacheName: SHELL });
+  if (hit) {
+    event.waitUntil(update);
+    return hit;
+  }
+  return (await update) || Response.error();
+}
+
+/** Scripts and styles named in the page: cached right away, so the next start needs no network for them. */
+function precacheAssets(html) {
+  const urls = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1]);
+  if (!urls.length) return;
+  caches.open(SHELL).then(async (c) => {
+    for (const u of urls) if (!(await c.match(u))) await c.add(u).catch(() => undefined);
+  });
 }
 
 async function cacheFirst(request, cacheName) {
@@ -75,7 +103,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (req.mode === 'navigate') {
-    event.respondWith(networkFirst(req, SHELL, '/'));
+    // the app opens at once from the phone (2026-10-17); the page is refreshed in the background for the next start.
+    // A new version shows „Jest nowa wersja” and its button loads it (live.ts → updateApp).
+    event.respondWith(shellFirst(req, event));
   }
 });
 

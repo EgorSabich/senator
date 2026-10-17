@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import { api, ApiFailure, type Me } from './api';
+import { api, ApiFailure, cached, type Me } from './api';
 import { errorText, pl } from './i18n/pl';
 import { Redirect, usePath } from './router';
 import { ChangeSecret } from './screens/ChangeSecret';
@@ -7,11 +7,37 @@ import { maybeShowInstallGuide } from './app/Install';
 import { Login } from './screens/Login';
 import { Brand, ErrorBox, LogoLoader, SecondaryButton, screen } from './ui';
 import { clearPersonalCache } from './pwa';
+import { updateApp } from './live';
 
+/**
+ * The app page opens from the phone (sw.js). After a new version is published, a part not loaded yet may be
+ * gone from the server: then the new version is fetched and the app reloads once.
+ */
+function lazyPart<T>(load: () => Promise<T>): Promise<T> {
+  return load().then((m) => {
+    try {
+      sessionStorage.removeItem('sa.chunk-reload');
+    } catch {
+      /* no storage */
+    }
+    return m;
+  }, async (e) => {
+    const key = 'sa.chunk-reload';
+    let again = false;
+    try {
+      again = sessionStorage.getItem(key) === '1';
+      sessionStorage.setItem(key, '1');
+    } catch {
+      /* no storage */
+    }
+    if (!again) await updateApp();
+    throw e;
+  });
+}
 // The panel (editor, admin screens) is loaded only for managers and the owner.
-const Panel = lazy(() => import('./admin/Panel').then((m) => ({ default: m.Panel })));
-const Academy = lazy(() => import('./app/Academy').then((m) => ({ default: m.Academy })));
-const Terminal = lazy(() => import('./terminal/Terminal').then((m) => ({ default: m.Terminal })));
+const Panel = lazy(() => lazyPart(() => import('./admin/Panel')).then((m) => ({ default: m.Panel })));
+const Academy = lazy(() => lazyPart(() => import('./app/Academy')).then((m) => ({ default: m.Academy })));
+const Terminal = lazy(() => lazyPart(() => import('./terminal/Terminal')).then((m) => ({ default: m.Terminal })));
 
 /** Set on a phone in time-clock mode: it opens the terminal even when the network is down at start. */
 function isTerminalPhone(): boolean {
@@ -33,15 +59,25 @@ function Loading() {
 }
 
 export function App() {
-  const [state, setState] = useState<State>({ kind: 'loading' });
+  // signed in on this phone before: open at once with the saved account, it is checked again right away
+  const [state, setState] = useState<State>(() => {
+    const me = cached<Me>('/api/auth/me');
+    return me && !me.user.mustChangeSecret ? { kind: 'signed-in', me } : { kind: 'loading' };
+  });
   const path = usePath();
 
   const refresh = useCallback(async () => {
     try {
-      setState({ kind: 'signed-in', me: await api<Me>('/api/auth/me') });
+      const me = await api<Me>('/api/auth/me');
+      // same account as the one already on screen: nothing to redraw
+      setState((s) => (s.kind === 'signed-in' && JSON.stringify(s.me) === JSON.stringify(me) ? s : { kind: 'signed-in', me }));
     } catch (err) {
-      if (err instanceof ApiFailure && err.status === 401) setState({ kind: 'anonymous' });
-      else if (err instanceof ApiFailure && err.status === 0 && isTerminalPhone()) setState({ kind: 'terminal-offline' });
+      if (err instanceof ApiFailure && err.status === 401) {
+        void clearPersonalCache();
+        setState({ kind: 'anonymous' });
+      } else if (err instanceof ApiFailure && err.status === 0 && isTerminalPhone()) setState({ kind: 'terminal-offline' });
+      // offline with a saved account: keep showing the app
+      else if (err instanceof ApiFailure && err.status === 0 && cached<Me>('/api/auth/me')) return;
       else setState({ kind: 'error', message: errorText(err instanceof ApiFailure ? err.code : 'generic') });
     }
   }, []);

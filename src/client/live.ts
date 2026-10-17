@@ -125,6 +125,15 @@ export function useLiveState() {
 /** „Jest nowa wersja” → fetch the new app and reload. */
 export async function updateApp(): Promise<void> {
   try {
+    // the app page is served from the phone first: put the new one there before reloading
+    const fresh = await fetch('/', { cache: 'reload', credentials: 'same-origin' });
+    if (fresh.ok && 'caches' in window) {
+      for (const k of await caches.keys()) if (k.startsWith('sa-shell')) await (await caches.open(k)).put('/', fresh.clone());
+    }
+  } catch {
+    /* offline — the reload uses what is there */
+  }
+  try {
     const reg = await navigator.serviceWorker?.getRegistration('/');
     await reg?.update();
   } catch {

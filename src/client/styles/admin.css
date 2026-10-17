@@ -2825,6 +2825,10 @@ a.sch-person:hover {
   font-weight: 600;
   margin: 0 0 6px;
 }
+.ntf-who {
+  font-size: 13px;
+  margin: -4px 0 4px;
+}
 .ntf-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 230px 170px 52px;

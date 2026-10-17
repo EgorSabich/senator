@@ -129,7 +129,7 @@ export function Reader({ id }: { id: string }) {
               <span className="a-note" style={{ alignItems: 'center' }}>
                 <Icon name="check" size={18} /> {t.reader.acked(formatDate(ackedAt!))}
               </span>
-              {it.next && <NextButton id={it.next.id} />}
+              {it.next ? <NextButton id={it.next.id} /> : <HomeButton />}
             </div>
           ) : (
             <>
@@ -152,7 +152,7 @@ export function Reader({ id }: { id: string }) {
             <span className="a-note" style={{ alignItems: 'center' }}>
               <Icon name="check" size={18} /> {t.reader.read(formatDate(ackedAt!))}
             </span>
-            {it.next ? <NextButton id={it.next.id} /> : <button className="a-btn" onClick={goBack}>{pl.common.back}</button>}
+            {it.next ? <NextButton id={it.next.id} /> : <HomeButton />}
           </div>
         ) : (
           <>
@@ -177,6 +177,16 @@ function NextButton({ id }: { id: string }) {
     <button className="a-btn primary" onClick={() => navigate(contentHref(id))}>
       <span>{t.reader.next}</span>
       <Icon name="next" size={18} />
+    </button>
+  );
+}
+
+/** After the last material: straight back to Start (owner, 2026-10-17). */
+function HomeButton() {
+  return (
+    <button className="a-btn primary" onClick={() => navigate('/')}>
+      <Icon name="home" size={18} />
+      <span>{t.reader.home}</span>
     </button>
   );
 }

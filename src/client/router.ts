@@ -24,6 +24,14 @@ if (typeof history !== 'undefined') {
   if (!(history.state as { k?: string } | null)?.k) history.replaceState({ k: entryKey }, '');
 }
 
+function touchDevice() {
+  try {
+    return window.matchMedia('(pointer: coarse)').matches;
+  } catch {
+    return false;
+  }
+}
+
 function reducedMotion() {
   try {
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -36,7 +44,9 @@ function reducedMotion() {
 function notify(direction: 'forward' | 'back') {
   const run = () => listeners.forEach((l) => l());
   const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
-  if (doc.startViewTransition && !reducedMotion()) {
+  // Phones (2026-10-17, smoothness): no whole-page snapshot transition — it photographs the page twice and stutters on
+  // iPhones. The new page's own light entrance (motion.css) is enough; going back shows the page at once.
+  if (doc.startViewTransition && !reducedMotion() && !touchDevice()) {
     document.documentElement.dataset.nav = direction;
     doc.startViewTransition(() => flushSync(run));
   } else {

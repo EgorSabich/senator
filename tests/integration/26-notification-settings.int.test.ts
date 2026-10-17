@@ -110,6 +110,8 @@ beforeAll(async () => {
   daria = await mk('Daria', 'waiter', '715284');
   emil = await mk('Emil', 'waiter', '826395');
   await mk('Filip', 'waiter', '937406');
+  const gabi = await mk('Gabi', 'waiter_assistant', '648213'); // a runner: belongs to Kelnerzy
+  await subscribe(gabi, '/gabi');
   await subscribe(daria, '/daria');
   await subscribe(emil, '/emil');
   const x = MANAGER_ROLES.head_chef;
@@ -191,6 +193,14 @@ describe('terminal and checklist', () => {
     await cron();
     await settle();
     expect(count('/emil', 'Lista kontrolna')).toBe(0);
+  });
+});
+
+describe('assistants', () => {
+  it('a runner gets the waiters’ notifications', async () => {
+    expect((await term.post('/api/terminal/punch', { pin: '648213', clientId: cid() })).data.outcome).toBe('in');
+    await arrived('/gabi', 'Wejście');
+    expect(count('/gabi', 'Wejście')).toBe(1);
   });
 });
 

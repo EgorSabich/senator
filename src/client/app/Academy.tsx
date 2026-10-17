@@ -49,14 +49,43 @@ export function Academy({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: (
     );
     const idle = (cb: () => void) => ((window as Window & { requestIdleCallback?: (f: () => void) => number }).requestIdleCallback ?? ((f: () => void) => window.setTimeout(f, 800)))(cb);
     let cancelled = false;
+    // a few at a time, only what is not on the phone yet (answers are kept between launches — apiCache.ts)
+    const fetchAll = async (list: string[], each: (p: string) => Promise<unknown>) => {
+      const todo = list.filter((p) => !apiCache.has(p));
+      const worker = async () => {
+        for (let p = todo.shift(); p && !cancelled; p = todo.shift()) await each(p).catch(() => undefined);
+      };
+      await Promise.all([worker(), worker(), worker()]);
+    };
     idle(async () => {
-      for (const p of paths) {
-        if (cancelled || apiCache.has(p)) continue;
-        try {
-          apiCache.set(p, await api(p));
-        } catch {
-          /* offline or not allowed: the tab loads normally later */
-        }
+      await fetchAll(paths, async (p) => apiCache.set(p, await api(p)));
+      if (cancelled) return;
+      // then the inside of the tabs: every dish card, every document and lesson
+      const menu = apiCache.get(`/api/locations/${locationId}/menu`) as { items?: { id: string; photoSrc: string | null }[] } | undefined;
+      const sb = apiCache.get(`/api/locations/${locationId}/service-book`) as { items?: { id: string }[] } | undefined;
+      const lib = apiCache.get(`/api/locations/${locationId}/library`) as { items?: { id: string; external?: boolean }[] } | undefined;
+      const les = apiCache.get(`/api/locations/${locationId}/lessons`) as { items?: { id: string; locked?: boolean }[] } | undefined;
+      const inner = [
+        ...(sb?.items ?? []).map((i) => `/api/content/${i.id}`),
+        ...(lib?.items ?? []).filter((i) => !i.external).map((i) => `/api/content/${i.id}`),
+        ...(les?.items ?? []).filter((i) => !i.locked).map((i) => `/api/content/${i.id}`),
+        ...(menu?.items ?? []).map((i) => `/api/menu/items/${i.id}`),
+      ];
+      await fetchAll(inner, async (p) => apiCache.set(p, await api(p)));
+      // dish photos into the offline cache (service worker), unless the phone asks to save data
+      const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
+      if (cancelled || saveData) return;
+      const seen = new Set<string>();
+      for (const i of menu?.items ?? []) {
+        if (cancelled) return;
+        if (!i.photoSrc || seen.has(i.photoSrc)) continue;
+        seen.add(i.photoSrc);
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = i.photoSrc;
+        await new Promise((r) => {
+          img.onload = img.onerror = r;
+        });
       }
     });
     return () => {

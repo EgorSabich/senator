@@ -4,6 +4,7 @@
  * (once, weekly, before shift start, after clock-in, before shift end). Leaders see their own divisions.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { positionsOfDivisions } from '../../shared/constants';
 import { warsawToMs } from '../../shared/time';
 import { api, ApiFailure } from '../api';
 import { DateField } from '../DateField';
@@ -142,6 +143,7 @@ export function Notifications() {
       {rules && (
         <section className="card ntf-card">
           <h2 className="ntf-h">{t.auto(DIV[div] ?? div)}</h2>
+          <span className="muted ntf-who">{t.covers(positionsOfDivisions([div]).map((p) => pl.admin.positions[p] ?? p).join(', '))}</span>
           {KINDS.map((k) => {
             const r = rules[k];
             const info = t.kinds[k]!;

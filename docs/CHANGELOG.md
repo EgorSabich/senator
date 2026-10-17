@@ -10,6 +10,16 @@
 
 
 
+## 0.9.16 — 2026-10-17 (instant start, smoother, keyboard)
+
+- Instant start: the staff app keeps its last answers on the phone (IndexedDB; panel data stays in memory only — it holds other people's data). The app opens straight away with them, also without internet, and refreshes in the background; an unchanged answer does not redraw the screen. Removed on logout and on login. The app page itself opens from the phone (service worker), its scripts are stored right away; „Jest nowa wersja” loads the new one. A part missing after an update reloads the app once.
+- Warm-up: besides the tabs, every dish card, Service Book page, document and lesson is fetched in the background once (three at a time, only what is missing), then dish photos (not with „save data” on).
+- Smoother on phones: no whole-page snapshot transition (it stuttered on iPhones); shorter entrances; only the first 8 rows of a list move; going back shows the page at once.
+- Panel loads ~3× smaller at first: the text editor is fetched only when a material is opened for editing.
+- iPhone keyboard: whether it is open is read from the visible area (also „Gotowe” on the keyboard); afterwards the bottom bars are moved to the real bottom of the screen if Safari left the page shifted.
+- Reader: after the last material „Na Start” instead of only a note.
+- Powiadomienia: under each division the positions it covers (e.g. Kelner, Runner; Barman, Barback; Mistrz shishy, Pomocnik). Test 26 checks a runner gets the waiters’ notifications. `cache_walkthrough.py`.
+
 ## 0.9.15 — 2026-10-17 (Panel → Statystyki)
 
 - New panel section „Statystyki” (permission `stats.view`; leaders who manage time or the schedule get it, migration 0020). Leaders see their divisions, the owner and zarządzający everything. Period: week, month, quarter (with ‹ ›) or own range; filter by division; „Eksport CSV” (Excel-friendly, „;”).
