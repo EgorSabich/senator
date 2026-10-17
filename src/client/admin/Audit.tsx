@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { api, ApiFailure } from '../api';
-import { errorText, pl } from '../i18n/pl';
-import { ErrorBox } from '../ui';
-import { formatDateTime } from './common';
+import { useEffect, useState } from "react";
+import { api, ApiFailure } from "../api";
+import { errorText, pl } from "../i18n/pl";
+import { ErrorBox } from "../ui";
+import { formatDateTime } from "./common";
 
 interface Entry {
   id: string;
@@ -16,18 +16,20 @@ interface Entry {
 const t = pl.admin.audit;
 
 function summary(e: Entry): string {
-  if (!e.afterJson) return '';
+  if (!e.afterJson) return "";
   try {
     const a = JSON.parse(e.afterJson) as Record<string, unknown>;
     const parts: string[] = [];
-    if (a.firstName || a.lastName) parts.push(`${a.firstName ?? ''} ${a.lastName ?? ''}`.trim());
+    if (a.firstName || a.lastName)
+      parts.push(`${a.firstName ?? ""} ${a.lastName ?? ""}`.trim());
     if (a.title) parts.push(String(a.title));
     if (a.name) parts.push(String(a.name));
     if (a.versionNo) parts.push(pl.admin.content.version(Number(a.versionNo)));
-    if (a.changeLevel) parts.push(pl.admin.content.levels[String(a.changeLevel)]?.label ?? '');
-    return parts.filter(Boolean).join(' · ');
+    if (a.changeLevel)
+      parts.push(pl.admin.content.levels[String(a.changeLevel)]?.label ?? "");
+    return parts.filter(Boolean).join(" · ");
   } catch {
-    return '';
+    return "";
   }
 }
 
@@ -35,9 +37,11 @@ export function Audit() {
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    api<{ entries: Entry[] }>('/api/admin/audit?limit=300')
+    api<{ entries: Entry[] }>("/api/admin/audit?limit=300")
       .then((r) => setEntries(r.entries))
-      .catch((e) => setError(errorText(e instanceof ApiFailure ? e.code : 'generic')));
+      .catch((e) =>
+        setError(errorText(e instanceof ApiFailure ? e.code : "generic")),
+      );
   }, []);
   return (
     <>
@@ -45,7 +49,7 @@ export function Audit() {
       <ErrorBox message={error} />
       {entries?.length === 0 && <p className="muted">{t.empty}</p>}
       {entries && entries.length > 0 && (
-        <div className="table-wrap">
+        <div className="table-wrap audit-table">
           <table>
             <thead>
               <tr>
@@ -57,10 +61,21 @@ export function Audit() {
             <tbody>
               {entries.map((e) => (
                 <tr key={e.id}>
-                  <td style={{ whiteSpace: 'nowrap', color: 'var(--text-soft)' }}>{formatDateTime(e.createdAt)}</td>
-                  <td>{e.actorFirstName ? `${e.actorFirstName} ${e.actorLastName}` : t.system}</td>
+                  <td
+                    className="audit-when"
+                    style={{ whiteSpace: "nowrap", color: "var(--text-soft)" }}
+                  >
+                    {formatDateTime(e.createdAt)}
+                  </td>
+                  <td className="audit-who">
+                    {e.actorFirstName
+                      ? `${e.actorFirstName} ${e.actorLastName}`
+                      : t.system}
+                  </td>
                   <td>
-                    <div style={{ fontWeight: 600 }}>{t.actions[e.action] ?? e.action}</div>
+                    <div style={{ fontWeight: 600 }}>
+                      {t.actions[e.action] ?? e.action}
+                    </div>
                     <div className="muted" style={{ fontSize: 13 }}>
                       {summary(e)}
                     </div>

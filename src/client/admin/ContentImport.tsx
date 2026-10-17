@@ -1,10 +1,16 @@
-import { useState } from 'react';
-import { checkContentBundle, checklistsToBundle, CONTENT_BUNDLE_FORMAT, CONTENT_IMPORT_CHUNK, type ContentBundle } from '../../shared/contentBundle';
-import { api, ApiFailure } from '../api';
-import { errorText, pl } from '../i18n/pl';
-import { ErrorBox } from '../ui';
-import { Btn, Modal } from './common';
-import { usePanel } from './Panel';
+import { useState } from "react";
+import {
+  checkContentBundle,
+  checklistsToBundle,
+  CONTENT_BUNDLE_FORMAT,
+  CONTENT_IMPORT_CHUNK,
+  type ContentBundle,
+} from "../../shared/contentBundle";
+import { api, ApiFailure } from "../api";
+import { errorText, pl } from "../i18n/pl";
+import { Disclosure, ErrorBox } from "../ui";
+import { Btn, Modal } from "./common";
+import { usePanel } from "./Panel";
 
 const t = pl.admin.content;
 
@@ -23,12 +29,21 @@ const CHECKLIST_SAMPLE = `{
   ]
 }`;
 
-export function ContentImport({ onClose, onDone }: { onClose: () => void; onDone: () => Promise<void> }) {
+export function ContentImport({
+  onClose,
+  onDone,
+}: {
+  onClose: () => void;
+  onDone: () => Promise<void>;
+}) {
   const { locationId } = usePanel();
   const [bundle, setBundle] = useState<ContentBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<[number, number] | null>(null);
-  const [result, setResult] = useState<{ created: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<{
+    created: number;
+    skipped: number;
+  } | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
 
   async function read(file: File | undefined) {
@@ -46,7 +61,7 @@ export function ContentImport({ onClose, onDone }: { onClose: () => void; onDone
         return;
       }
       const b = checkContentBundle(json);
-      if (!b) throw new Error('bad');
+      if (!b) throw new Error("bad");
       setBundle(b);
     } catch {
       setError(t.importBadFile);
@@ -60,16 +75,22 @@ export function ContentImport({ onClose, onDone }: { onClose: () => void; onDone
     try {
       for (let i = 0; i < bundle.items.length; i += CONTENT_IMPORT_CHUNK) {
         setProgress([i, bundle.items.length]);
-        const res = await api<{ created: string[]; skipped: string[] }>(`/api/admin/locations/${locationId}/content/import`, {
-          method: 'POST',
-          body: { format: CONTENT_BUNDLE_FORMAT, items: bundle.items.slice(i, i + CONTENT_IMPORT_CHUNK) },
-        });
+        const res = await api<{ created: string[]; skipped: string[] }>(
+          `/api/admin/locations/${locationId}/content/import`,
+          {
+            method: "POST",
+            body: {
+              format: CONTENT_BUNDLE_FORMAT,
+              items: bundle.items.slice(i, i + CONTENT_IMPORT_CHUNK),
+            },
+          },
+        );
         total.created += res.created.length;
         total.skipped += res.skipped.length;
       }
       setResult(total);
     } catch (e) {
-      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+      setError(errorText(e instanceof ApiFailure ? e.code : "generic"));
       if (total.created || total.skipped) setResult(total);
     } finally {
       setProgress(null);
@@ -78,26 +99,45 @@ export function ContentImport({ onClose, onDone }: { onClose: () => void; onDone
   }
 
   const byKind = new Map<string, number>();
-  for (const i of bundle?.items ?? []) byKind.set(i.kind, (byKind.get(i.kind) ?? 0) + 1);
+  for (const i of bundle?.items ?? [])
+    byKind.set(i.kind, (byKind.get(i.kind) ?? 0) + 1);
 
   return (
     <Modal title={t.importTitle} onClose={progress ? () => undefined : onClose}>
-      <p style={{ margin: 0, lineHeight: 1.5, fontSize: 14 }}>{t.importIntro}</p>
-      <details>
-        <summary style={{ cursor: 'pointer', fontSize: 14 }}>{t.importChecklistHelp}</summary>
+      <p style={{ margin: 0, lineHeight: 1.5, fontSize: 14 }}>
+        {t.importIntro}
+      </p>
+      <Disclosure className="small-disc" summary={t.importChecklistHelp}>
         <pre className="code-sample">{CHECKLIST_SAMPLE}</pre>
-        <p className="muted" style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>
+        <p
+          className="muted"
+          style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}
+        >
           {t.importChecklistHint}
         </p>
-      </details>
+      </Disclosure>
       <label className="file-btn">
-        <input type="file" accept="application/json,.json" disabled={Boolean(progress)} onChange={(e) => void read(e.target.files?.[0])} />
+        <input
+          type="file"
+          accept="application/json,.json"
+          disabled={Boolean(progress)}
+          onChange={(e) => void read(e.target.files?.[0])}
+        />
         <span>{t.importChoose}</span>
       </label>
       {bundle && (
         <>
-          <p style={{ margin: 0, fontWeight: 600 }}>{t.importSummary(bundle.items.length)}</p>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, lineHeight: 1.6 }}>
+          <p style={{ margin: 0, fontWeight: 600 }}>
+            {t.importSummary(bundle.items.length)}
+          </p>
+          <ul
+            style={{
+              margin: 0,
+              paddingLeft: 18,
+              fontSize: 14,
+              lineHeight: 1.6,
+            }}
+          >
             {[...byKind.entries()].map(([k, n]) => (
               <li key={k}>
                 {t.kinds[k] ?? k}: {n}
@@ -105,20 +145,33 @@ export function ContentImport({ onClose, onDone }: { onClose: () => void; onDone
             ))}
           </ul>
           {bundle.notes && bundle.notes.length > 0 && (
-            <details>
-              <summary style={{ cursor: 'pointer', fontSize: 14 }}>
-                {t.importNotes} ({bundle.notes.length})
-              </summary>
-              <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 13, lineHeight: 1.5, maxHeight: 240, overflow: 'auto' }}>
+            <Disclosure
+              className="small-disc"
+              summary={`${t.importNotes} (${bundle.notes.length})`}
+            >
+              <ul
+                style={{
+                  margin: "8px 0 0",
+                  paddingLeft: 18,
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  maxHeight: 240,
+                  overflow: "auto",
+                }}
+              >
                 {bundle.notes.map((x, i) => (
                   <li key={i}>{x}</li>
                 ))}
               </ul>
-            </details>
+            </Disclosure>
           )}
         </>
       )}
-      {progress && <p className="muted" role="status">{t.importProgress(progress[0], progress[1])}</p>}
+      {progress && (
+        <p className="muted" role="status">
+          {t.importProgress(progress[0], progress[1])}
+        </p>
+      )}
       {result && (
         <div className="notice" role="status">
           {t.importResult(result.created, result.skipped)}
@@ -127,7 +180,14 @@ export function ContentImport({ onClose, onDone }: { onClose: () => void; onDone
       {problems.length > 0 && (
         <div className="error-box" role="alert">
           <strong>{t.importChecklistErrors}</strong>
-          <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 13, lineHeight: 1.5 }}>
+          <ul
+            style={{
+              margin: "6px 0 0",
+              paddingLeft: 18,
+              fontSize: 13,
+              lineHeight: 1.5,
+            }}
+          >
             {problems.map((x, i) => (
               <li key={i}>{x}</li>
             ))}
@@ -137,7 +197,11 @@ export function ContentImport({ onClose, onDone }: { onClose: () => void; onDone
       <ErrorBox message={error} />
       <div className="btn-row">
         {!result && (
-          <Btn kind="primary" disabled={!bundle || Boolean(progress)} onClick={() => void run()}>
+          <Btn
+            kind="primary"
+            disabled={!bundle || Boolean(progress)}
+            onClick={() => void run()}
+          >
             {t.importStart}
           </Btn>
         )}

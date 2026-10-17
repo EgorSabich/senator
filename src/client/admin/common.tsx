@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { api, ApiFailure } from '../api';
-import { errorText, pl } from '../i18n/pl';
-import { positionsOfDivisions } from '../../shared/constants';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { api, ApiFailure } from "../api";
+import { errorText, pl } from "../i18n/pl";
+import { positionsOfDivisions } from "../../shared/constants";
 
 /* ───────── Icons (inline stroke SVG, decorative) ───────── */
 
@@ -119,9 +125,25 @@ const paths: Record<string, ReactNode> = {
   ),
 };
 
-export function Icon({ name, size = 22 }: { name: keyof typeof paths | string; size?: number }) {
+export function Icon({
+  name,
+  size = 22,
+}: {
+  name: keyof typeof paths | string;
+  size?: number;
+}) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       {paths[name]}
     </svg>
   );
@@ -131,7 +153,12 @@ export function Icon({ name, size = 22 }: { name: keyof typeof paths | string; s
 export function DivisionExtras({ division }: { division: string }) {
   const extra = positionsOfDivisions([division]).filter((p) => p !== division);
   if (!extra.length) return null;
-  if (extra.length > 2) return <span className="chip-extra">{pl.admin.moreSpecialisations(extra.length)}</span>;
+  if (extra.length > 2)
+    return (
+      <span className="chip-extra">
+        {pl.admin.moreSpecialisations(extra.length)}
+      </span>
+    );
   return (
     <>
       {extra.map((p) => (
@@ -148,25 +175,50 @@ export function DivisionExtras({ division }: { division: string }) {
 export function Btn(props: {
   children: ReactNode;
   onClick?: () => void;
-  kind?: 'primary' | 'secondary' | 'danger';
+  kind?: "primary" | "secondary" | "danger";
   disabled?: boolean;
-  type?: 'button' | 'submit';
+  type?: "button" | "submit";
 }) {
-  const kind = props.kind ?? 'secondary';
+  const kind = props.kind ?? "secondary";
   const style: React.CSSProperties = {
     minHeight: 44,
-    padding: '0 16px',
+    padding: "0 16px",
     borderRadius: 10,
-    fontFamily: 'var(--font-ui)',
+    fontFamily: "var(--font-ui)",
     fontSize: 14,
-    fontWeight: kind === 'primary' ? 700 : 600,
-    cursor: props.disabled ? 'default' : 'pointer',
-    border: kind === 'primary' ? 'none' : `1px solid ${kind === 'danger' ? 'var(--bad-border)' : 'var(--border)'}`,
-    background: kind === 'primary' ? (props.disabled ? 'var(--border)' : 'var(--accent)') : 'none',
-    color: kind === 'primary' ? (props.disabled ? 'var(--text-disabled)' : 'var(--on-accent)') : kind === 'danger' ? 'var(--bad-fg)' : 'var(--text)',
+    fontWeight: kind === "primary" ? 700 : 600,
+    // one line; a label too long for the screen ends with „…” instead of leaving it
+    whiteSpace: "nowrap",
+    maxWidth: "100%",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    cursor: props.disabled ? "default" : "pointer",
+    border:
+      kind === "primary"
+        ? "none"
+        : `1px solid ${kind === "danger" ? "var(--bad-border)" : "var(--border)"}`,
+    background:
+      kind === "primary"
+        ? props.disabled
+          ? "var(--border)"
+          : "var(--accent)"
+        : "none",
+    color:
+      kind === "primary"
+        ? props.disabled
+          ? "var(--text-disabled)"
+          : "var(--on-accent)"
+        : kind === "danger"
+          ? "var(--bad-fg)"
+          : "var(--text)",
   };
   return (
-    <button type={props.type ?? 'button'} onClick={props.onClick} disabled={props.disabled} style={style}>
+    <button
+      type={props.type ?? "button"}
+      onClick={props.onClick}
+      disabled={props.disabled}
+      style={style}
+    >
       {props.children}
     </button>
   );
@@ -174,7 +226,15 @@ export function Btn(props: {
 
 /* ───────── Modal ───────── */
 
-export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+export function Modal({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [closing, setClosing] = useState(false);
   const [drag, setDrag] = useState(0);
@@ -187,20 +247,26 @@ export function Modal({ title, children, onClose }: { title: string; children: R
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     // on phones do not pop the keyboard up by focusing the first field
-    if (window.matchMedia('(min-width: 721px)').matches) ref.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
-    document.addEventListener('keydown', onKey);
-    document.documentElement.classList.add('modal-open');
+    if (window.matchMedia("(min-width: 721px)").matches)
+      ref.current
+        ?.querySelector<HTMLElement>("input, select, textarea, button")
+        ?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    document.addEventListener("keydown", onKey);
+    document.documentElement.classList.add("modal-open");
     return () => {
-      document.removeEventListener('keydown', onKey);
-      document.documentElement.classList.remove('modal-open');
+      document.removeEventListener("keydown", onKey);
+      document.documentElement.classList.remove("modal-open");
       prev?.focus();
     };
   }, [close]);
   return (
-    <div className={`modal-backdrop${closing ? ' closing' : ''}`} onClick={(e) => e.target === e.currentTarget && close()}>
+    <div
+      className={`modal-backdrop${closing ? " closing" : ""}`}
+      onClick={(e) => e.target === e.currentTarget && close()}
+    >
       <div
-        className={`modal${closing ? ' closing' : ''}${drag ? ' dragging' : ''}`}
+        className={`modal${closing ? " closing" : ""}${drag ? " dragging" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
@@ -215,7 +281,10 @@ export function Modal({ title, children, onClose }: { title: string; children: R
             start.current = e.clientY;
             e.currentTarget.setPointerCapture(e.pointerId);
           }}
-          onPointerMove={(e) => start.current !== null && setDrag(Math.max(0, e.clientY - start.current))}
+          onPointerMove={(e) =>
+            start.current !== null &&
+            setDrag(Math.max(0, e.clientY - start.current))
+          }
           onPointerUp={() => {
             start.current = null;
             if (drag > 90) close();
@@ -228,7 +297,15 @@ export function Modal({ title, children, onClose }: { title: string; children: R
         >
           <span />
         </div>
-        <h2 id="modal-title" style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 600 }}>
+        <h2
+          id="modal-title"
+          style={{
+            margin: 0,
+            fontFamily: "var(--font-display)",
+            fontSize: 26,
+            fontWeight: 600,
+          }}
+        >
           {title}
         </h2>
         {children}
@@ -253,28 +330,37 @@ export function DeleteForeverModal(props: {
   onClose: () => void;
 }) {
   const d = pl.admin.deleteForever;
-  const [impact, setImpact] = useState<Record<string, any> | null>(props.impactPath ? null : {});
-  const [typed, setTyped] = useState('');
+  const [impact, setImpact] = useState<Record<string, any> | null>(
+    props.impactPath ? null : {},
+  );
+  const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!props.impactPath) return;
     api<Record<string, any>>(props.impactPath)
       .then(setImpact)
-      .catch((e) => setError(errorText(e instanceof ApiFailure ? e.code : 'generic')));
+      .catch((e) =>
+        setError(errorText(e instanceof ApiFailure ? e.code : "generic")),
+      );
   }, [props.impactPath]);
-  const expected: string = (impact?.confirmText as string | undefined) ?? props.confirmText ?? '';
-  const norm = (v: string) => v.normalize('NFC').replace(/\s+/g, ' ').trim().toLocaleLowerCase('pl');
-  const ok = expected !== '' && norm(typed) === norm(expected);
+  const expected: string =
+    (impact?.confirmText as string | undefined) ?? props.confirmText ?? "";
+  const norm = (v: string) =>
+    v.normalize("NFC").replace(/\s+/g, " ").trim().toLocaleLowerCase("pl");
+  const ok = expected !== "" && norm(typed) === norm(expected);
 
   async function run() {
     setBusy(true);
     setError(null);
     try {
-      await api(props.deletePath, { method: 'DELETE', body: { confirm: typed } });
+      await api(props.deletePath, {
+        method: "DELETE",
+        body: { confirm: typed },
+      });
       await props.onDeleted();
     } catch (e) {
-      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+      setError(errorText(e instanceof ApiFailure ? e.code : "generic"));
       setBusy(false);
     }
   }
@@ -282,19 +368,34 @@ export function DeleteForeverModal(props: {
   return (
     <Modal title={props.title} onClose={props.onClose}>
       <p style={{ margin: 0 }}>{d.intro}</p>
-      {impact && props.lines && props.lines(impact as Record<string, number>).length > 0 && (
-        <ul style={{ margin: 0, paddingLeft: 20 }}>
-          {props.lines(impact as Record<string, number>).map((l) => (
-            <li key={l}>{l}</li>
-          ))}
-        </ul>
-      )}
-      <p className="muted" style={{ margin: 0, fontSize: 13 }}>{d.backups}</p>
+      {impact &&
+        props.lines &&
+        props.lines(impact as Record<string, number>).length > 0 && (
+          <ul style={{ margin: 0, paddingLeft: 20 }}>
+            {props.lines(impact as Record<string, number>).map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        )}
+      <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+        {d.backups}
+      </p>
       <div className="field">
         <label htmlFor="delete-confirm">{d.typeToConfirm(expected)}</label>
-        <input id="delete-confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" spellCheck={false} disabled={!impact} />
+        <input
+          id="delete-confirm"
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={!impact}
+        />
       </div>
-      {error && <div className="notice warn-notice" role="alert">{error}</div>}
+      {error && (
+        <div className="notice warn-notice" role="alert">
+          {error}
+        </div>
+      )}
       <div className="btn-row">
         <Btn kind="danger" onClick={() => void run()} disabled={!ok || busy}>
           {busy ? d.deleting : d.button}
@@ -311,30 +412,44 @@ export interface SecretInfo {
   name: string;
   login: string;
   tempSecret: string;
-  secretKind: 'pin' | 'password';
+  secretKind: "pin" | "password";
   /** Overrides the default note (e.g. a terminal password, which is not changed at first sign-in). */
   note?: string;
   secretLabel?: string;
 }
 
-export function SecretCardModal({ info, onClose }: { info: SecretInfo; onClose: () => void }) {
-  const isPin = info.secretKind === 'pin';
+export function SecretCardModal({
+  info,
+  onClose,
+}: {
+  info: SecretInfo;
+  onClose: () => void;
+}) {
+  const isPin = info.secretKind === "pin";
   const [copied, setCopied] = useState(false);
-  const label = info.secretLabel ?? (isPin ? pl.admin.card.pin : pl.admin.card.password);
+  const label =
+    info.secretLabel ?? (isPin ? pl.admin.card.pin : pl.admin.card.password);
   async function copy() {
-    const text = pl.admin.card.copyText(info.name, location.origin, info.login, label, info.tempSecret, info.note ?? (isPin ? pl.admin.card.note : pl.admin.card.notePassword));
+    const text = pl.admin.card.copyText(
+      info.name,
+      location.origin,
+      info.login,
+      label,
+      info.tempSecret,
+      info.note ?? (isPin ? pl.admin.card.note : pl.admin.card.notePassword),
+    );
     try {
       await navigator.clipboard.writeText(text);
     } catch {
       // older browsers / no permission: classic copy through a hidden field
-      const ta = document.createElement('textarea');
+      const ta = document.createElement("textarea");
       ta.value = text;
-      ta.setAttribute('readonly', '');
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
       document.body.appendChild(ta);
       ta.select();
-      document.execCommand('copy');
+      document.execCommand("copy");
       ta.remove();
     }
     setCopied(true);
@@ -343,7 +458,15 @@ export function SecretCardModal({ info, onClose }: { info: SecretInfo; onClose: 
   return (
     <Modal title={pl.admin.card.title} onClose={onClose}>
       <div className="secret-card">
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600 }}>SENATOR Academy</div>
+        <div
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 22,
+            fontWeight: 600,
+          }}
+        >
+          SENATOR Academy
+        </div>
         <div>{info.name}</div>
         <div>
           <div className="label">{pl.admin.card.address}</div>
@@ -354,7 +477,10 @@ export function SecretCardModal({ info, onClose }: { info: SecretInfo; onClose: 
           <div className="value">{info.login}</div>
         </div>
         <div>
-          <div className="label">{info.secretLabel ?? (isPin ? pl.admin.card.pin : pl.admin.card.password)}</div>
+          <div className="label">
+            {info.secretLabel ??
+              (isPin ? pl.admin.card.pin : pl.admin.card.password)}
+          </div>
           <div className="value">{info.tempSecret}</div>
         </div>
       </div>
@@ -375,12 +501,19 @@ export function SecretCardModal({ info, onClose }: { info: SecretInfo; onClose: 
 /* ───────── Formatting ───────── */
 
 export function formatDateTime(ms: number | null | undefined): string {
-  if (!ms) return '—';
-  return new Intl.DateTimeFormat('pl-PL', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Warsaw' }).format(new Date(ms));
+  if (!ms) return "—";
+  return new Intl.DateTimeFormat("pl-PL", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Warsaw",
+  }).format(new Date(ms));
 }
 
 export function formatTime(ms: number): string {
-  return new Intl.DateTimeFormat('pl-PL', { timeStyle: 'short', timeZone: 'Europe/Warsaw' }).format(new Date(ms));
+  return new Intl.DateTimeFormat("pl-PL", {
+    timeStyle: "short",
+    timeZone: "Europe/Warsaw",
+  }).format(new Date(ms));
 }
 
 export function storageGet(key: string): string | null {

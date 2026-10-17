@@ -142,20 +142,20 @@
   animation-delay: 200ms;
 }
 /* after an iPhone swipe back (or „back”) the page must simply be there — no second entrance */
-html[data-nav='back'] .a-main > *,
-html[data-nav='back'] .a-reader > *,
-html[data-nav='back'] .page-enter > *,
-html[data-nav='back'] .page > *,
-html[data-nav='back'] .a-list > .a-row,
-html[data-nav='back'] .a-menu-grid > *,
-html[data-nav='back'] .a-modules > .a-module,
-html[data-nav='swipe'] .a-main > *,
-html[data-nav='swipe'] .a-reader > *,
-html[data-nav='swipe'] .page-enter > *,
-html[data-nav='swipe'] .page > *,
-html[data-nav='swipe'] .a-list > .a-row,
-html[data-nav='swipe'] .a-menu-grid > *,
-html[data-nav='swipe'] .a-modules > .a-module {
+html[data-nav="back"] .a-main > *,
+html[data-nav="back"] .a-reader > *,
+html[data-nav="back"] .page-enter > *,
+html[data-nav="back"] .page > *,
+html[data-nav="back"] .a-list > .a-row,
+html[data-nav="back"] .a-menu-grid > *,
+html[data-nav="back"] .a-modules > .a-module,
+html[data-nav="swipe"] .a-main > *,
+html[data-nav="swipe"] .a-reader > *,
+html[data-nav="swipe"] .page-enter > *,
+html[data-nav="swipe"] .page > *,
+html[data-nav="swipe"] .a-list > .a-row,
+html[data-nav="swipe"] .a-menu-grid > *,
+html[data-nav="swipe"] .a-modules > .a-module {
   animation: none !important;
 }
 .a-hero img,
@@ -231,7 +231,7 @@ button:active:not(:disabled) {
 .a-tabbar a svg {
   transition: transform 260ms var(--ease-out);
 }
-.a-tabbar a[aria-current='page'] svg {
+.a-tabbar a[aria-current="page"] svg {
   transform: translateY(-1px) scale(1.08);
 }
 .a-tabbar a:active svg {
@@ -298,7 +298,7 @@ button:active:not(:disabled) {
 ::view-transition-new(root) {
   animation: vt-in 280ms var(--ease-out) both;
 }
-html[data-nav='back']::view-transition-new(root) {
+html[data-nav="back"]::view-transition-new(root) {
   animation-name: vt-in-back;
 }
 @keyframes vt-out {
@@ -348,8 +348,16 @@ html[data-nav='back']::view-transition-new(root) {
 .skeleton span:not(.sr-only) {
   display: block;
   border-radius: 14px;
-  background: linear-gradient(90deg, var(--surface) 0%, var(--surface-raised) 40%, var(--surface) 80%) 0 0 / 300% 100%;
-  animation: sk-shine 1.4s ease-in-out infinite, fade-in 300ms ease both;
+  background: linear-gradient(
+      90deg,
+      var(--surface) 0%,
+      var(--surface-raised) 40%,
+      var(--surface) 80%
+    )
+    0 0 / 300% 100%;
+  animation:
+    sk-shine 1.4s ease-in-out infinite,
+    fade-in 300ms ease both;
 }
 .skeleton .sk-title {
   width: 42%;
@@ -450,7 +458,10 @@ html.modal-open body {
 .sch-template,
 .more-tile,
 .today-tile {
-  transition: transform 140ms ease, background-color 160ms ease, border-color 160ms ease;
+  transition:
+    transform 140ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
 }
 .row-btn:active:not(:disabled),
 a.a-row:active,
@@ -604,4 +615,18 @@ a.today-tile:active {
   .a-modules > .a-module {
     animation-duration: 260ms;
   }
+}
+
+/* Checklist section names: normal case, so long names stay readable on phones (2026-10-18) */
+.sec-fold .fold-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text);
+  line-height: 1.35;
+}
+.sec-fold .fold-head {
+  gap: 12px;
+  padding: 12px 0;
 }

@@ -1,16 +1,34 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { useLiveRefresh } from '../live';
-import { DateField } from '../DateField';
-import { divisionOf, POSITIONS } from '../../shared/constants';
-import { comparePl, foldPolish } from '../../shared/text';
-import { api, ApiFailure, cached } from '../api';
-import { errorText, pl } from '../i18n/pl';
-import { navigate } from '../router';
-import { ErrorBox, LogoLoader } from '../ui';
-import { businessDate, formatDuration } from '../../shared/time';
-import { formatMoney } from './TimeTracking';
-import { Btn, DeleteForeverModal, formatDateTime, Icon, Modal, SecretCardModal, storageGet, storageSet, type SecretInfo } from './common';
-import { usePanel } from './Panel';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
+import { useLiveRefresh } from "../live";
+import { DateField } from "../DateField";
+import { divisionOf, POSITIONS } from "../../shared/constants";
+import { comparePl, foldPolish } from "../../shared/text";
+import { api, ApiFailure, cached } from "../api";
+import { errorText, pl } from "../i18n/pl";
+import { navigate } from "../router";
+import { Disclosure, ErrorBox, LogoLoader } from "../ui";
+import { businessDate, formatDuration } from "../../shared/time";
+import { formatMoney } from "./TimeTracking";
+import {
+  Btn,
+  DeleteForeverModal,
+  formatDateTime,
+  Icon,
+  Modal,
+  SecretCardModal,
+  storageGet,
+  storageSet,
+  type SecretInfo,
+} from "./common";
+import { usePanel } from "./Panel";
 
 interface Employee {
   id: string;
@@ -18,7 +36,7 @@ interface Employee {
   lastName: string;
   login: string;
   role: string;
-  status: 'active' | 'inactive';
+  status: "active" | "inactive";
   position: string;
   positions: string[];
   startDate: string | null;
@@ -26,8 +44,8 @@ interface Employee {
   locked: number;
 }
 
-type Filter = 'all' | 'active' | 'locked' | 'inactive';
-const SORT_KEY = 'sa.panel.employeesSort';
+type Filter = "all" | "active" | "locked" | "inactive";
+const SORT_KEY = "sa.panel.employeesSort";
 const posRank = (p: string) => {
   const i = (POSITIONS as readonly string[]).indexOf(p);
   return i < 0 ? 99 : i;
@@ -36,26 +54,41 @@ const t = pl.admin.employees;
 
 export function Employees({ selectedId }: { selectedId: string | null }) {
   const { locationId, can, isOwner, me } = usePanel();
-  const [list, setList] = useState<Employee[] | null>(() => cached<{ employees: Employee[] }>(`/api/admin/locations/${locationId}/employees`)?.employees ?? null);
+  const [list, setList] = useState<Employee[] | null>(
+    () =>
+      cached<{ employees: Employee[] }>(
+        `/api/admin/locations/${locationId}/employees`,
+      )?.employees ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('active');
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("active");
   const [positions, setPositions] = useState<string[]>([]);
-  const [byPosition, setByPosition] = useState(() => storageGet(SORT_KEY) === 'position');
+  const [byPosition, setByPosition] = useState(
+    () => storageGet(SORT_KEY) === "position",
+  );
   const [adding, setAdding] = useState(false);
   const [secret, setSecret] = useState<SecretInfo | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const canManage = can('employees.manage');
-  const [divisions, setDivisions] = useState<string[] | null>(() => cached<{ divisions?: string[] | null }>(`/api/admin/locations/${locationId}/employees`)?.divisions ?? null);
+  const canManage = can("employees.manage");
+  const [divisions, setDivisions] = useState<string[] | null>(
+    () =>
+      cached<{ divisions?: string[] | null }>(
+        `/api/admin/locations/${locationId}/employees`,
+      )?.divisions ?? null,
+  );
 
   const load = useCallback(async () => {
     try {
-      const res = await api<{ employees: Employee[]; divisions?: string[] | null }>(`/api/admin/locations/${locationId}/employees`);
+      const res = await api<{
+        employees: Employee[];
+        divisions?: string[] | null;
+      }>(`/api/admin/locations/${locationId}/employees`);
       setList(res.employees);
       setDivisions(res.divisions ?? null);
     } catch (e) {
-      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+      setError(errorText(e instanceof ApiFailure ? e.code : "generic"));
     }
   }, [locationId]);
   useEffect(() => {
@@ -66,14 +99,41 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
   const shown = useMemo(() => {
     const q = foldPolish(query.trim());
     return (list ?? [])
-      .filter((e) => (filter === 'all' ? true : filter === 'active' ? e.status === 'active' : filter === 'inactive' ? e.status === 'inactive' : e.locked === 1))
-      .filter((e) => !q || foldPolish(`${e.firstName} ${e.lastName} ${e.login}`).includes(q))
-      .filter((e) => !positions.length || positions.some((p) => (e.positions ?? [e.position]).includes(p)))
+      .filter((e) =>
+        filter === "all"
+          ? true
+          : filter === "active"
+            ? e.status === "active"
+            : filter === "inactive"
+              ? e.status === "inactive"
+              : e.locked === 1,
+      )
+      .filter(
+        (e) =>
+          !q ||
+          foldPolish(`${e.firstName} ${e.lastName} ${e.login}`).includes(q),
+      )
+      .filter(
+        (e) =>
+          !positions.length ||
+          positions.some((p) => (e.positions ?? [e.position]).includes(p)),
+      )
       .sort(
-        (a, b) => (byPosition ? posRank(a.position) - posRank(b.position) : 0) || comparePl(`${a.lastName} ${a.firstName}`, `${b.lastName} ${b.firstName}`),
+        (a, b) =>
+          (byPosition ? posRank(a.position) - posRank(b.position) : 0) ||
+          comparePl(
+            `${a.lastName} ${a.firstName}`,
+            `${b.lastName} ${b.firstName}`,
+          ),
       );
   }, [list, query, filter, positions, byPosition]);
-  const presentPositions = useMemo(() => [...new Set((list ?? []).flatMap((e) => e.positions ?? [e.position]))].sort((a, b) => posRank(a) - posRank(b)), [list]);
+  const presentPositions = useMemo(
+    () =>
+      [
+        ...new Set((list ?? []).flatMap((e) => e.positions ?? [e.position])),
+      ].sort((a, b) => posRank(a) - posRank(b)),
+    [list],
+  );
 
   const selected = list?.find((e) => e.id === selectedId) ?? null;
   useScrollIntoView(list ? selectedId : null);
@@ -89,34 +149,38 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
     return () => clearTimeout(t);
   }, [selectedId]);
 
-  async function act(path: string, success: string, after?: (data: any) => void) {
+  async function act(
+    path: string,
+    success: string,
+    after?: (data: any) => void,
+  ) {
     setError(null);
     setNotice(null);
     try {
-      const data = await api<any>(path, { method: 'POST' });
+      const data = await api<any>(path, { method: "POST" });
       after?.(data);
       setNotice(success);
       await load();
     } catch (e) {
-      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+      setError(errorText(e instanceof ApiFailure ? e.code : "generic"));
     }
   }
 
   const counts = {
     all: list?.length ?? 0,
-    active: list?.filter((e) => e.status === 'active').length ?? 0,
+    active: list?.filter((e) => e.status === "active").length ?? 0,
     locked: list?.filter((e) => e.locked === 1).length ?? 0,
-    inactive: list?.filter((e) => e.status === 'inactive').length ?? 0,
+    inactive: list?.filter((e) => e.status === "inactive").length ?? 0,
   };
 
   return (
     <>
       <div
         style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          justifyContent: 'space-between',
-          alignItems: 'center',
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+          alignItems: "center",
           gap: 12,
         }}
       >
@@ -137,24 +201,24 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
         <section className="list" aria-label={t.title}>
           <label
             style={{
-              display: 'flex',
-              alignItems: 'center',
+              display: "flex",
+              alignItems: "center",
               gap: 10,
               minHeight: 44,
-              padding: '0 14px',
+              padding: "0 14px",
               borderRadius: 10,
-              border: '1px solid var(--border)',
-              background: 'var(--surface)',
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
             }}
           >
             <Icon name="search" size={18} />
             <span
               style={{
-                position: 'absolute',
+                position: "absolute",
                 width: 1,
                 height: 1,
-                overflow: 'hidden',
-                clip: 'rect(0 0 0 0)',
+                overflow: "hidden",
+                clip: "rect(0 0 0 0)",
               }}
             >
               {t.search}
@@ -167,18 +231,23 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
               style={{
                 flex: 1,
                 minWidth: 0,
-                background: 'none',
-                border: 'none',
-                color: 'var(--text)',
-                fontFamily: 'var(--font-ui)',
+                background: "none",
+                border: "none",
+                color: "var(--text)",
+                fontFamily: "var(--font-ui)",
                 fontSize: 14,
-                outline: 'none',
+                outline: "none",
               }}
             />
           </label>
           <div className="btn-row" role="group">
-            {(['active', 'locked', 'inactive', 'all'] as Filter[]).map((f) => (
-              <button key={f} className="chip" aria-pressed={filter === f} onClick={() => setFilter(f)}>
+            {(["active", "locked", "inactive", "all"] as Filter[]).map((f) => (
+              <button
+                key={f}
+                className="chip"
+                aria-pressed={filter === f}
+                onClick={() => setFilter(f)}
+              >
                 {
                   {
                     all: t.filterAll,
@@ -186,14 +255,23 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                     locked: t.filterLocked,
                     inactive: t.filterInactive,
                   }[f]
-                }{' '}
+                }{" "}
                 · {counts[f]}
               </button>
             ))}
           </div>
           {presentPositions.length > 1 && (
-            <div className="btn-row" role="group" aria-label={t.positionFilter} style={{ alignItems: 'center' }}>
-              <button className="chip" aria-pressed={positions.length === 0} onClick={() => setPositions([])}>
+            <div
+              className="btn-row"
+              role="group"
+              aria-label={t.positionFilter}
+              style={{ alignItems: "center" }}
+            >
+              <button
+                className="chip"
+                aria-pressed={positions.length === 0}
+                onClick={() => setPositions([])}
+              >
                 {t.allPositions}
               </button>
               {presentPositions.map((p) => (
@@ -201,9 +279,20 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                   key={p}
                   className="chip"
                   aria-pressed={positions.includes(p)}
-                  onClick={() => setPositions(positions.includes(p) ? positions.filter((x) => x !== p) : [...positions, p])}
+                  onClick={() =>
+                    setPositions(
+                      positions.includes(p)
+                        ? positions.filter((x) => x !== p)
+                        : [...positions, p],
+                    )
+                  }
                 >
-                  {pl.admin.positions[p] ?? p} · {(list ?? []).filter((e) => (e.positions ?? [e.position]).includes(p)).length}
+                  {pl.admin.positions[p] ?? p} ·{" "}
+                  {
+                    (list ?? []).filter((e) =>
+                      (e.positions ?? [e.position]).includes(p),
+                    ).length
+                  }
                 </button>
               ))}
             </div>
@@ -214,32 +303,55 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
               checked={byPosition}
               onChange={(e) => {
                 setByPosition(e.target.checked);
-                storageSet(SORT_KEY, e.target.checked ? 'position' : 'name');
+                storageSet(SORT_KEY, e.target.checked ? "position" : "name");
               }}
             />
             <span>{t.groupByPosition}</span>
           </label>
           {list === null && <LogoLoader />}
-          {list !== null && shown.length === 0 && <p className="muted">{list.length ? t.empty : t.emptyAll}</p>}
+          {list !== null && shown.length === 0 && (
+            <p className="muted">{list.length ? t.empty : t.emptyAll}</p>
+          )}
           {shown.map((e, i) => (
             <Fragment key={e.id}>
-              {byPosition && (i === 0 || shown[i - 1]!.position !== e.position) && (
-                <div className="label emp-group">{pl.admin.divisions[e.position] ?? pl.admin.positions[e.position] ?? e.position}</div>
-              )}
-              <div className={`emp${e.id === selectedId ? ' open' : ''}`} data-emp={e.id}>
+              {byPosition &&
+                (i === 0 || shown[i - 1]!.position !== e.position) && (
+                  <div className="label emp-group">
+                    {pl.admin.divisions[e.position] ??
+                      pl.admin.positions[e.position] ??
+                      e.position}
+                  </div>
+                )}
+              <div
+                className={`emp${e.id === selectedId ? " open" : ""}`}
+                data-emp={e.id}
+              >
                 <button
                   className="row-btn"
-                  onPointerDown={() => e.role === 'employee' && e.id !== selectedId && void prefetchSummary(locationId, e.id).catch(() => undefined)}
+                  onPointerDown={() =>
+                    e.role === "employee" &&
+                    e.id !== selectedId &&
+                    void prefetchSummary(locationId, e.id).catch(
+                      () => undefined,
+                    )
+                  }
                   aria-current={e.id === selectedId}
                   aria-expanded={e.id === selectedId}
-                  onClick={() => navigate(e.id === selectedId ? '/panel/pracownicy' : `/panel/pracownicy/${e.id}`, { keepScroll: true })}
+                  onClick={() =>
+                    navigate(
+                      e.id === selectedId
+                        ? "/panel/pracownicy"
+                        : `/panel/pracownicy/${e.id}`,
+                      { keepScroll: true },
+                    )
+                  }
                 >
                   <span
                     style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
+                      display: "flex",
+                      justifyContent: "space-between",
                       gap: 8,
-                      width: '100%',
+                      width: "100%",
                     }}
                   >
                     <span style={{ fontSize: 15, fontWeight: 700 }}>
@@ -248,7 +360,10 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                     <StatusBadge e={e} />
                   </span>
                   <span className="muted" style={{ fontSize: 12 }}>
-                    {(e.positions ?? [e.position]).map((p) => pl.admin.positions[p] ?? p).join(' + ')} · {e.login}
+                    {(e.positions ?? [e.position])
+                      .map((p) => pl.admin.positions[p] ?? p)
+                      .join(" + ")}{" "}
+                    · {e.login}
                   </span>
                 </button>
                 <div className="emp-detail" inert={e.id !== selectedId}>
@@ -257,89 +372,154 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                       <div className="emp-detail-body">
                         <div
                           style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            justifyContent: 'space-between',
-                            alignItems: 'flex-start',
+                            display: "flex",
+                            flexWrap: "wrap",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
                             gap: 10,
                           }}
                         >
                           <div>
                             <span className="muted" style={{ fontSize: 13 }}>
                               {pl.admin.positions[e.position] ?? e.position}
-                              {e.startDate ? ` · ${t.startDate.toLowerCase()}: ${e.startDate}` : ''}
+                              {e.startDate
+                                ? ` · ${t.startDate.toLowerCase()}: ${e.startDate}`
+                                : ""}
                             </span>
                           </div>
                         </div>
                         <dl
                           style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(auto-fit, minmax(160px, 1fr))",
                             gap: 10,
                             margin: 0,
                           }}
                         >
                           <Stat label={t.login} value={e.login} />
-                          <Stat label={t.lastLogin} value={e.lastLoginAt ? formatDateTime(e.lastLoginAt) : t.never} />
+                          <Stat
+                            label={t.lastLogin}
+                            value={
+                              e.lastLoginAt
+                                ? formatDateTime(e.lastLoginAt)
+                                : t.never
+                            }
+                          />
                         </dl>
-                        {e.role === 'employee' && <Summary key={e.id} userId={e.id} locationId={locationId} canManage={canManage} allowed={POSITIONS.filter((p) => !divisions || divisions.includes(p))} />}
-                        {canManage && e.id !== me.user.id && (e.role === 'employee' || (isOwner && e.role === 'manager')) && (
-                          <div className="btn-row">
-                            {e.status === 'active' && (
-                              <>
+                        {e.role === "employee" && (
+                          <Summary
+                            key={e.id}
+                            userId={e.id}
+                            locationId={locationId}
+                            canManage={canManage}
+                            allowed={POSITIONS.filter(
+                              (p) => !divisions || divisions.includes(p),
+                            )}
+                          />
+                        )}
+                        {canManage &&
+                          e.id !== me.user.id &&
+                          (e.role === "employee" ||
+                            (isOwner && e.role === "manager")) && (
+                            <div className="btn-row">
+                              {e.status === "active" && (
+                                <>
+                                  <Btn
+                                    onClick={() =>
+                                      confirm(
+                                        (e.role === "manager"
+                                          ? t.confirmResetPassword
+                                          : t.confirmReset)(
+                                          `${e.firstName} ${e.lastName}`,
+                                        ),
+                                      ) &&
+                                      void act(
+                                        `/api/admin/users/${e.id}/reset-secret`,
+                                        t.done,
+                                        (d) =>
+                                          setSecret({
+                                            name: `${e.firstName} ${e.lastName}`,
+                                            login: d.login,
+                                            tempSecret: d.tempSecret,
+                                            secretKind: d.secretKind,
+                                          }),
+                                      )
+                                    }
+                                  >
+                                    {e.role === "manager"
+                                      ? t.resetPassword
+                                      : t.resetPin}
+                                  </Btn>
+                                  {e.locked === 1 && (
+                                    <Btn
+                                      onClick={() =>
+                                        void act(
+                                          `/api/admin/users/${e.id}/unlock`,
+                                          t.done,
+                                        )
+                                      }
+                                    >
+                                      {t.unlock}
+                                    </Btn>
+                                  )}
+                                  <Btn
+                                    onClick={() =>
+                                      void act(
+                                        `/api/admin/users/${e.id}/logout-all`,
+                                        t.done,
+                                      )
+                                    }
+                                  >
+                                    {t.logoutAll}
+                                  </Btn>
+                                  <Btn
+                                    kind="danger"
+                                    onClick={() =>
+                                      confirm(
+                                        t.confirmDeactivate(
+                                          `${e.firstName} ${e.lastName}`,
+                                        ),
+                                      ) &&
+                                      void act(
+                                        `/api/admin/users/${e.id}/deactivate`,
+                                        t.done,
+                                      )
+                                    }
+                                  >
+                                    {t.deactivate}
+                                  </Btn>
+                                </>
+                              )}
+                              {e.status === "inactive" && (
                                 <Btn
                                   onClick={() =>
-                                    confirm(
-                                      (e.role === 'manager' ? t.confirmResetPassword : t.confirmReset)(`${e.firstName} ${e.lastName}`),
-                                    ) &&
-                                    void act(`/api/admin/users/${e.id}/reset-secret`, t.done, (d) =>
-                                      setSecret({
-                                        name: `${e.firstName} ${e.lastName}`,
-                                        login: d.login,
-                                        tempSecret: d.tempSecret,
-                                        secretKind: d.secretKind,
-                                      }),
+                                    void act(
+                                      `/api/admin/users/${e.id}/reactivate`,
+                                      t.done,
+                                      (d) =>
+                                        setSecret({
+                                          name: `${e.firstName} ${e.lastName}`,
+                                          login: d.login,
+                                          tempSecret: d.tempSecret,
+                                          secretKind: d.secretKind,
+                                        }),
                                     )
                                   }
                                 >
-                                  {e.role === 'manager' ? t.resetPassword : t.resetPin}
+                                  {t.reactivate}
                                 </Btn>
-                                {e.locked === 1 && <Btn onClick={() => void act(`/api/admin/users/${e.id}/unlock`, t.done)}>{t.unlock}</Btn>}
-                                <Btn onClick={() => void act(`/api/admin/users/${e.id}/logout-all`, t.done)}>{t.logoutAll}</Btn>
+                              )}
+                              {e.status === "inactive" && (
                                 <Btn
                                   kind="danger"
-                                  onClick={() =>
-                                    confirm(t.confirmDeactivate(`${e.firstName} ${e.lastName}`)) &&
-                                    void act(`/api/admin/users/${e.id}/deactivate`, t.done)
-                                  }
+                                  onClick={() => setDeleting(true)}
                                 >
-                                  {t.deactivate}
+                                  {pl.admin.deleteForever.button}
                                 </Btn>
-                              </>
-                            )}
-                            {e.status === 'inactive' && (
-                              <Btn
-                                onClick={() =>
-                                  void act(`/api/admin/users/${e.id}/reactivate`, t.done, (d) =>
-                                    setSecret({
-                                      name: `${e.firstName} ${e.lastName}`,
-                                      login: d.login,
-                                      tempSecret: d.tempSecret,
-                                      secretKind: d.secretKind,
-                                    }),
-                                  )
-                                }
-                              >
-                                {t.reactivate}
-                              </Btn>
-                            )}
-                            {e.status === 'inactive' && (
-                              <Btn kind="danger" onClick={() => setDeleting(true)}>
-                                {pl.admin.deleteForever.button}
-                              </Btn>
-                            )}
-                          </div>
-                        )}
+                              )}
+                            </div>
+                          )}
                       </div>
                     )}
                   </div>
@@ -351,7 +531,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
       </div>
       {adding && (
         <AddEmployee
-          canRate={can('wages.manage')}
+          canRate={can("wages.manage")}
           divisions={divisions}
           locationId={locationId}
           onClose={() => setAdding(false)}
@@ -364,10 +544,14 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
           }}
         />
       )}
-      {secret && <SecretCardModal info={secret} onClose={() => setSecret(null)} />}
+      {secret && (
+        <SecretCardModal info={secret} onClose={() => setSecret(null)} />
+      )}
       {deleting && selected && (
         <DeleteForeverModal
-          title={pl.admin.deleteForever.userTitle(`${selected.firstName} ${selected.lastName}`)}
+          title={pl.admin.deleteForever.userTitle(
+            `${selected.firstName} ${selected.lastName}`,
+          )}
           impactPath={`/api/admin/users/${selected.id}/deletion`}
           lines={pl.admin.deleteForever.userLines}
           deletePath={`/api/admin/users/${selected.id}`}
@@ -376,7 +560,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
             setDeleting(false);
             setNotice(t.deleted);
             await load();
-            navigate('/panel/pracownicy');
+            navigate("/panel/pracownicy");
           }}
         />
       )}
@@ -385,23 +569,27 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
 }
 
 function StatusBadge({ e }: { e: Employee }) {
-  if (e.status === 'inactive') return <span className="badge neutral">{t.statusInactive}</span>;
-  if (e.locked === 1) return <span className="badge bad">{t.statusLocked}</span>;
+  if (e.status === "inactive")
+    return <span className="badge neutral">{t.statusInactive}</span>;
+  if (e.locked === 1)
+    return <span className="badge bad">{t.statusLocked}</span>;
   return <span className="badge ok">{t.statusActive}</span>;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ background: 'var(--surface-2)', borderRadius: 12, padding: 12 }}>
+    <div
+      style={{ background: "var(--surface-2)", borderRadius: 12, padding: 12 }}
+    >
       <dt className="muted" style={{ fontSize: 12 }}>
         {label}
       </dt>
       <dd
         style={{
-          margin: '4px 0 0',
+          margin: "4px 0 0",
           fontSize: 15,
           fontWeight: 600,
-          overflowWrap: 'anywhere',
+          overflowWrap: "anywhere",
         }}
       >
         {value}
@@ -423,10 +611,10 @@ function AddEmployee({
   onClose: () => void;
   onCreated: (info: SecretInfo, id: string) => void;
 }) {
-  const [firstName, setFirst] = useState('');
-  const [lastName, setLast] = useState('');
-  const [rate, setRate] = useState('');
-  const [position, setPosition] = useState(divisions?.[0] ?? 'waiter');
+  const [firstName, setFirst] = useState("");
+  const [lastName, setLast] = useState("");
+  const [rate, setRate] = useState("");
+  const [position, setPosition] = useState(divisions?.[0] ?? "waiter");
   const [startDate, setStart] = useState(new Date().toISOString().slice(0, 10));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -440,9 +628,9 @@ function AddEmployee({
         id: string;
         login: string;
         tempSecret: string;
-        secretKind: 'pin';
+        secretKind: "pin";
       }>(`/api/admin/locations/${locationId}/employees`, {
-        method: 'POST',
+        method: "POST",
         body: {
           firstName,
           lastName,
@@ -461,7 +649,7 @@ function AddEmployee({
         res.id,
       );
     } catch (err) {
-      setError(errorText(err instanceof ApiFailure ? err.code : 'generic'));
+      setError(errorText(err instanceof ApiFailure ? err.code : "generic"));
     } finally {
       setBusy(false);
     }
@@ -469,19 +657,42 @@ function AddEmployee({
 
   return (
     <Modal title={t.add} onClose={onClose}>
-      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <form
+        onSubmit={submit}
+        style={{ display: "flex", flexDirection: "column", gap: 14 }}
+      >
         <div className="field">
           <label htmlFor="fn">{t.firstName}</label>
-          <input id="fn" value={firstName} onChange={(e) => setFirst(e.target.value)} autoComplete="off" maxLength={60} />
+          <input
+            id="fn"
+            value={firstName}
+            onChange={(e) => setFirst(e.target.value)}
+            autoComplete="off"
+            maxLength={60}
+          />
         </div>
         <div className="field">
           <label htmlFor="ln">{t.lastName}</label>
-          <input id="ln" value={lastName} onChange={(e) => setLast(e.target.value)} autoComplete="off" maxLength={80} />
+          <input
+            id="ln"
+            value={lastName}
+            onChange={(e) => setLast(e.target.value)}
+            autoComplete="off"
+            maxLength={80}
+          />
         </div>
         <div className="field">
           <label htmlFor="pos">{t.position}</label>
-          <select id="pos" value={position} onChange={(e) => setPosition(e.target.value)}>
-            {POSITIONS.filter((p) => p !== 'shift_manager' && (!divisions || divisions.includes(divisionOf(p)))).map((p) => (
+          <select
+            id="pos"
+            value={position}
+            onChange={(e) => setPosition(e.target.value)}
+          >
+            {POSITIONS.filter(
+              (p) =>
+                p !== "shift_manager" &&
+                (!divisions || divisions.includes(divisionOf(p))),
+            ).map((p) => (
               <option key={p} value={p}>
                 {pl.admin.positions[p]}
               </option>
@@ -494,7 +705,9 @@ function AddEmployee({
         </div>
         {canRate && (
           <div className="field">
-            <label htmlFor="rate-new">{t.rateField(pl.admin.positions[position] ?? position)}</label>
+            <label htmlFor="rate-new">
+              {t.rateField(pl.admin.positions[position] ?? position)}
+            </label>
             <RateInput id="rate-new" value={rate} onChange={setRate} />
             <span className="muted" style={{ fontSize: 12 }}>
               {t.rateHint}
@@ -503,7 +716,11 @@ function AddEmployee({
         )}
         <ErrorBox message={error} />
         <div className="btn-row">
-          <Btn kind="primary" type="submit" disabled={busy || !firstName.trim() || !lastName.trim()}>
+          <Btn
+            kind="primary"
+            type="submit"
+            disabled={busy || !firstName.trim() || !lastName.trim()}
+          >
             {t.add}
           </Btn>
           <Btn onClick={onClose}>{pl.admin.cancel}</Btn>
@@ -515,16 +732,49 @@ function AddEmployee({
 
 interface SummaryData {
   remoteWork?: boolean;
-  deadlines?: { lockedSince: number | null; nextDue: number | null; due: Record<string, number> };
+  deadlines?: {
+    lockedSince: number | null;
+    nextDue: number | null;
+    due: Record<string, number>;
+  };
   lessons: { done: number; total: number };
-  mandatory: { done: number; total: number; missing: { id: string; title: string; status: string }[] };
-  hours: Record<'thisMonth' | 'prevMonth', { month: string; minutes: number; shifts: number; open: number; costGrosze?: number; missingRate?: boolean }>;
+  mandatory: {
+    done: number;
+    total: number;
+    missing: { id: string; title: string; status: string }[];
+  };
+  hours: Record<
+    "thisMonth" | "prevMonth",
+    {
+      month: string;
+      minutes: number;
+      shifts: number;
+      open: number;
+      costGrosze?: number;
+      missingRate?: boolean;
+    }
+  >;
   wages: boolean;
-  rate: { current: number | null; history: { rateGrosze: number; validFrom: string }[] } | null;
-  positions: { position: string; startDate: string | null; primary: boolean; rate?: number | null; ownRate?: boolean; history?: { position: string; rateGrosze: number; validFrom: string }[] }[];
+  rate: {
+    current: number | null;
+    history: { rateGrosze: number; validFrom: string }[];
+  } | null;
+  positions: {
+    position: string;
+    startDate: string | null;
+    primary: boolean;
+    rate?: number | null;
+    ownRate?: boolean;
+    history?: { position: string; rateGrosze: number; validFrom: string }[];
+  }[];
 }
 
-const monthName = (m: string) => new Intl.DateTimeFormat('pl-PL', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(m + '-15T12:00:00Z'));
+const monthName = (m: string) =>
+  new Intl.DateTimeFormat("pl-PL", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(m + "-15T12:00:00Z"));
 
 /** Training progress, hours of this and last month, hourly rate (D37). */
 /**
@@ -532,17 +782,33 @@ const monthName = (m: string) => new Intl.DateTimeFormat('pl-PL', { month: 'long
  * so the opening card already has its content and nothing pops in afterwards.
  */
 const summaryCache = new Map<string, { at: number; p: Promise<SummaryData> }>();
-export function prefetchSummary(locationId: string, userId: string, fresh = false): Promise<SummaryData> {
+export function prefetchSummary(
+  locationId: string,
+  userId: string,
+  fresh = false,
+): Promise<SummaryData> {
   const key = `${locationId}:${userId}`;
   const hit = summaryCache.get(key);
   if (hit && !fresh && Date.now() - hit.at < 60_000) return hit.p;
-  const p = api<SummaryData>(`/api/admin/locations/${locationId}/users/${userId}/summary`);
+  const p = api<SummaryData>(
+    `/api/admin/locations/${locationId}/users/${userId}/summary`,
+  );
   summaryCache.set(key, { at: Date.now(), p });
   p.catch(() => summaryCache.delete(key));
   return p;
 }
 
-function Summary({ userId, locationId, canManage, allowed }: { userId: string; locationId: string; canManage: boolean; allowed: string[] }) {
+function Summary({
+  userId,
+  locationId,
+  canManage,
+  allowed,
+}: {
+  userId: string;
+  locationId: string;
+  canManage: boolean;
+  allowed: string[];
+}) {
   const s = pl.admin.employees.summary;
   const [data, setData] = useState<SummaryData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -553,29 +819,38 @@ function Summary({ userId, locationId, canManage, allowed }: { userId: string; l
       setData(await prefetchSummary(locationId, userId, !first.current));
       first.current = false;
     } catch (e) {
-      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+      setError(errorText(e instanceof ApiFailure ? e.code : "generic"));
     }
   }, [locationId, userId]);
   useEffect(() => {
     void load();
   }, [load]);
 
-  if (!data) return error ? <ErrorBox message={error} /> : <div className="emp-summary-wait"><LogoLoader /></div>;
+  if (!data)
+    return error ? (
+      <ErrorBox message={error} />
+    ) : (
+      <div className="emp-summary-wait">
+        <LogoLoader />
+      </div>
+    );
   const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
-  const month = (k: 'thisMonth' | 'prevMonth') => {
+  const month = (k: "thisMonth" | "prevMonth") => {
     const h = data.hours[k];
     return (
       <div className="emp-stat">
-        <span className="k">{k === 'thisMonth' ? s.thisMonth : s.prevMonth}</span>
+        <span className="k">
+          {k === "thisMonth" ? s.thisMonth : s.prevMonth}
+        </span>
         <span className="v">{formatDuration(h.minutes)} h</span>
         <span className="sub">
           {monthName(h.month)} · {s.shifts(h.shifts)}
-          {h.open ? ` · ${s.open(h.open)}` : ''}
+          {h.open ? ` · ${s.open(h.open)}` : ""}
         </span>
         {data.wages && h.costGrosze !== undefined && (
           <span className="sub">
             {formatMoney(h.costGrosze)}
-            {h.missingRate ? ` · ${s.missingRate}` : ''}
+            {h.missingRate ? ` · ${s.missingRate}` : ""}
           </span>
         )}
       </div>
@@ -591,7 +866,11 @@ function Summary({ userId, locationId, canManage, allowed }: { userId: string; l
             {data.lessons.done} / {data.lessons.total}
           </span>
           <span className="emp-bar" aria-hidden="true">
-            <span style={{ width: `${pct(data.lessons.done, data.lessons.total)}%` }} />
+            <span
+              style={{
+                width: `${pct(data.lessons.done, data.lessons.total)}%`,
+              }}
+            />
           </span>
         </div>
         <div className="emp-stat">
@@ -600,52 +879,92 @@ function Summary({ userId, locationId, canManage, allowed }: { userId: string; l
             {data.mandatory.done} / {data.mandatory.total}
           </span>
           <span className="emp-bar" aria-hidden="true">
-            <span style={{ width: `${pct(data.mandatory.done, data.mandatory.total)}%` }} />
+            <span
+              style={{
+                width: `${pct(data.mandatory.done, data.mandatory.total)}%`,
+              }}
+            />
           </span>
         </div>
-        {month('thisMonth')}
-        {month('prevMonth')}
+        {month("thisMonth")}
+        {month("prevMonth")}
       </div>
       {data.mandatory.missing.length > 0 ? (
-        <details className="emp-missing">
-          <summary>
-            <span className="label">{s.missingDocs}</span>
-            <span className="badge neutral">{data.mandatory.missing.length}</span>
-            {data.deadlines?.lockedSince != null ? (
-              <span className="badge bad">{pl.admin.today.locked}</span>
-            ) : data.deadlines?.nextDue != null ? (
-              <span className="badge warn">{s.dueBy(new Date(data.deadlines.nextDue).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }))}</span>
-            ) : null}
-            <span className="emp-chevron" aria-hidden="true">
-              <Icon name="down" size={16} />
-            </span>
-          </summary>
+        <Disclosure
+          className="emp-missing"
+          summary={
+            <>
+              <span className="label">{s.missingDocs}</span>
+              <span className="badge neutral">
+                {data.mandatory.missing.length}
+              </span>
+              {data.deadlines?.lockedSince != null ? (
+                <span className="badge bad">{pl.admin.today.locked}</span>
+              ) : data.deadlines?.nextDue != null ? (
+                <span className="badge warn">
+                  {s.dueBy(
+                    new Date(data.deadlines.nextDue).toLocaleDateString(
+                      "pl-PL",
+                      { day: "numeric", month: "short" },
+                    ),
+                  )}
+                </span>
+              ) : null}
+            </>
+          }
+        >
           <div className="emp-missing-list">
             {data.mandatory.missing.map((m) => (
               <span key={m.id} className="emp-missing-row">
                 {m.title}
-                <span className={`badge ${data.deadlines?.due[m.id] && data.deadlines.due[m.id]! < Date.now() ? 'bad' : m.status === 'review' ? 'warn' : 'neutral'}`}>
-                  {data.deadlines?.due[m.id] && data.deadlines.due[m.id]! < Date.now() ? pl.deadlines.overdue : m.status === 'review' ? s.toReconfirm : s.notRead}
+                <span
+                  className={`badge ${data.deadlines?.due[m.id] && data.deadlines.due[m.id]! < Date.now() ? "bad" : m.status === "review" ? "warn" : "neutral"}`}
+                >
+                  {data.deadlines?.due[m.id] &&
+                  data.deadlines.due[m.id]! < Date.now()
+                    ? pl.deadlines.overdue
+                    : m.status === "review"
+                      ? s.toReconfirm
+                      : s.notRead}
                 </span>
               </span>
             ))}
           </div>
-        </details>
+        </Disclosure>
       ) : data.mandatory.total > 0 ? (
         <span className="muted" style={{ fontSize: 13 }}>
           {s.allConfirmed}
         </span>
       ) : null}
-      <Positions data={data} userId={userId} locationId={locationId} canManage={canManage} allowed={allowed} onChanged={load} />
-      {data.positions.some((p) => p.position === 'call_center') && (
-        <RemoteToggle on={Boolean(data.remoteWork)} disabled={!canManage} userId={userId} locationId={locationId} onChanged={load} />
+      <Positions
+        data={data}
+        userId={userId}
+        locationId={locationId}
+        canManage={canManage}
+        allowed={allowed}
+        onChanged={load}
+      />
+      {data.positions.some((p) => p.position === "call_center") && (
+        <RemoteToggle
+          on={Boolean(data.remoteWork)}
+          disabled={!canManage}
+          userId={userId}
+          locationId={locationId}
+          onChanged={load}
+        />
       )}
     </div>
   );
 }
 
 /** Praca zdalna (owner, 2026-10-17; mockup 18): call center starts and ends work in the app. */
-function RemoteToggle(props: { on: boolean; disabled: boolean; userId: string; locationId: string; onChanged: () => Promise<void> }) {
+function RemoteToggle(props: {
+  on: boolean;
+  disabled: boolean;
+  userId: string;
+  locationId: string;
+  onChanged: () => Promise<void>;
+}) {
   const r = pl.admin.employees.remote;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -653,10 +972,13 @@ function RemoteToggle(props: { on: boolean; disabled: boolean; userId: string; l
     setBusy(true);
     setError(null);
     try {
-      await api(`/api/admin/locations/${props.locationId}/users/${props.userId}/remote`, { method: 'PUT', body: { enabled: !props.on } });
+      await api(
+        `/api/admin/locations/${props.locationId}/users/${props.userId}/remote`,
+        { method: "PUT", body: { enabled: !props.on } },
+      );
       await props.onChanged();
     } catch (e) {
-      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+      setError(errorText(e instanceof ApiFailure ? e.code : "generic"));
     } finally {
       setBusy(false);
     }
@@ -668,7 +990,15 @@ function RemoteToggle(props: { on: boolean; disabled: boolean; userId: string; l
           <b>{r.title}</b>
           <p className="muted">{r.hint}</p>
         </div>
-        <button type="button" role="switch" aria-checked={props.on} aria-label={r.title} className="ntf-switch" disabled={busy || props.disabled} onClick={() => void flip()}>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={props.on}
+          aria-label={r.title}
+          className="ntf-switch"
+          disabled={busy || props.disabled}
+          onClick={() => void flip()}
+        >
           <span />
         </button>
       </div>
@@ -687,7 +1017,8 @@ export function useScrollIntoView(id: string | null) {
       const el = document.querySelector(`[data-emp="${id}"]`);
       if (!el) return;
       const top = el.getBoundingClientRect().top;
-      if (top < 56 || top > window.innerHeight * 0.55) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (top < 56 || top > window.innerHeight * 0.55)
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
     };
     // Once now, and again after a card above has finished folding.
     const a = window.setTimeout(check, 60);
@@ -700,15 +1031,22 @@ export function useScrollIntoView(id: string | null) {
 }
 
 /** Positions of a person with their own rates (owner, 2026-10-17). */
-function Positions(props: { data: SummaryData; userId: string; locationId: string; canManage: boolean; allowed: string[]; onChanged: () => Promise<void> }) {
+function Positions(props: {
+  data: SummaryData;
+  userId: string;
+  locationId: string;
+  canManage: boolean;
+  allowed: string[];
+  onChanged: () => Promise<void>;
+}) {
   const s = pl.admin.employees.positionsCard;
   const { data } = props;
   const [error, setError] = useState<string | null>(null);
   const [rateFor, setRateFor] = useState<string | null>(null);
-  const [rate, setRate] = useState('');
+  const [rate, setRate] = useState("");
   const [from, setFrom] = useState(businessDate(Date.now()));
   const [adding, setAdding] = useState(false);
-  const [newPos, setNewPos] = useState('');
+  const [newPos, setNewPos] = useState("");
   const [newStart, setNewStart] = useState(businessDate(Date.now()));
   const [busy, setBusy] = useState(false);
   const list = data.positions;
@@ -724,15 +1062,24 @@ function Positions(props: { data: SummaryData; userId: string; locationId: strin
       await props.onChanged();
       return true;
     } catch (e) {
-      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+      setError(errorText(e instanceof ApiFailure ? e.code : "generic"));
       return false;
     } finally {
       setBusy(false);
     }
   }
-  const save = (positions: { position: string; startDate: string | null }[], main: string | undefined) =>
-    run(() => api(`/api/admin/locations/${props.locationId}/users/${props.userId}/positions`, { method: 'PUT', body: { positions, primary: main } }));
-  const current = () => list.map((p) => ({ position: p.position, startDate: p.startDate }));
+  const save = (
+    positions: { position: string; startDate: string | null }[],
+    main: string | undefined,
+  ) =>
+    run(() =>
+      api(
+        `/api/admin/locations/${props.locationId}/users/${props.userId}/positions`,
+        { method: "PUT", body: { positions, primary: main } },
+      ),
+    );
+  const current = () =>
+    list.map((p) => ({ position: p.position, startDate: p.startDate }));
 
   return (
     <div className="emp-positions">
@@ -743,22 +1090,40 @@ function Positions(props: { data: SummaryData; userId: string; locationId: strin
             <div className="emp-pos-main">
               <span className="emp-pos-name">
                 {pl.admin.positions[p.position] ?? p.position}
-                {p.primary && list.length > 1 && <span className="badge neutral">{s.primary}</span>}
+                {p.primary && list.length > 1 && (
+                  <span className="badge neutral">{s.primary}</span>
+                )}
               </span>
               <span className="muted" style={{ fontSize: 12 }}>
-                {[p.startDate ? s.since(p.startDate) : null, data.wages ? (p.rate == null ? s.noRate : `${formatMoney(p.rate)} / h${p.ownRate ? '' : ` · ${s.commonRate}`}`) : null]
+                {[
+                  p.startDate ? s.since(p.startDate) : null,
+                  data.wages
+                    ? p.rate == null
+                      ? s.noRate
+                      : `${formatMoney(p.rate)} / h${p.ownRate ? "" : ` · ${s.commonRate}`}`
+                    : null,
+                ]
                   .filter(Boolean)
-                  .join(' · ')}
+                  .join(" · ")}
               </span>
             </div>
             <div className="btn-row">
               {canTouch(p.position) && !p.primary && list.length > 1 && (
-                <Btn disabled={busy} onClick={() => void save(current(), p.position)}>
+                <Btn
+                  disabled={busy}
+                  onClick={() => void save(current(), p.position)}
+                >
                   {s.makePrimary}
                 </Btn>
               )}
               {data.wages && (
-                <Btn disabled={busy} onClick={() => (setRateFor(rateFor === p.position ? null : p.position), setRate(''))}>
+                <Btn
+                  disabled={busy}
+                  onClick={() => (
+                    setRateFor(rateFor === p.position ? null : p.position),
+                    setRate("")
+                  )}
+                >
                   {s.rate}
                 </Btn>
               )}
@@ -767,10 +1132,16 @@ function Positions(props: { data: SummaryData; userId: string; locationId: strin
                   kind="danger"
                   disabled={busy}
                   onClick={() =>
-                    window.confirm(s.confirmRemove(pl.admin.positions[p.position] ?? p.position)) &&
+                    window.confirm(
+                      s.confirmRemove(
+                        pl.admin.positions[p.position] ?? p.position,
+                      ),
+                    ) &&
                     void save(
                       current().filter((x) => x.position !== p.position),
-                      p.primary ? list.find((x) => x.position !== p.position)?.position : primary,
+                      p.primary
+                        ? list.find((x) => x.position !== p.position)?.position
+                        : primary,
                     )
                   }
                 >
@@ -783,27 +1154,64 @@ function Positions(props: { data: SummaryData; userId: string; locationId: strin
                 className="emp-rate"
                 onSubmit={async (e: FormEvent) => {
                   e.preventDefault();
-                  if (await run(() => api(`/api/admin/locations/${props.locationId}/users/${props.userId}/rate`, { method: 'PUT', body: { rate, validFrom: from, position: p.position } }))) setRateFor(null);
+                  if (
+                    await run(() =>
+                      api(
+                        `/api/admin/locations/${props.locationId}/users/${props.userId}/rate`,
+                        {
+                          method: "PUT",
+                          body: { rate, validFrom: from, position: p.position },
+                        },
+                      ),
+                    )
+                  )
+                    setRateFor(null);
                 }}
               >
-                <div className="field" style={{ flex: '1 1 120px' }}>
-                  <label htmlFor={`rate-${p.position}`}>{s.newRate(pl.admin.positions[p.position] ?? p.position)}</label>
-                  <input id={`rate-${p.position}`} inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value.replace(/[^0-9.,]/g, ''))} placeholder="np. 32,50" />
+                <div className="field" style={{ flex: "1 1 120px" }}>
+                  <label htmlFor={`rate-${p.position}`}>
+                    {s.newRate(pl.admin.positions[p.position] ?? p.position)}
+                  </label>
+                  <input
+                    id={`rate-${p.position}`}
+                    inputMode="decimal"
+                    value={rate}
+                    onChange={(e) =>
+                      setRate(e.target.value.replace(/[^0-9.,]/g, ""))
+                    }
+                    placeholder="np. 32,50"
+                  />
                 </div>
-                <div className="field" style={{ flex: '1 1 150px' }}>
-                  <label htmlFor={`rate-from-${p.position}`}>{pl.admin.employees.summary.validFrom}</label>
-                  <DateField id={`rate-from-${p.position}`} value={from} onChange={setFrom} />
+                <div className="field" style={{ flex: "1 1 150px" }}>
+                  <label htmlFor={`rate-from-${p.position}`}>
+                    {pl.admin.employees.summary.validFrom}
+                  </label>
+                  <DateField
+                    id={`rate-from-${p.position}`}
+                    value={from}
+                    onChange={setFrom}
+                  />
                 </div>
-                <Btn kind="primary" type="submit" disabled={busy || !rate || !from}>
+                <Btn
+                  kind="primary"
+                  type="submit"
+                  disabled={busy || !rate || !from}
+                >
                   {pl.admin.employees.summary.saveRate}
                 </Btn>
                 {p.history && p.history.length > 0 && (
-                  <span className="muted" style={{ fontSize: 12, flexBasis: '100%' }}>
-                    {pl.admin.employees.summary.history}:{' '}
+                  <span
+                    className="muted"
+                    style={{ fontSize: 12, flexBasis: "100%" }}
+                  >
+                    {pl.admin.employees.summary.history}:{" "}
                     {p.history
                       .slice(-4)
-                      .map((r) => `${formatMoney(r.rateGrosze)} ${pl.admin.employees.summary.from} ${r.validFrom}${r.position ? '' : ` (${s.commonRate})`}`)
-                      .join(' · ')}
+                      .map(
+                        (r) =>
+                          `${formatMoney(r.rateGrosze)} ${pl.admin.employees.summary.from} ${r.validFrom}${r.position ? "" : ` (${s.commonRate})`}`,
+                      )
+                      .join(" · ")}
                   </span>
                 )}
               </form>
@@ -813,7 +1221,9 @@ function Positions(props: { data: SummaryData; userId: string; locationId: strin
       </div>
       {props.canManage && free.length > 0 && !adding && (
         <div>
-          <Btn onClick={() => (setAdding(true), setNewPos(free[0]!))}>{s.add}</Btn>
+          <Btn onClick={() => (setAdding(true), setNewPos(free[0]!))}>
+            {s.add}
+          </Btn>
         </div>
       )}
       {adding && (
@@ -821,12 +1231,25 @@ function Positions(props: { data: SummaryData; userId: string; locationId: strin
           className="emp-rate"
           onSubmit={async (e: FormEvent) => {
             e.preventDefault();
-            if (await save([...current(), { position: newPos, startDate: newStart || null }], primary)) setAdding(false);
+            if (
+              await save(
+                [
+                  ...current(),
+                  { position: newPos, startDate: newStart || null },
+                ],
+                primary,
+              )
+            )
+              setAdding(false);
           }}
         >
-          <div className="field" style={{ flex: '1 1 160px' }}>
+          <div className="field" style={{ flex: "1 1 160px" }}>
             <label htmlFor="new-pos">{s.position}</label>
-            <select id="new-pos" value={newPos} onChange={(e) => setNewPos(e.target.value)}>
+            <select
+              id="new-pos"
+              value={newPos}
+              onChange={(e) => setNewPos(e.target.value)}
+            >
               {free.map((p) => (
                 <option key={p} value={p}>
                   {pl.admin.positions[p] ?? p}
@@ -834,9 +1257,14 @@ function Positions(props: { data: SummaryData; userId: string; locationId: strin
               ))}
             </select>
           </div>
-          <div className="field" style={{ flex: '1 1 150px' }}>
+          <div className="field" style={{ flex: "1 1 150px" }}>
             <label htmlFor="new-pos-start">{s.startDate}</label>
-            <DateField id="new-pos-start" value={newStart} onChange={setNewStart} shortcuts />
+            <DateField
+              id="new-pos-start"
+              value={newStart}
+              onChange={setNewStart}
+              shortcuts
+            />
           </div>
           <Btn kind="primary" type="submit" disabled={busy || !newPos}>
             {s.addShort}
@@ -853,10 +1281,27 @@ function Positions(props: { data: SummaryData; userId: string; locationId: strin
 }
 
 /** Hourly rate input: „32,50” with „zł / h” on the right (Polish comma accepted). */
-export function RateInput({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
+export function RateInput({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <div className="rate-input">
-      <input id={id} inputMode="decimal" autoComplete="off" value={value} placeholder="0,00" onChange={(e) => onChange(e.target.value.replace(/[^\d,.]/g, '').slice(0, 8))} />
+      <input
+        id={id}
+        inputMode="decimal"
+        autoComplete="off"
+        value={value}
+        placeholder="0,00"
+        onChange={(e) =>
+          onChange(e.target.value.replace(/[^\d,.]/g, "").slice(0, 8))
+        }
+      />
       <span aria-hidden="true">zł / h</span>
     </div>
   );
