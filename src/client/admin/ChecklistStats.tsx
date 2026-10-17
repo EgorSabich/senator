@@ -5,6 +5,10 @@ import { errorText, pl } from '../i18n/pl';
 import { ErrorBox, Fold, LogoLoader } from '../ui';
 import { Btn, Icon, Modal } from './common';
 import { usePanel } from './Panel';
+import { ChecklistEditor, ChecklistManager, DivisionChips, inDivision, listDivisions } from './ChecklistEditor';
+import { ContentImport } from './ContentImport';
+import { match, navigate, usePath } from '../router';
+import { storageGet, storageSet } from './common';
 
 const t = pl.admin.checklists;
 
@@ -19,6 +23,7 @@ interface DayItem {
 }
 interface DayChecklist {
   id: string;
+  positions?: string[];
   title: string;
   items: DayItem[];
   done: number;
@@ -30,7 +35,7 @@ interface DayChecklist {
 }
 interface Stats {
   days: string[];
-  checklists: { id: string; title: string; total: number; mode: 'individual' | 'shared' }[];
+  checklists: { id: string; title: string; total: number; mode: 'individual' | 'shared'; positions?: string[] }[];
   perDay: { id: string; date: string; done: number; people?: number }[];
   closed: { id: string; date: string; done: number; total: number; closedBy: string | null }[];
   people: { userId: string; name: string; items: number; days: number }[];
@@ -55,7 +60,60 @@ function sectionsOf(items: DayItem[]) {
 
 const dayFmt = new Intl.DateTimeFormat('pl-PL', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
 
+const DIV_KEY = 'sa.panel.checklistDivision';
+
+/** "Listy": control (Dzień, Statystyka) and — for leaders who edit materials — editing and import (owner, 2026-10-17). */
 export function ChecklistStats() {
+  const { can } = usePanel();
+  const path = usePath();
+  const [division, setDivisionState] = useState(() => storageGet(DIV_KEY) ?? 'all');
+  const setDivision = (d: string) => {
+    setDivisionState(d);
+    storageSet(DIV_KEY, d);
+  };
+  const [importing, setImporting] = useState(false);
+  const canEdit = can('content.edit');
+  const m = match('/panel/listy/edycja/:id', path);
+  const editing = canEdit && path.startsWith('/panel/listy/edycja');
+  return (
+    <div className="page">
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <h1 className="page-title">{t.title}</h1>
+        {canEdit && (
+          <div className="btn-row">
+            {editing ? (
+              <Btn onClick={() => navigate('/panel/listy')}>{t.edit.toControl}</Btn>
+            ) : (
+              <Btn kind="primary" onClick={() => navigate('/panel/listy/edycja')}>
+                {t.edit.button}
+              </Btn>
+            )}
+            <Btn onClick={() => setImporting(true)}>{t.edit.import}</Btn>
+          </div>
+        )}
+      </div>
+      {editing ? (
+        m ? (
+          <ChecklistEditor key={m.id} id={m.id!} />
+        ) : (
+          <ChecklistManager division={division} setDivision={setDivision} />
+        )
+      ) : (
+        <Control division={division} setDivision={setDivision} />
+      )}
+      {importing && (
+        <ContentImport
+          onClose={() => setImporting(false)}
+          onDone={async () => {
+            if (!path.startsWith('/panel/listy/edycja')) navigate('/panel/listy/edycja');
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function Control({ division, setDivision }: { division: string; setDivision: (d: string) => void }) {
   const { locationId } = usePanel();
   const [tab, setTab] = useState<'day' | 'stats'>('day');
   const [date, setDate] = useState(businessDate(Date.now()));
@@ -96,14 +154,16 @@ export function ChecklistStats() {
     }
   }, [tab, loadDay, loadStats]);
 
+  const present = [...new Set([...(day ?? []), ...(stats?.checklists ?? [])].flatMap((c) => listDivisions(c.positions ?? [])))];
+  const dayShown = day?.filter((c) => inDivision(c.positions ?? [], division)) ?? null;
+  const statsLists = stats?.checklists.filter((c) => inDivision(c.positions ?? [], division)) ?? [];
   return (
-    <div className="page">
+    <>
       {photo && (
         <Modal title={photo.title} onClose={() => setPhoto(null)}>
           <img className="cl-photo-big" src={`/api/admin/checklists/marks/${photo.id}/photo`} alt={photo.title} />
         </Modal>
       )}
-      <h1 className="page-title">{t.title}</h1>
       <div className="btn-row" role="tablist">
         {(['day', 'stats'] as const).map((x) => (
           <button key={x} role="tab" className="chip" aria-selected={tab === x} aria-pressed={tab === x} onClick={() => setTab(x)}>
@@ -111,6 +171,7 @@ export function ChecklistStats() {
           </button>
         ))}
       </div>
+      <DivisionChips value={division} onChange={setDivision} present={present} />
       <ErrorBox message={error} />
 
       {tab === 'day' && (
@@ -124,8 +185,8 @@ export function ChecklistStats() {
             <Btn onClick={() => setDate(addDays(date, 1))}>›</Btn>
           </div>
           {!day && !error && <LogoLoader />}
-          {day && day.length === 0 && <p className="muted">{t.none}</p>}
-          {day?.map((cl) => {
+          {dayShown && dayShown.length === 0 && <p className="muted">{t.none}</p>}
+          {dayShown?.map((cl) => {
             const pct = cl.total ? Math.round((cl.done / cl.total) * 100) : 0;
             return (
               <section key={cl.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -287,7 +348,7 @@ export function ChecklistStats() {
                       </tr>
                     </thead>
                     <tbody>
-                      {stats.checklists.map((c) => (
+                      {statsLists.map((c) => (
                         <tr key={c.id}>
                           <th className="sticky" scope="row">
                             <span className="name" style={{ whiteSpace: 'normal' }}>{c.title}</span>
@@ -323,6 +384,6 @@ export function ChecklistStats() {
           )}
         </>
       )}
-    </div>
+    </>
   );
 }

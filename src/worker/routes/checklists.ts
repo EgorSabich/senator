@@ -339,12 +339,13 @@ checklistAdminRoutes.get('/locations/:locId/checklists/day', async (c) => {
   for (const l of lists) {
     const cl = await loadChecklist(db, l.id);
     const v = await dayView(db, cl, date, locId);
-    if (!v.total) continue;
+    if (!v.itemCount) continue; // a list nobody worked on today still shows (division filter, 2026-10-17)
     // D44: only people of my divisions
     const keep = (userId: string) => !people || people.has(userId);
     out.push({
       id: l.id,
       title: l.title,
+      positions: l.positions ? l.positions.split(',') : [],
       ...v,
       people: v.people?.filter((p) => keep(p.userId)),
     });
@@ -419,7 +420,7 @@ checklistAdminRoutes.get('/locations/:locId/checklists/stats', async (c) => {
     days,
     checklists: lists
       .filter((l) => (totals.get(l.id) ?? 0) > 0)
-      .map((l) => ({ id: l.id, title: l.title, total: totals.get(l.id), mode: loaded.get(l.id)?.mode ?? 'shared' })),
+      .map((l) => ({ id: l.id, title: l.title, total: totals.get(l.id), mode: loaded.get(l.id)?.mode ?? 'shared', positions: l.positions ? l.positions.split(',') : [] })),
     perDay: perDayRows,
     closed: closed!.results,
     people: (perPerson!.results as { userId: string }[]).filter((p) => !people || people.has(p.userId)),

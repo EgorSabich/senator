@@ -28,12 +28,14 @@ interface Item {
 }
 
 const t = pl.admin.content;
+// checklists are edited in „Listy” (owner, 2026-10-17)
+const MATERIAL_KINDS = CONTENT_KINDS.filter((k) => k !== 'checklist');
 const KIND_KEY = 'sa.panel.contentKind';
 const POS_KEY = 'sa.panel.contentPosition';
 
 export function ContentList() {
   const { locationId, isOwner } = usePanel();
-  const [kind, setKind] = useState<string>(storageGet(KIND_KEY) ?? 'service_book');
+  const [kind, setKind] = useState<string>(() => { const k = storageGet(KIND_KEY); return k && k !== 'checklist' ? k : 'service_book'; });
   const [items, setItems] = useState<Item[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -120,7 +122,7 @@ export function ContentList() {
         );
       })()}
       <div role="tablist" aria-label={t.title} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, borderBottom: '1px solid var(--border)' }}>
-        {CONTENT_KINDS.map((k) => (
+        {MATERIAL_KINDS.map((k) => (
           <button
             key={k}
             role="tab"
@@ -283,7 +285,7 @@ function NewContent(props: { defaultKind: string; locationId: string; canShare: 
         <div className="field">
           <label htmlFor="ckind">{t.kindLabel}</label>
           <select id="ckind" value={kind} onChange={(e) => setKind(e.target.value)}>
-            {CONTENT_KINDS.map((k) => (
+            {MATERIAL_KINDS.map((k) => (
               <option key={k} value={k}>
                 {t.kindOne[k]}
               </option>

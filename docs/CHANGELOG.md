@@ -6,6 +6,13 @@
 
 
 
+
+## 0.9.3 — 2026-10-17
+
+- „Listy” in the panel: „Edytuj listy” and „Importuj (JSON)” right there (owner). Edit mode: division chips → list of checklists (draft / published) → „Nowa lista” or a list edited point by point: name, mode, positions, sections (rename, reorder, remove), items (text, ↑ ↓, remove, „+ Dodaj punkt”), „Wymaga zdjęcia” per item (individual lists). „Zapisz” publishes at once; a rewritten photo item keeps its photo; a warning when today's ticks of rewritten items will go. Notes and paragraphs of a list stay above the sections.
+- Division chips also in Dzień and Statystyka; the day view shows lists nobody worked on yet.
+- Checklists are no longer a tab in Materiały (import there still accepts checklist JSON).
+
 ## 0.9.2 — 2026-10-17 (iteration 2 again, one feature at a time: 1/4)
 
 - Photo items in individual checklists (from 0.10.0, nothing else): the leader picks „Zadania ze zdjęciem” in the list editor; on the phone such a task opens the camera and is ticked only with a photo (≤1024 px JPEG, ≤220 KB); panel day view shows a camera chip by the name, the photo opens in a window. Private PHOTOS bucket, deleted after 30 days, removed with the person / material on permanent deletion. Uses migration 0012 (already applied).

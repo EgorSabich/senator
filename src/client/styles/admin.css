@@ -1902,3 +1902,116 @@ a.sch-person:hover {
   margin: 0 auto;
   border-radius: 12px;
 }
+
+/* Checklist editor in „Listy” (2026-10-17) */
+.cle {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 920px;
+}
+.cle-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 8px 0;
+  background: var(--bg);
+}
+.cle-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cle-positions {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cle-positions legend {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+.cle-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cle-section-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.cle-section-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px !important;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cle-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  counter-reset: cle;
+}
+.cle-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.cle-item textarea {
+  flex: 1 1 320px;
+  min-width: 0;
+  min-height: 44px;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.45;
+}
+.cle-tools {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: none;
+}
+.cle-icon {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: none;
+  color: var(--text-soft);
+  font: inherit;
+  cursor: pointer;
+}
+.cle-icon:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.cle-photo[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--text);
+}
+@media (max-width: 600px) {
+  .cle-item textarea {
+    flex-basis: 100%;
+  }
+  .cle-item .cle-tools {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
