@@ -23,6 +23,7 @@ interface Row {
   lateMin: number;
 }
 interface TodayView {
+  documents?: { userId: string; name: string; lockedSince: number | null; nextDue: number | null; overdue: number; pending: number }[];
   date: string;
   now: number;
   summary: { planned: number; onShift: number; late: number; absent: number; missingExits: number };
@@ -31,6 +32,8 @@ interface TodayView {
   missingExits: { id: string; userId: string; name: string; date: string; clockInAt: number }[];
   checklists: { id: string; title: string; mode: 'individual' | 'shared'; done: number; total: number; people?: number; peopleDone?: number; closed?: boolean }[];
 }
+
+const dayFmt = (ms: number) => new Intl.DateTimeFormat('pl-PL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Warsaw' }).format(new Date(ms));
 
 const longDate = (d: string) => {
   const s = new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`));
@@ -112,6 +115,29 @@ export function Today() {
           </div>
         )}
       </section>
+
+      {(data.documents ?? []).length > 0 && (
+        <section className="card today-card">
+          <div className="today-head">
+            <h2 className="label">{t.documents}</h2>
+            <a href="/panel/pracownicy" onClick={onNav('/panel/pracownicy')} className="muted">
+              {t.toPeople}
+            </a>
+          </div>
+          {data.documents!.map((d) => (
+            <a key={d.userId} className="today-row today-link" href={`/panel/pracownicy/${d.userId}`} onClick={onNav(`/panel/pracownicy/${d.userId}`)}>
+              <span className="today-time muted">{d.lockedSince !== null ? '🔒' : '⏳'}</span>
+              <span className="today-name">
+                {d.name}
+                <span className="muted" style={{ display: 'block', fontSize: 12 }}>
+                  {d.lockedSince !== null ? t.docsOverdue(d.overdue, dayFmt(d.lockedSince)) : t.docsPending(d.pending, dayFmt(d.nextDue!))}
+                </span>
+              </span>
+              {d.lockedSince !== null ? <span className="badge bad">{t.locked}</span> : <span className="badge warn">{t.daysLeft(Math.max(0, Math.ceil((d.nextDue! - data.now) / 86400_000)))}</span>}
+            </a>
+          ))}
+        </section>
+      )}
 
       {data.missingExits.length > 0 && (
         <section className="card today-card">

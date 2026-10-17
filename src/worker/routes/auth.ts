@@ -103,7 +103,7 @@ authRoutes.post('/login', async (c) => {
   }
 
   await db
-    .prepare(`UPDATE users SET failed_attempts = 0, lock_count = 0, locked_until = NULL, last_login_at = ? WHERE id = ?`)
+    .prepare(`UPDATE users SET failed_attempts = 0, lock_count = 0, locked_until = NULL, last_login_at = ?1, first_login_at = COALESCE(first_login_at, ?1) WHERE id = ?2`)
     .bind(now, user.id)
     .run();
   await recordAttempt(true);

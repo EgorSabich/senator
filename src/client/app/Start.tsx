@@ -14,6 +14,35 @@ interface Home {
   toConfirm: { id: string; kind: string; title: string; status: string }[];
   review: { id: string; kind: string; title: string }[];
   updated: { id: string; kind: string; title: string }[];
+  deadlines?: { ackDays: number; lockedSince: number | null; nextDue: number | null; items: { id: string; title: string; due: number; overdue: boolean }[] } | null;
+}
+
+const dueDate = (ms: number) => new Intl.DateTimeFormat('pl-PL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Warsaw' }).format(new Date(ms));
+const daysLeft = (ms: number) => Math.max(0, Math.ceil((ms - Date.now()) / 86400_000));
+
+/** Reading period for mandatory documents (2026-10-17): days left, or Grafik locked. */
+export function DeadlineNote({ d }: { d: NonNullable<Home['deadlines']> }) {
+  const n = d.items.length;
+  if (d.lockedSince !== null)
+    return (
+      <div className="a-note bad" role="alert">
+        <Icon name="lock" size={18} />
+        <span>
+          <b>{pl.deadlines.lockedTitle(Math.max(1, Math.floor((Date.now() - d.lockedSince) / 86400_000)))}</b> {pl.deadlines.lockedText}
+        </span>
+      </div>
+    );
+  if (d.nextDue === null) return null;
+  return (
+    <div className="a-note warn">
+      <Icon name="clock" size={18} />
+      <span>
+        <b>{pl.deadlines.left(daysLeft(d.nextDue), n)}</b> ({pl.deadlines.until(dueDate(d.nextDue))})
+        <br />
+        <span style={{ fontSize: 13, opacity: 0.85 }}>{pl.deadlines.warning}</span>
+      </span>
+    </div>
+  );
 }
 
 const t = pl.academy;
@@ -31,7 +60,14 @@ export function Start() {
         ...data.review.map((r) => ({ ...r, pill: <span className="a-pill bad">{t.review}</span>, hint: t.reviewHint })),
         ...data.toConfirm
           .filter((d) => !data.review.some((r) => r.id === d.id))
-          .map((d) => ({ ...d, pill: <span className="a-pill warn">{t.toConfirm}</span>, hint: t.kinds[d.kind] ?? '' })),
+          .map((d) => {
+            const due = data.deadlines?.items.find((x) => x.id === d.id);
+            return {
+              ...d,
+              pill: due?.overdue ? <span className="a-pill bad">{pl.deadlines.overdue}</span> : <span className="a-pill warn">{t.toConfirm}</span>,
+              hint: [t.kinds[d.kind] ?? '', due && !due.overdue ? pl.deadlines.until(dueDate(due.due)) : ''].filter(Boolean).join(' · '),
+            };
+          }),
         ...data.updated.map((u) => ({ ...u, pill: <span className="a-pill">{t.updated}</span>, hint: t.updatedHint })),
       ]
     : [];
@@ -45,6 +81,7 @@ export function Start() {
       {!data && !error && <Loading />}
       {data && (
         <>
+          {data.deadlines && <DeadlineNote d={data.deadlines} />}
           <InstallCard />
           <TodayCard />
           <MyScheduleCard />

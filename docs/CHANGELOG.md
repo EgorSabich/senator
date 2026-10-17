@@ -9,6 +9,13 @@
 
 
 
+
+## 0.9.6 — 2026-10-17 (iteration 3, step 2: reading period)
+
+- Lokale → „Dni na zapoznanie się z dokumentami obowiązkowymi” (default 3). Period: a new person from their first sign-in; a new document from its publication; a significant change from that version's publication. Migration 0016: `locations.ack_days`, `users.first_login_at` (people who already signed in start their period at deploy time).
+- After the period the person's Grafik is locked: „Moje zmiany” and „Niedostępność” show the overdue documents and „Czytaj dokumenty”; setting days off is refused (`docs_overdue`). Reading unlocks at once. Time tracking and „Moje godziny” are not affected.
+- Start: „Masz N dni na zapoznanie się…” or „Termin minął…”, documents marked „Po terminie”. Panel: „Dziś” lists who is locked or has a period running; the employee card shows the deadline and overdue documents.
+
 ## 0.9.5 — 2026-10-17 (iteration 3, step 1: positions)
 
 - Several positions per person: „Stanowiska” in the employee card — add (with start date), make main, remove (history kept, at least one stays). Leaders change only positions of their divisions. The list shows a person once („Kelner + Host”), filters by any of their positions. Migration 0015: `user_locations.is_primary` (the first position became main), `pay_rates.position` ('' = rate for every position, as before), `time_entries.position`.

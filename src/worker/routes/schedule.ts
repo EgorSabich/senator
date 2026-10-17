@@ -4,6 +4,8 @@
  * Templates are saved automatically from planned shifts; staff report days off before a weekly deadline.
  */
 import { Hono } from 'hono';
+import { userPositions } from '../lib/learning';
+import { myDeadlines } from '../lib/deadlines';
 import { addDays, isIsoDate } from '../../shared/time';
 import { shiftMinutes, unavailabilityDeadline, weekDays, weekStart } from '../../shared/schedule';
 import { divisionOf } from '../../shared/constants';
@@ -385,6 +387,12 @@ async function staffGuard(c: Ctx, locId: string) {
   requireLocation(access, locId);
 }
 
+/** 2026-10-17: Grafik is locked for a person whose mandatory documents are past the reading period. */
+async function scheduleLock(c: Ctx, locId: string) {
+  const d = await myDeadlines(c.env.DB, locId, c.var.user, await userPositions(c.env.DB, c.var.user, locId));
+  return d.lockedSince === null ? null : { since: d.lockedSince, documents: d.items.filter((i) => i.overdue).map((i) => ({ id: i.id, title: i.title, due: i.due })) };
+}
+
 /** My published shifts in a week (and who else works in my division those days), plus my next shifts. */
 scheduleRoutes.get('/locations/:locId/my-schedule', async (c) => {
   const locId = c.req.param('locId');
@@ -395,6 +403,8 @@ scheduleRoutes.get('/locations/:locId/my-schedule', async (c) => {
   const q = c.req.query('week');
   const monday = q && isIsoDate(q) ? weekStart(q) : weekStart(today);
   const days = weekDays(monday);
+  const locked = await scheduleLock(c, locId);
+  if (locked) return c.json({ week: monday, days, today, locked, shifts: [], team: [], upcoming: [] });
   const [week, upcoming] = await db.batch([
     db
       .prepare(
@@ -443,7 +453,9 @@ scheduleRoutes.get('/locations/:locId/unavailability', async (c) => {
     )
     .bind(c.var.user.id, locId, weeks[0], addDays(weeks[5]!, 6))
     .all<{ date: string; note: string | null; fromMin: number | null; toMin: number | null; byManager: number }>();
+  const locked = await scheduleLock(c, locId);
   return c.json({
+    locked,
     deadlineRule: { dow, hour },
     weeks: weeks.map((w) => {
       const deadline = unavailabilityDeadline(w, dow, hour);
@@ -457,6 +469,7 @@ scheduleRoutes.put('/locations/:locId/unavailability', async (c) => {
   const locId = c.req.param('locId');
   await staffGuard(c, locId);
   if (c.var.user.role !== 'employee') throw new ApiError(403, 'forbidden');
+  if (await scheduleLock(c, locId)) throw new ApiError(403, 'docs_overdue');
   const db = c.env.DB;
   const body = await readJson<{ week?: unknown; dates?: unknown; items?: unknown; note?: unknown }>(c.req.raw);
   const monday = mondayOf(body.week);

@@ -11,6 +11,7 @@ import type { AppEnv } from '../env';
 import { ApiError } from '../lib/http';
 import { locationRules } from '../lib/location';
 import { isVisibleFor, visibleContent } from '../lib/learning';
+import { deadlinesFor } from '../lib/deadlines';
 import { allowedDivisions, loadAccess, requireLocation } from '../auth/access';
 
 export const todayAdminRoutes = new Hono<AppEnv>();
@@ -32,7 +33,7 @@ todayAdminRoutes.get('/locations/:locId/today', async (c) => {
   const [people, plan, entries, stale] = await db.batch([
     db
       .prepare(
-        `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName, group_concat(ul.position) AS positions
+        `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName, group_concat(ul.position) AS positions, u.first_login_at AS firstLoginAt, u.status
          FROM users u JOIN user_locations ul ON ul.user_id = u.id AND ul.location_id = ? AND ul.is_active = 1
          WHERE u.role = 'employee' GROUP BY u.id`,
       )
@@ -54,7 +55,10 @@ todayAdminRoutes.get('/locations/:locId/today', async (c) => {
       .bind(locId, now - rules.staleHours * 3600_000),
   ]);
   const ppl = new Map(
-    (people!.results as { id: string; firstName: string; lastName: string; positions: string }[]).map((p) => [p.id, { ...p, positions: p.positions.split(',') }]),
+    (people!.results as { id: string; firstName: string; lastName: string; positions: string; firstLoginAt: number | null; status: string }[]).map((p) => [
+      p.id,
+      { ...p, positions: p.positions.split(',') },
+    ]),
   );
   const inScope = (userId: string, division?: string) => {
     if (!scope) return ppl.has(userId);
@@ -139,7 +143,23 @@ todayAdminRoutes.get('/locations/:locId/today', async (c) => {
     checklists.push({ id: l.id, title: l.title, mode: 'individual', people: who.size, peopleDone, done, total: total * Math.max(who.size, 1) });
   }
 
+  // 2026-10-17: who has Grafik locked for unread documents, and whose period ends soon
+  const watched = [...ppl.values()].filter((p) => p.status === 'active' && inScope(p.id));
+  const dl = await deadlinesFor(db, locId, watched.map((p) => ({ id: p.id, positions: p.positions, firstLoginAt: p.firstLoginAt })), now);
+  const documents = watched
+    .map((p) => ({ p, d: dl.get(p.id)! }))
+    .filter(({ d }) => d.lockedSince !== null || d.nextDue !== null)
+    .map(({ p, d }) => ({
+      userId: p.id,
+      name: `${p.firstName} ${p.lastName}`,
+      lockedSince: d.lockedSince,
+      nextDue: d.nextDue,
+      overdue: d.items.filter((i) => i.overdue).length,
+      pending: d.items.length,
+    }))
+    .sort((a, b) => (a.lockedSince ?? Infinity) - (b.lockedSince ?? Infinity) || (a.nextDue ?? Infinity) - (b.nextDue ?? Infinity));
   return c.json({
+    documents,
     date,
     now,
     divisions: scope ? [...scope] : null,

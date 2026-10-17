@@ -46,6 +46,8 @@ export const locations = sqliteTable('locations', {
   /** D43: staff report days off for a week until this weekday (0 = Sunday … 6 = Saturday) of the week before, HH:59. */
   unavailDeadlineDow: integer('unavail_deadline_dow').notNull().default(0),
   unavailDeadlineHour: integer('unavail_deadline_hour').notNull().default(23),
+  /** 2026-10-17: days to read mandatory documents; after that the person's Grafik is locked until they read them */
+  ackDays: integer('ack_days').notNull().default(3),
   createdAt: createdAt(),
 });
 
@@ -69,6 +71,8 @@ export const users = sqliteTable(
     lockCount: integer('lock_count').notNull().default(0),
     lockedUntil: integer('locked_until'),
     lastLoginAt: integer('last_login_at'),
+    /** start of the reading period for a new person (first sign-in) */
+    firstLoginAt: integer('first_login_at'),
     deactivatedAt: integer('deactivated_at'),
     anonymizedAt: integer('anonymized_at'),
     /** HMAC(AUTH_SECRET, PIN) — finds the person on the time terminal by PIN alone (D35). Unique; null until set. */

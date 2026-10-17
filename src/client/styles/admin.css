@@ -2230,3 +2230,10 @@ a.sch-person:hover {
 .emp-pos .emp-rate {
   flex-basis: 100%;
 }
+.today-link {
+  color: inherit;
+  text-decoration: none;
+}
+.today-link:hover .today-name {
+  text-decoration: underline;
+}

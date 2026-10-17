@@ -14,6 +14,7 @@ import { revokeUserSessions } from '../auth/session';
 import { loadAccess, requirePermission, scopedUserIds, userInScope, type Access } from '../auth/access';
 import { MANDATORY_KINDS, progressFor, visibleContent } from '../lib/learning';
 import { entryPositions, positionsAt, rateFor, type RateRow } from '../lib/positions';
+import { deadlinesFor } from '../lib/deadlines';
 
 export const timeAdminRoutes = new Hono<AppEnv>();
 
@@ -469,7 +470,10 @@ timeAdminRoutes.get('/locations/:locId/users/:id/summary', async (c) => {
     return { month: m, minutes: Math.round(minutes), shifts: es.length, open: es.filter((e) => !e.outAt).length, ...(wages ? { costGrosze: Math.round(cost), missingRate } : {}) };
   };
 
+  const first = await db.prepare(`SELECT first_login_at AS f FROM users WHERE id = ?`).bind(person.id).first<{ f: number | null }>();
+  const dl = (await deadlinesFor(db, locId, [{ id: person.id, positions, firstLoginAt: first?.f ?? null }])).get(person.id)!;
   return c.json({
+    deadlines: { lockedSince: dl.lockedSince, nextDue: dl.nextDue, due: Object.fromEntries(dl.items.map((i) => [i.id, i.due])) },
     lessons: { done: lessons.filter((l) => done(l.id)).length, total: lessons.length },
     mandatory: {
       done: mandatory.filter((m) => done(m.id)).length,

@@ -502,6 +502,7 @@ function AddEmployee({
 }
 
 interface SummaryData {
+  deadlines?: { lockedSince: number | null; nextDue: number | null; due: Record<string, number> };
   lessons: { done: number; total: number };
   mandatory: { done: number; total: number; missing: { id: string; title: string; status: string }[] };
   hours: Record<'thisMonth' | 'prevMonth', { month: string; minutes: number; shifts: number; open: number; costGrosze?: number; missingRate?: boolean }>;
@@ -579,6 +580,11 @@ function Summary({ userId, locationId, canManage, allowed }: { userId: string; l
           <summary>
             <span className="label">{s.missingDocs}</span>
             <span className="badge neutral">{data.mandatory.missing.length}</span>
+            {data.deadlines?.lockedSince != null ? (
+              <span className="badge bad">{pl.admin.today.locked}</span>
+            ) : data.deadlines?.nextDue != null ? (
+              <span className="badge warn">{s.dueBy(new Date(data.deadlines.nextDue).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }))}</span>
+            ) : null}
             <span className="emp-chevron" aria-hidden="true">
               <Icon name="down" size={16} />
             </span>
@@ -587,7 +593,9 @@ function Summary({ userId, locationId, canManage, allowed }: { userId: string; l
             {data.mandatory.missing.map((m) => (
               <span key={m.id} className="emp-missing-row">
                 {m.title}
-                <span className={`badge ${m.status === 'review' ? 'warn' : 'neutral'}`}>{m.status === 'review' ? s.toReconfirm : s.notRead}</span>
+                <span className={`badge ${data.deadlines?.due[m.id] && data.deadlines.due[m.id]! < Date.now() ? 'bad' : m.status === 'review' ? 'warn' : 'neutral'}`}>
+                  {data.deadlines?.due[m.id] && data.deadlines.due[m.id]! < Date.now() ? pl.deadlines.overdue : m.status === 'review' ? s.toReconfirm : s.notRead}
+                </span>
               </span>
             ))}
           </div>

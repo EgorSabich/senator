@@ -21,6 +21,7 @@ interface LocationSettings {
   punchPhoto: boolean;
   unavailDeadlineDow: number;
   unavailDeadlineHour: number;
+  ackDays: number;
 }
 
 export function Locations() {
@@ -248,6 +249,19 @@ function LocationSettingsView({ id, onSaved }: { id: string; onSaved: () => Prom
           </div>
           <span className="muted" style={{ fontSize: 12 }}>
             {t.unavailDeadlineHint}
+          </span>
+        </div>
+        <div className="field">
+          <label htmlFor="loc-ack-days">{t.ackDays}</label>
+          <select id="loc-ack-days" value={form.ackDays ?? 3} onChange={(e) => set('ackDays', Number(e.target.value))}>
+            {[1, 2, 3, 4, 5, 7, 10, 14, 21, 30].map((d) => (
+              <option key={d} value={d}>
+                {t.ackDaysOption(d)}
+              </option>
+            ))}
+          </select>
+          <span className="muted" style={{ fontSize: 12 }}>
+            {t.ackDaysHint}
           </span>
         </div>
         <div className="field">

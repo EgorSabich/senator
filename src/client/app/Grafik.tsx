@@ -6,7 +6,7 @@ import { onNav } from '../router';
 import { formatHm, shiftColor } from '../../shared/schedule';
 import { addDays } from '../../shared/time';
 import { MyTime } from './MyTime';
-import { Icon, Loading, Problem, useAcademy, useApi } from './shared';
+import { contentHref, Icon, Loading, Problem, useAcademy, useApi } from './shared';
 
 const t = pl.grafik;
 
@@ -17,6 +17,44 @@ interface MySchedule {
   shifts: { id: string; date: string; division: string; startMin: number; endMin: number; note: string | null }[];
   team: { date: string; name: string; startMin: number; endMin: number }[];
   upcoming: { id: string; date: string; startMin: number; endMin: number; note: string | null }[];
+  locked?: Locked | null;
+}
+/** 2026-10-17: mandatory documents past the reading period lock Grafik. */
+interface Locked {
+  since: number;
+  documents: { id: string; title: string; due: number }[];
+}
+
+function LockedGrafik({ locked }: { locked: Locked }) {
+  const d = pl.deadlines;
+  const first = locked.documents[0];
+  return (
+    <section className="a-card g-locked" aria-live="polite">
+      <Icon name="lock" size={28} />
+      <strong>{d.gridTitle}</strong>
+      <p className="a-sub" style={{ margin: 0 }}>
+        {d.gridText}
+      </p>
+      <div className="a-list" style={{ textAlign: 'left', width: '100%' }}>
+        {locked.documents.map((doc) => (
+          <a key={doc.id} className="a-row" href={contentHref(doc.id)} onClick={onNav(contentHref(doc.id))}>
+            <span className="grow">
+              <span className="t">{doc.title}</span>
+            </span>
+            <span className="a-pill bad">{d.overdue}</span>
+          </a>
+        ))}
+      </div>
+      {first && (
+        <a className="a-btn primary" href={contentHref(first.id)} onClick={onNav(contentHref(first.id))}>
+          {d.read}
+        </a>
+      )}
+      <p className="a-sub" style={{ margin: 0, fontSize: 13 }}>
+        {d.hoursOk}
+      </p>
+    </section>
+  );
 }
 interface Unav {
   weeks: {
@@ -26,6 +64,7 @@ interface Unav {
     open: boolean;
     dates: { date: string; note: string | null; fromMin: number | null; toMin: number | null; byManager?: number }[];
   }[];
+  locked?: Locked | null;
 }
 
 const range = (s: { startMin: number; endMin: number }) => `${formatHm(s.startMin)}–${formatHm(s.endMin)}`;
@@ -47,6 +86,19 @@ export function MyScheduleCard() {
   const { locationId, me } = useAcademy();
   const { data } = useApi<MySchedule>(me.user.role === 'employee' ? `/api/locations/${locationId}/my-schedule` : null);
   if (!data) return null;
+  if (data.locked)
+    return (
+      <div className="a-list">
+        <a className="a-row" href="/grafik" onClick={onNav('/grafik')}>
+          <Icon name="lock" size={20} />
+          <span className="grow">
+            <span className="t">{t.myTitle}</span>
+            <span className="s">{pl.deadlines.cardLocked}</span>
+          </span>
+          <Icon name="next" size={18} />
+        </a>
+      </div>
+    );
   const next = data.upcoming[0];
   return (
     <div className="a-list">
@@ -96,7 +148,8 @@ function Shifts() {
     <main className="a-main">
       <Problem message={error} />
       {!data && !error && <Loading />}
-      {data && (
+      {data?.locked && <LockedGrafik locked={data.locked} />}
+      {data && !data.locked && (
         <>
           <div className="mt-month">
             <button type="button" className="a-icon-btn" aria-label={t.prevWeek} onClick={() => setWeek(addDays(data.week, -7))}>
@@ -150,7 +203,7 @@ function DaysOff() {
       <p className="a-sub">{t.offIntro}</p>
       <Problem message={error} />
       {!data && !error && <Loading />}
-      {data?.weeks.map((w) => <WeekOff key={w.week} w={w} onSaved={reload} />)}
+      {data?.locked ? <LockedGrafik locked={data.locked} /> : data?.weeks.map((w) => <WeekOff key={w.week} w={w} onSaved={reload} />)}
     </main>
   );
 }

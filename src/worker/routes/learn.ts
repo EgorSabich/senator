@@ -11,6 +11,7 @@ import { ApiError, badRequest, notFound, readJson } from '../lib/http';
 import { ftsQuery } from '../lib/search';
 import { locationView } from './admin';
 import { locationRules } from '../lib/location';
+import { ackDaysOf, myDeadlines } from '../lib/deadlines';
 import { businessDate } from '../../shared/time';
 import { loadAccess, requireLocation } from '../auth/access';
 import { DOCUMENT_KINDS, MANDATORY_KINDS, DEFAULT_TAB, isVisibleFor, programFor, progressFor, userPositions, visibleContent, type VisibleItem } from '../lib/learning';
@@ -58,7 +59,10 @@ learnRoutes.get('/locations/:locId/home', async (c) => {
   const updated = [...programItems.filter((i) => i.updated).map((i) => ({ id: i.contentItemId, kind: i.kind, title: i.title })), ...docs.filter((d) => docProgress.get(d.id)!.updated).map((d) => ({ id: d.id, kind: d.kind, title: d.title }))];
 
   const loc = await db.prepare(`SELECT name FROM locations WHERE id = ?`).bind(locId).first<{ name: string }>();
+  // 2026-10-17: reading period for mandatory documents (Grafik locks after it)
+  const dl = await myDeadlines(db, locId, user, positions);
   return c.json({
+    deadlines: dl.items.length ? { ackDays: await ackDaysOf(db, locId), lockedSince: dl.lockedSince, nextDue: dl.nextDue, items: dl.items } : null,
     user: { firstName: user.firstName, lastName: user.lastName, role: user.role, positions: positions ?? [] },
     location: { id: locId, name: loc?.name ?? '' },
     program: program.program ? { id: program.program.id, name: program.program.name, percent: program.percent, modules: program.modules.length, modulesComplete: program.modules.filter((m) => m.complete).length } : null,

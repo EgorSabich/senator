@@ -86,11 +86,12 @@ interface LocationRow {
   punchPhoto: number;
   unavailDeadlineDow: number;
   unavailDeadlineHour: number;
+  ackDays: number;
 }
 
 const LOCATION_SELECT = `SELECT id, name, slug, address, phone, email, opening_hours_json AS openingHoursJson, staff_note AS staffNote,
   day_start_hour AS dayStartHour, stale_hours AS staleHours, punch_photo AS punchPhoto,
-  unavail_deadline_dow AS unavailDeadlineDow, unavail_deadline_hour AS unavailDeadlineHour FROM locations`;
+  unavail_deadline_dow AS unavailDeadlineDow, unavail_deadline_hour AS unavailDeadlineHour, ack_days AS ackDays FROM locations`;
 
 export function locationView(l: LocationRow) {
   let hours: Record<string, string> = {};
@@ -112,6 +113,7 @@ export function locationView(l: LocationRow) {
     punchPhoto: Boolean(l.punchPhoto),
     unavailDeadlineDow: l.unavailDeadlineDow ?? 0,
     unavailDeadlineHour: l.unavailDeadlineHour ?? 23,
+    ackDays: l.ackDays ?? 3,
   };
 }
 
@@ -176,6 +178,7 @@ adminRoutes.put('/locations/:id/settings', async (c) => {
   if (body.punchPhoto !== undefined && typeof body.punchPhoto !== 'boolean') throw badRequest('setting_invalid', { field: 'punchPhoto' });
   const unavailDeadlineDow = int('unavailDeadlineDow', 0, 6, before.unavailDeadlineDow);
   const unavailDeadlineHour = int('unavailDeadlineHour', 0, 23, before.unavailDeadlineHour);
+  const ackDays = int('ackDays', 1, 30, before.ackDays ?? 3);
   const punchPhoto = body.punchPhoto === undefined ? Boolean(before.punchPhoto) : (body.punchPhoto as boolean);
   const after = {
     name,
@@ -189,13 +192,14 @@ adminRoutes.put('/locations/:id/settings', async (c) => {
     punchPhoto,
     unavailDeadlineDow,
     unavailDeadlineHour,
+    ackDays,
   };
   await db.batch([
     db
       .prepare(
-        `UPDATE locations SET name = ?, address = ?, phone = ?, email = ?, opening_hours_json = ?, staff_note = ?, day_start_hour = ?, stale_hours = ?, punch_photo = ?, unavail_deadline_dow = ?, unavail_deadline_hour = ? WHERE id = ?`,
+        `UPDATE locations SET name = ?, address = ?, phone = ?, email = ?, opening_hours_json = ?, staff_note = ?, day_start_hour = ?, stale_hours = ?, punch_photo = ?, unavail_deadline_dow = ?, unavail_deadline_hour = ?, ack_days = ? WHERE id = ?`,
       )
-      .bind(after.name, after.address, after.phone, after.email, after.openingHoursJson, after.staffNote, after.dayStartHour, after.staleHours, after.punchPhoto ? 1 : 0, after.unavailDeadlineDow, after.unavailDeadlineHour, id),
+      .bind(after.name, after.address, after.phone, after.email, after.openingHoursJson, after.staffNote, after.dayStartHour, after.staleHours, after.punchPhoto ? 1 : 0, after.unavailDeadlineDow, after.unavailDeadlineHour, after.ackDays, id),
     auditStatement(db, {
       actorId: c.var.user.id,
       locationId: id,
@@ -203,7 +207,7 @@ adminRoutes.put('/locations/:id/settings', async (c) => {
       entityType: 'location',
       entityId: id,
       before: { name: before.name, dayStartHour: before.dayStartHour, staleHours: before.staleHours, punchPhoto: Boolean(before.punchPhoto) },
-      after: { name, dayStartHour, staleHours, punchPhoto },
+      after: { name, dayStartHour, staleHours, punchPhoto, ackDays },
     }),
   ]);
   return c.json({ ok: true });

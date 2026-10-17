@@ -956,3 +956,13 @@ a.a-dish:hover {
   border: 1px solid var(--border);
   color: var(--text-muted);
 }
+
+/* Grafik locked for unread documents (2026-10-17) */
+.g-locked {
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+.g-locked > svg {
+  color: var(--bad-fg);
+}
