@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { DateField } from '../DateField';
 import { divisionOf, POSITIONS } from '../../shared/constants';
 import { comparePl, foldPolish } from '../../shared/text';
 import { api, ApiFailure, cached } from '../api';
@@ -348,6 +349,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
       </div>
       {adding && (
         <AddEmployee
+          canRate={can('wages.manage')}
           divisions={divisions}
           locationId={locationId}
           onClose={() => setAdding(false)}
@@ -409,9 +411,11 @@ function Stat({ label, value }: { label: string; value: string }) {
 function AddEmployee({
   locationId,
   divisions,
+  canRate,
   onClose,
   onCreated,
 }: {
+  canRate: boolean;
   locationId: string;
   divisions: string[] | null;
   onClose: () => void;
@@ -419,6 +423,7 @@ function AddEmployee({
 }) {
   const [firstName, setFirst] = useState('');
   const [lastName, setLast] = useState('');
+  const [rate, setRate] = useState('');
   const [position, setPosition] = useState(divisions?.[0] ?? 'waiter');
   const [startDate, setStart] = useState(new Date().toISOString().slice(0, 10));
   const [error, setError] = useState<string | null>(null);
@@ -441,6 +446,7 @@ function AddEmployee({
           lastName,
           position,
           startDate: startDate || undefined,
+          rate: canRate && rate.trim() ? rate.trim() : undefined,
         },
       });
       onCreated(
@@ -482,8 +488,17 @@ function AddEmployee({
         </div>
         <div className="field">
           <label htmlFor="sd">{t.startDate}</label>
-          <input id="sd" type="date" value={startDate} onChange={(e) => setStart(e.target.value)} />
+          <DateField id="sd" value={startDate} onChange={setStart} shortcuts />
         </div>
+        {canRate && (
+          <div className="field">
+            <label htmlFor="rate-new">{t.rateField(pl.admin.positions[position] ?? position)}</label>
+            <RateInput id="rate-new" value={rate} onChange={setRate} />
+            <span className="muted" style={{ fontSize: 12 }}>
+              {t.rateHint}
+            </span>
+          </div>
+        )}
         <ErrorBox message={error} />
         <div className="btn-row">
           <Btn kind="primary" type="submit" disabled={busy || !firstName.trim() || !lastName.trim()}>
@@ -738,7 +753,7 @@ function Positions(props: { data: SummaryData; userId: string; locationId: strin
                 </div>
                 <div className="field" style={{ flex: '1 1 150px' }}>
                   <label htmlFor={`rate-from-${p.position}`}>{pl.admin.employees.summary.validFrom}</label>
-                  <input id={`rate-from-${p.position}`} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+                  <DateField id={`rate-from-${p.position}`} value={from} onChange={setFrom} />
                 </div>
                 <Btn kind="primary" type="submit" disabled={busy || !rate || !from}>
                   {pl.admin.employees.summary.saveRate}
@@ -782,7 +797,7 @@ function Positions(props: { data: SummaryData; userId: string; locationId: strin
           </div>
           <div className="field" style={{ flex: '1 1 150px' }}>
             <label htmlFor="new-pos-start">{s.startDate}</label>
-            <input id="new-pos-start" type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
+            <DateField id="new-pos-start" value={newStart} onChange={setNewStart} shortcuts />
           </div>
           <Btn kind="primary" type="submit" disabled={busy || !newPos}>
             {s.addShort}
@@ -794,6 +809,16 @@ function Positions(props: { data: SummaryData; userId: string; locationId: strin
         {s.hint}
       </span>
       <ErrorBox message={error} />
+    </div>
+  );
+}
+
+/** Hourly rate input: „32,50” with „zł / h” on the right (Polish comma accepted). */
+export function RateInput({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="rate-input">
+      <input id={id} inputMode="decimal" autoComplete="off" value={value} placeholder="0,00" onChange={(e) => onChange(e.target.value.replace(/[^\d,.]/g, '').slice(0, 8))} />
+      <span aria-hidden="true">zł / h</span>
     </div>
   );
 }

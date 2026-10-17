@@ -16,6 +16,22 @@ def slide(p):
     p.mouse.move(x,y); p.mouse.down(); p.mouse.move(tr["x"]+tr["width"]-10, y, steps=12); p.mouse.up()
 def keypad(p, pin):
     for d in pin: p.locator(".t-pad button", has_text=re.compile(f"^{d}$")).click()
+
+def pick_date(page, label, iso, time=None):
+    """DateField: open the field by its label, go to the month, click the day (and the time, then „Gotowe”)."""
+    page.get_by_label(label, exact=True).click()
+    want=iso[:7]
+    for _ in range(36):
+        if page.locator(f'.df-day[data-date="{iso}"]').count(): break
+        head=page.locator(".df-pop .df-head b, .df-sheet .df-head b").first.inner_text()
+        months=["Styczeń","Luty","Marzec","Kwiecień","Maj","Czerwiec","Lipiec","Sierpień","Wrzesień","Październik","Listopad","Grudzień"]
+        name,year=head.split()
+        cur=f"{year}-{months.index(name)+1:02d}"
+        page.get_by_role("button",name="Następny miesiąc" if cur<want else "Poprzedni miesiąc").last.click()
+    page.locator(f'.df-day[data-date="{iso}"]').click()
+    if time:
+        page.locator(".df-other input").fill(time); page.get_by_role("button",name="Gotowe").click()
+
 with sync_playwright() as pw:
     b=pw.chromium.launch(args=["--use-fake-ui-for-media-stream","--use-fake-device-for-media-stream"])
     o=b.new_context(viewport={"width":1280,"height":900},locale="pl-PL").new_page(); watch(o)
@@ -92,7 +108,7 @@ with sync_playwright() as pw:
     # rate in the employee card (opens under the name)
     zid=emps[0][0]["id"]
     o.goto(BASE+f"/panel/pracownicy/{zid}"); o.get_by_text("Lekcje przeczytane").wait_for(); o.wait_for_timeout(600)
-    o.locator(".emp-pos").first.get_by_role("button", name="Stawka").click(); o.get_by_label(re.compile("Nowa stawka")).fill("32,50"); o.get_by_label("Obowiązuje od").fill("2026-01-01"); o.get_by_role("button", name="Zapisz stawkę").click()
+    o.locator(".emp-pos").first.get_by_role("button", name="Stawka").click(); o.get_by_label(re.compile("Nowa stawka")).fill("32,50"); pick_date(o,"Obowiązuje od","2026-01-01"); o.get_by_role("button", name="Zapisz stawkę").click()
     o.get_by_text("32,50 zł / h").wait_for(); o.wait_for_timeout(500); o.screenshot(path=f"{OUT}/15b-employee-card.png", full_page=True)
     o.goto(BASE+"/panel/czas"); o.get_by_text("Teraz na zmianie").wait_for(); o.wait_for_timeout(900); o.screenshot(path=f"{OUT}/15c-panel-costs.png", full_page=True)
     o.goto(BASE+"/panel/listy"); o.get_by_text("Lista kontrolna zamknięcia").first.wait_for(); o.wait_for_timeout(700); o.screenshot(path=f"{OUT}/16-panel-checklists.png", full_page=True)

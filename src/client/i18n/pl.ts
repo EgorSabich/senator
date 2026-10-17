@@ -11,6 +11,19 @@ function docsWord(n: number): string {
 }
 
 export const pl = {
+  dateField: {
+    pickDate: 'Wybierz dzień',
+    pickDateTime: 'Wybierz dzień i godzinę',
+    time: 'Godzina',
+    otherTime: 'Inna godzina:',
+    done: 'Gotowe',
+    cancel: 'Anuluj',
+    clear: 'Wyczyść',
+    today: 'Dziś',
+    tomorrow: 'Jutro',
+    prev: 'Poprzedni miesiąc',
+    next: 'Następny miesiąc',
+  },
   app: {
     name: 'SENATOR',
     subtitle: 'Academy',
@@ -818,6 +831,8 @@ export const pl = {
       ],
     },
     employees: {
+      rateField: (position: string) => `Stawka godzinowa — ${position}`,
+      rateHint: 'Od daty rozpoczęcia. Możesz zostawić puste i ustawić później w karcie pracownika. Widzi tylko osoba z dostępem do stawek.',
       positionsCard: {
         title: 'Stanowiska',
         primary: 'główne',

@@ -15,7 +15,7 @@ import { isIsoDate, warsawToMs } from '../../shared/time';
 import { allowedDivisions, loadAccess, requirePermission, type Access } from '../auth/access';
 import { randomToken, sha256 } from '../auth/crypto';
 import { auditStatement } from '../lib/audit';
-import { newEmployee } from '../lib/employees';
+import { newEmployee, parseRate } from '../lib/employees';
 import { ApiError, badRequest, newId, notFound, readJson, str } from '../lib/http';
 
 export const recruitmentAdminRoutes = new Hono<AppEnv>();
@@ -158,6 +158,7 @@ recruitmentAdminRoutes.get('/locations/:locId/candidates', async (c) => {
     candidates: results.filter((r) => !scope || scope.has(r.position)).map((r) => view(r, r.n)),
     divisions: scope ? [...new Set([...scope].map(divisionOf))] : null,
     canHire: access.locations.get(locId)?.has('employees.manage') ?? false,
+    canRate: access.locations.get(locId)?.has('wages.manage') ?? false,
   });
 });
 
@@ -334,21 +335,25 @@ recruitmentAdminRoutes.post('/candidates/:id/hire', async (c) => {
   const { access, row } = await load(c, c.req.param('id'));
   requirePermission(access, row.locationId, 'employees.manage');
   if (row.hiredUserId) throw new ApiError(409, 'already_hired');
-  const body = await readJson<{ firstName?: unknown; lastName?: unknown; startDate?: unknown }>(c.req.raw);
+  const body = await readJson<{ firstName?: unknown; lastName?: unknown; startDate?: unknown; rate?: unknown }>(c.req.raw);
   const parts = row.name.split(/\s+/);
   const firstName = str(body.firstName, 60) ?? parts[0] ?? '';
   const lastName = str(body.lastName, 80) ?? (parts.slice(1).join(' ') || '');
   if (!firstName || !lastName) throw badRequest('name_required');
   if (body.startDate !== undefined && body.startDate !== null && body.startDate !== '' && !isIsoDate(body.startDate)) throw badRequest('start_date_invalid');
   const db = c.env.DB;
+  const rateGrosze = parseRate(body.rate);
+  if (rateGrosze !== null) requirePermission(access, row.locationId, 'wages.manage');
+  const startDate = isIsoDate(body.startDate) ? body.startDate : null;
   const made = await newEmployee(db, c.env.AUTH_SECRET, {
     firstName,
     lastName,
     position: row.position,
     locationId: row.locationId,
-    startDate: isIsoDate(body.startDate) ? body.startDate : null,
+    startDate,
     actorId: c.var.user.id,
     source: 'recruitment',
+    rate: rateGrosze === null ? undefined : { grosze: rateGrosze, validFrom: startDate ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw' }).format(new Date()) },
   });
   await db.batch([
     ...made.statements,

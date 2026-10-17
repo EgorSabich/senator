@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
+import { DateField } from '../DateField';
 import { addDays, businessDate, formatClock } from '../../shared/time';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
@@ -178,7 +179,7 @@ function Control({ division, setDivision }: { division: string; setDivision: (d:
             <Btn onClick={() => setDate(addDays(date, -1))}>‹</Btn>
             <div className="field">
               <label htmlFor="cl-date">{t.date}</label>
-              <input id="cl-date" type="date" value={date} max={businessDate(Date.now())} onChange={(e) => e.target.value && setDate(e.target.value)} />
+              <DateField id="cl-date" value={date} max={businessDate(Date.now())} onChange={(v) => v && setDate(v)} />
             </div>
             <Btn onClick={() => setDate(addDays(date, 1))}>›</Btn>
           </div>

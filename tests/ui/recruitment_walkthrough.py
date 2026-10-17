@@ -9,6 +9,22 @@ def watch(p):
     p.on("console", lambda m: errors.append(f"console: {m.text}") if m.type=="error" and not any(x in m.text for x in IGN) else None)
 today=datetime.date.today(); d=lambda n: str(today+datetime.timedelta(days=n))
 PDF=b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n"
+
+def pick_date(page, label, iso, time=None):
+    """DateField: open the field by its label, go to the month, click the day (and the time, then „Gotowe”)."""
+    page.get_by_label(label, exact=True).click()
+    want=iso[:7]
+    for _ in range(36):
+        if page.locator(f'.df-day[data-date="{iso}"]').count(): break
+        head=page.locator(".df-pop .df-head b, .df-sheet .df-head b").first.inner_text()
+        months=["Styczeń","Luty","Marzec","Kwiecień","Maj","Czerwiec","Lipiec","Sierpień","Wrzesień","Październik","Listopad","Grudzień"]
+        name,year=head.split()
+        cur=f"{year}-{months.index(name)+1:02d}"
+        page.get_by_role("button",name="Następny miesiąc" if cur<want else "Poprzedni miesiąc").last.click()
+    page.locator(f'.df-day[data-date="{iso}"]').click()
+    if time:
+        page.locator(".df-other input").fill(time); page.get_by_role("button",name="Gotowe").click()
+
 with sync_playwright() as pw:
     b=pw.chromium.launch()
     o=b.new_context(viewport={"width":1400,"height":900},locale="pl-PL").new_page(); watch(o)
@@ -28,7 +44,7 @@ with sync_playwright() as pw:
     o.get_by_role("button",name="+ Kandydat").click(); dlg=o.get_by_role("dialog")
     dlg.get_by_label("Imię i nazwisko").fill("Ewa Kot"); dlg.get_by_label("Telefon").press_sequentially("601234567")
     assert dlg.get_by_label("Telefon").input_value()=="+48 601 234 567", dlg.get_by_label("Telefon").input_value()
-    dlg.get_by_label("Stanowisko").select_option("host"); dlg.get_by_label("Rozmowa").fill(f"{d(3)}T14:00")
+    dlg.get_by_label("Stanowisko").select_option("host"); pick_date(o,"Rozmowa",d(3),"14:00")
     o.wait_for_timeout(300); dlg.screenshot(path=f"{OUT}/r01-new.png")
     dlg.get_by_role("button",name="Dodaj kandydata").click(); o.wait_for_url(re.compile(r"/panel/rekrutacja/cand_"))
     o.get_by_role("heading",name="Ewa Kot").wait_for(); assert o.locator(".badge",has_text="Rozmowa").count()>=1

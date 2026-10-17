@@ -12,6 +12,8 @@ import { navigate, onNav } from '../router';
 import { ErrorBox, LogoLoader } from '../ui';
 import { Btn, Modal, SecretCardModal, storageGet, storageSet, type SecretInfo } from './common';
 import { usePanel } from './Panel';
+import { DateField } from '../DateField';
+import { RateInput } from './Employees';
 
 const t = pl.admin.recruitment;
 const DAY = 86400_000;
@@ -373,7 +375,7 @@ function NewCandidate({ allowed, onClose }: { allowed: string[] | null; onClose:
       </div>
       <div className="field">
         <label htmlFor="rc-int">{t.interview}</label>
-        <input id="rc-int" type="datetime-local" value={f.interviewAt} onChange={(e) => setF({ ...f, interviewAt: e.target.value })} />
+        <DateField id="rc-int" withTime clearable value={f.interviewAt} onChange={(v) => setF({ ...f, interviewAt: v })} min={todayWarsaw()} />
       </div>
       <ErrorBox message={error} />
       <div className="btn-row">
@@ -393,6 +395,7 @@ function CandidateCard({ id }: { id: string }) {
   const [c, setC] = useState<Candidate | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [canHire, setCanHire] = useState(false);
+  const [canRate, setCanRate] = useState(false);
   const [allowed, setAllowed] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -414,9 +417,10 @@ function CandidateCard({ id }: { id: string }) {
         setComments(r.comments);
       })
       .catch((e) => setError(errorText(e instanceof ApiFailure ? e.code : 'generic')));
-    api<{ divisions: string[] | null; canHire: boolean }>(`/api/admin/locations/${locationId}/candidates`)
+    api<{ divisions: string[] | null; canHire: boolean; canRate?: boolean }>(`/api/admin/locations/${locationId}/candidates`)
       .then((r) => {
         setCanHire(r.canHire);
+        setCanRate(Boolean(r.canRate));
         setAllowed(r.divisions);
       })
       .catch(() => undefined);
@@ -523,11 +527,11 @@ function CandidateCard({ id }: { id: string }) {
           <div className="rec-two">
             <div className="field">
               <label htmlFor="cd-int">{t.interview}</label>
-              <input id="cd-int" type="datetime-local" value={form.interviewAt} onChange={(e) => setForm({ ...form, interviewAt: e.target.value })} onBlur={() => saveField('interviewAt')} />
+              <DateField id="cd-int" withTime clearable value={form.interviewAt} onChange={(v) => { setForm({ ...form, interviewAt: v }); void put({ interviewAt: v || null }); }} />
             </div>
             <div className="field">
               <label htmlFor="cd-trial">{t.trial}</label>
-              <input id="cd-trial" type="datetime-local" value={form.trialAt} onChange={(e) => setForm({ ...form, trialAt: e.target.value })} onBlur={() => saveField('trialAt')} />
+              <DateField id="cd-trial" withTime clearable value={form.trialAt} onChange={(v) => { setForm({ ...form, trialAt: v }); void put({ trialAt: v || null }); }} />
             </div>
           </div>
           {(gi || gt) && (
@@ -605,6 +609,7 @@ function CandidateCard({ id }: { id: string }) {
       {hiring && (
         <HireModal
           c={c}
+          canRate={canRate}
           onClose={() => setHiring(false)}
           onDone={(info, userId) => {
             setHiring(false);
@@ -740,7 +745,8 @@ function CvBox({ c, onChange, onError }: { c: Candidate; onChange: (cv: Candidat
   );
 }
 
-function HireModal({ c, onClose, onDone }: { c: Candidate; onClose: () => void; onDone: (info: SecretInfo, userId: string) => void }) {
+function HireModal({ c, canRate, onClose, onDone }: { c: Candidate; canRate: boolean; onClose: () => void; onDone: (info: SecretInfo, userId: string) => void }) {
+  const [rate, setRate] = useState('');
   const words = c.name.split(/\s+/);
   const [first, setFirst] = useState(words[0] ?? '');
   const [last, setLast] = useState(words.slice(1).join(' '));
@@ -753,7 +759,7 @@ function HireModal({ c, onClose, onDone }: { c: Candidate; onClose: () => void; 
     try {
       const r = await api<{ id: string; login: string; tempSecret: string; secretKind: 'pin'; name: string }>(`/api/admin/candidates/${c.id}/hire`, {
         method: 'POST',
-        body: { firstName: first, lastName: last, startDate: start || null },
+        body: { firstName: first, lastName: last, startDate: start || null, rate: rate.trim() || null },
       });
       onDone({ name: r.name, login: r.login, tempSecret: r.tempSecret, secretKind: r.secretKind }, r.id);
     } catch (e) {
@@ -776,8 +782,15 @@ function HireModal({ c, onClose, onDone }: { c: Candidate; onClose: () => void; 
       </div>
       <div className="field">
         <label htmlFor="h-start">{t.startDate}</label>
-        <input id="h-start" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+        <DateField id="h-start" value={start} onChange={setStart} shortcuts clearable />
       </div>
+      {canRate && (
+        <div className="field">
+          <label htmlFor="h-rate">{pl.admin.employees.rateField(posLabel(c.position))}</label>
+          <RateInput id="h-rate" value={rate} onChange={setRate} />
+          <span className="muted" style={{ fontSize: 12 }}>{pl.admin.employees.rateHint}</span>
+        </div>
+      )}
       <ErrorBox message={error} />
       <div className="btn-row">
         <Btn kind="primary" onClick={() => void go()} disabled={busy || !first.trim() || !last.trim()}>

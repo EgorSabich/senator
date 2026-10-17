@@ -21,7 +21,17 @@ export async function uniqueLogin(db: D1Database, base: string): Promise<string>
 export async function newEmployee(
   db: D1Database,
   pepper: string,
-  p: { firstName: string; lastName: string; position: string; locationId: string; startDate: string | null; actorId: string; source?: string },
+  p: {
+    firstName: string;
+    lastName: string;
+    position: string;
+    locationId: string;
+    startDate: string | null;
+    actorId: string;
+    source?: string;
+    /** hourly rate for this position (grosze), from the start date (or today); only with wages.manage */
+    rate?: { grosze: number; validFrom: string };
+  },
 ) {
   const id = newId('usr');
   const login = await uniqueLogin(db, proposeLogin(p.firstName, p.lastName));
@@ -46,5 +56,21 @@ export async function newEmployee(
       after: { firstName: p.firstName, lastName: p.lastName, login, position: p.position, startDate: p.startDate, ...(p.source ? { source: p.source } : {}) },
     }),
   ];
+  if (p.rate) {
+    statements.push(
+      db
+        .prepare(`INSERT INTO pay_rates (id, user_id, location_id, position, rate_grosze, valid_from, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(newId('rate'), id, p.locationId, p.position, p.rate.grosze, p.rate.validFrom, p.actorId, Date.now()),
+      auditStatement(db, { actorId: p.actorId, locationId: p.locationId, action: 'user.rate', entityType: 'user', entityId: id, after: { rateGrosze: p.rate.grosze, validFrom: p.rate.validFrom, position: p.position } }),
+    );
+  }
   return { id, login, tempSecret, statements };
+}
+
+/** „32,50” / 32.5 → 3250 grosze; null when empty; throws rate_invalid otherwise. */
+export function parseRate(v: unknown): number | null {
+  if (v === undefined || v === null || v === '') return null;
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v.replace(',', '.').trim()) : NaN;
+  if (!Number.isFinite(n) || n < 0 || n > 10_000) throw new ApiError(400, 'rate_invalid');
+  return Math.round(n * 100);
 }

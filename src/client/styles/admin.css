@@ -2782,3 +2782,19 @@ a.sch-person:hover {
 .rec-cv.files-over img {
   pointer-events: none;
 }
+.rate-input {
+  position: relative;
+}
+.rate-input input {
+  width: 100%;
+  padding-right: 64px;
+}
+.rate-input span {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 14px;
+  pointer-events: none;
+}

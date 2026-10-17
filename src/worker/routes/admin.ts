@@ -21,7 +21,8 @@ import { allowedDivisions, loadAccess, requireManageableUser, requireOwner, requ
 import { confirmMatches, purgeUserStatements } from '../lib/purge';
 import { deleteKeys } from '../jobs/punchPhotos';
 
-import { newEmployee, uniqueLogin } from '../lib/employees';
+import { newEmployee, parseRate, uniqueLogin } from '../lib/employees';
+const warsawToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw' }).format(new Date());
 
 export const adminRoutes = new Hono<AppEnv>();
 // Session is enforced by the /api/admin router (index.ts).
@@ -297,7 +298,7 @@ adminRoutes.post('/locations/:locId/employees', async (c) => {
   const access = await loadAccess(db, c.var.user);
   requirePermission(access, locId, 'employees.manage');
 
-  const body = await readJson<{ firstName?: unknown; lastName?: unknown; position?: unknown; startDate?: unknown }>(c.req.raw);
+  const body = await readJson<{ firstName?: unknown; lastName?: unknown; position?: unknown; startDate?: unknown; rate?: unknown }>(c.req.raw);
   const firstName = str(body.firstName, 60);
   const lastName = str(body.lastName, 80);
   const position = typeof body.position === 'string' && (POSITIONS as readonly string[]).includes(body.position) ? body.position : null;
@@ -307,13 +308,17 @@ adminRoutes.post('/locations/:locId/employees', async (c) => {
   if (scope && !scope.has(position)) throw new ApiError(403, 'outside_divisions');
   if (body.startDate !== undefined && body.startDate !== null && !isIsoDate(body.startDate)) throw badRequest('start_date_invalid');
 
+  const rateGrosze = parseRate(body.rate);
+  if (rateGrosze !== null) requirePermission(access, locId, 'wages.manage');
+  const startDate = (body.startDate as string | undefined) || null;
   const made = await newEmployee(db, c.env.AUTH_SECRET, {
     firstName,
     lastName,
     position,
     locationId: locId,
-    startDate: (body.startDate as string | undefined) ?? null,
+    startDate,
     actorId: c.var.user.id,
+    rate: rateGrosze === null ? undefined : { grosze: rateGrosze, validFrom: startDate ?? warsawToday() },
   });
   await db.batch(made.statements);
   const { id, login, tempSecret } = made;

@@ -7,6 +7,22 @@ IGN=("ERR_TUNNEL_CONNECTION_FAILED","status of 401")
 def watch(p):
     p.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
     p.on("console", lambda m: errors.append(f"console: {m.text}") if m.type=="error" and not any(x in m.text for x in IGN) else None)
+
+def pick_date(page, label, iso, time=None):
+    """DateField: open the field by its label, go to the month, click the day (and the time, then „Gotowe”)."""
+    page.get_by_label(label, exact=True).click()
+    want=iso[:7]
+    for _ in range(36):
+        if page.locator(f'.df-day[data-date="{iso}"]').count(): break
+        head=page.locator(".df-pop .df-head b, .df-sheet .df-head b").first.inner_text()
+        months=["Styczeń","Luty","Marzec","Kwiecień","Maj","Czerwiec","Lipiec","Sierpień","Wrzesień","Październik","Listopad","Grudzień"]
+        name,year=head.split()
+        cur=f"{year}-{months.index(name)+1:02d}"
+        page.get_by_role("button",name="Następny miesiąc" if cur<want else "Poprzedni miesiąc").last.click()
+    page.locator(f'.df-day[data-date="{iso}"]').click()
+    if time:
+        page.locator(".df-other input").fill(time); page.get_by_role("button",name="Gotowe").click()
+
 with sync_playwright() as pw:
     b=pw.chromium.launch()
     o=b.new_context(viewport={"width":1280,"height":900},locale="pl-PL").new_page(); watch(o)
@@ -21,10 +37,10 @@ with sync_playwright() as pw:
     o.get_by_role("button",name="+ Dodaj stanowisko").click(); o.locator("#new-pos").select_option("host")
     o.get_by_role("button",name="Dodaj",exact=True).click(); o.locator(".emp-pos",has_text="Host").wait_for(); o.wait_for_timeout(400)
     o.locator(".emp-pos",has_text="Kelner").get_by_role("button",name="Stawka").click()
-    o.get_by_label(re.compile("Nowa stawka — Kelner")).fill("32,50"); o.get_by_label("Obowiązuje od").fill("2026-01-01"); o.get_by_role("button",name="Zapisz stawkę").click()
+    o.get_by_label(re.compile("Nowa stawka — Kelner")).fill("32,50"); pick_date(o,"Obowiązuje od","2026-01-01"); o.get_by_role("button",name="Zapisz stawkę").click()
     o.locator(".emp-pos",has_text="Kelner").get_by_text("32,50").wait_for()
     o.locator(".emp-pos",has_text="Host").get_by_role("button",name="Stawka").click()
-    o.get_by_label(re.compile("Nowa stawka — Host")).fill("30"); o.get_by_label("Obowiązuje od").fill("2026-01-01"); o.get_by_role("button",name="Zapisz stawkę").click()
+    o.get_by_label(re.compile("Nowa stawka — Host")).fill("30"); pick_date(o,"Obowiązuje od","2026-01-01"); o.get_by_role("button",name="Zapisz stawkę").click()
     o.locator(".emp-pos",has_text="Host").get_by_text("30").first.wait_for(); o.wait_for_timeout(400)
     o.locator(".emp.open").screenshot(path=f"{OUT}/p01-card-positions.png")
     # Grafik: shifts on both positions this week
