@@ -13,7 +13,7 @@ File paths are relative to the manifest. The bundle holds restaurant material: n
 
 Markdown subset (what the editor supports):
   ## Heading / ### Subheading (#### is treated as ###; a leading "# Title" line is skipped)
-  paragraphs with **bold**, *italic*, [link](https://…)
+  paragraphs with **bold**, *italic*, [link](https://…); a line ending with \\ keeps its line break
   - bullet lists, 1. numbered lists (steps); two-space indent = nested list
   | table | rows | with a | --- | separator line (first row = header)
   > [!WAŻNE] / > [!UWAGA] / > [!INFO] followed by "> text" lines = callout blocks
@@ -122,8 +122,25 @@ def md_to_doc(md: str) -> dict:
 
     def flush():
         if buf:
-            text = ' '.join(s.strip() for s in buf)
-            content.append(para(text))
+            # a line ending with a backslash keeps its line break (hardBreak); other lines join with a space
+            parts: list = []
+            chunk: list = []
+            for ln in buf:
+                t = ln.strip()
+                if t.endswith('\\'):
+                    chunk.append(t[:-1].rstrip())
+                    parts.append(' '.join(chunk))
+                    chunk = []
+                else:
+                    chunk.append(t)
+            if chunk:
+                parts.append(' '.join(chunk))
+            nodes: list = []
+            for k, part in enumerate(parts):
+                if k:
+                    nodes.append({'type': 'hardBreak'})
+                nodes.extend(inline(part.strip()))
+            content.append({'type': 'paragraph', 'content': nodes} if nodes else {'type': 'paragraph'})
             buf.clear()
 
     while i < len(lines):
