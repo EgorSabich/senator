@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveRefresh } from '../live';
 import { divisionOf, POSITIONS } from '../../shared/constants';
-import { ACTIVE_STAGES, formatPhone, INTERVIEW_MINUTES, STAGES, TRIAL_MINUTES, WARN_DAYS } from '../../shared/recruitment';
+import { ACTIVE_STAGES, formatPhone, INTERVIEW_MINUTES, REJECT_REASONS, SOURCES, STAGES, TRIAL_MINUTES, WARN_DAYS } from '../../shared/recruitment';
 import { addDays } from '../../shared/time';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
@@ -31,6 +31,10 @@ export interface Candidate {
   trialAt: number | null;
   cv: { name: string; type: string } | null;
   hiredUserId: string | null;
+  source: string | null;
+  rejectReason: string | null;
+  noShowInterview: boolean;
+  noShowTrial: boolean;
   comments: number;
   createdAt: number;
   updatedAt: number;
@@ -327,10 +331,23 @@ function PhoneInput({ id, value, onChange, onBlur }: { id: string; value: string
   return <input id={id} onBlur={onBlur} type="tel" inputMode="tel" autoComplete="off" value={value} onChange={(e) => onChange(formatPhone(e.target.value))} placeholder="+48 600 000 000" />;
 }
 
+function SourceSelect({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">{t.sourceNone}</option>
+      {SOURCES.map((x) => (
+        <option key={x} value={x}>
+          {t.sources[x]}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function NewCandidate({ allowed, onClose }: { allowed: string[] | null; onClose: () => void }) {
   const { locationId } = usePanel();
   const options = positionsFor(allowed);
-  const [f, setF] = useState({ name: '', phone: '', email: '', position: options.length === 1 ? options[0]! : '', interviewAt: '' });
+  const [f, setF] = useState({ name: '', phone: '', email: '', position: options.length === 1 ? options[0]! : '', interviewAt: '', source: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function save() {
@@ -339,7 +356,7 @@ function NewCandidate({ allowed, onClose }: { allowed: string[] | null; onClose:
     try {
       const r = await api<{ candidate: Candidate }>(`/api/admin/locations/${locationId}/candidates`, {
         method: 'POST',
-        body: { name: f.name, phone: f.phone || null, email: f.email || null, position: f.position, interviewAt: f.interviewAt || null },
+        body: { name: f.name, phone: f.phone || null, email: f.email || null, position: f.position, interviewAt: f.interviewAt || null, source: f.source || null },
       });
       navigate(`/panel/rekrutacja/${r.candidate.id}`);
     } catch (e) {
@@ -374,6 +391,10 @@ function NewCandidate({ allowed, onClose }: { allowed: string[] | null; onClose:
             </option>
           ))}
         </select>
+      </div>
+      <div className="field">
+        <label htmlFor="rc-src">{t.source}</label>
+        <SourceSelect id="rc-src" value={f.source} onChange={(source) => setF({ ...f, source })} />
       </div>
       <div className="field">
         <label htmlFor="rc-int">{t.interview}</label>
@@ -526,7 +547,11 @@ function CandidateCard({ id }: { id: string }) {
               ))}
             </select>
           </div>
-          <div className="rec-two">
+          <div className="field">
+            <label htmlFor="cd-src">{t.source}</label>
+            <SourceSelect id="cd-src" value={c.source ?? ''} onChange={(v) => void put({ source: v || null })} />
+          </div>
+          <div className="rec-dates">
             <div className="field">
               <label htmlFor="cd-int">{t.interview}</label>
               <DateField id="cd-int" withTime clearable value={form.interviewAt} onChange={(v) => { setForm({ ...form, interviewAt: v }); void put({ interviewAt: v || null }); }} />
@@ -536,6 +561,22 @@ function CandidateCard({ id }: { id: string }) {
               <DateField id="cd-trial" withTime clearable value={form.trialAt} onChange={(v) => { setForm({ ...form, trialAt: v }); void put({ trialAt: v || null }); }} />
             </div>
           </div>
+          {(c.interviewAt !== null || c.trialAt !== null || c.noShowInterview || c.noShowTrial) && (
+            <div className="rec-two">
+              {(c.interviewAt !== null || c.noShowInterview) && (
+                <label className="check">
+                  <input type="checkbox" checked={c.noShowInterview} onChange={(e) => void put({ noShowInterview: e.target.checked })} />
+                  <span>{t.noShowInterview}</span>
+                </label>
+              )}
+              {(c.trialAt !== null || c.noShowTrial) && (
+                <label className="check">
+                  <input type="checkbox" checked={c.noShowTrial} onChange={(e) => void put({ noShowTrial: e.target.checked })} />
+                  <span>{t.noShowTrial}</span>
+                </label>
+              )}
+            </div>
+          )}
           {(gi || gt) && (
             <div className="btn-row">
               {gi && (
@@ -558,6 +599,19 @@ function CandidateCard({ id }: { id: string }) {
               </button>
             ))}
           </div>
+          {c.stage === 'rejected' && (
+            <div className="field">
+              <label htmlFor="cd-reason">{t.rejectReason}</label>
+              <select id="cd-reason" value={c.rejectReason ?? ''} onChange={(e) => void put({ rejectReason: e.target.value || null })}>
+                <option value="">{t.rejectNone}</option>
+                {REJECT_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {t.rejectReasons[r]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {c.stage === 'hired' && !c.hiredUserId && (canHire ? <Btn kind="primary" onClick={() => setHiring(true)}>{t.createAccount}</Btn> : <p className="muted">{t.hireNeedsRight}</p>)}
           {c.hiredUserId && (
             <a className="btn-link-secondary" href={`/panel/pracownicy/${c.hiredUserId}`} onClick={onNav(`/panel/pracownicy/${c.hiredUserId}`)} style={{ alignSelf: 'flex-start' }}>

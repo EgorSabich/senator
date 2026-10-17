@@ -10,6 +10,14 @@
 
 
 
+## 0.9.15 — 2026-10-17 (Panel → Statystyki)
+
+- New panel section „Statystyki” (permission `stats.view`; leaders who manage time or the schedule get it, migration 0020). Leaders see their divisions, the owner and zarządzający everything. Period: week, month, quarter (with ‹ ›) or own range; filter by division; „Eksport CSV” (Excel-friendly, „;”).
+- Obecność i spóźnienia: shifts in the plan, absences (vs the period before), late arrivals from 5 minutes with the average, missing exits (and how many were added later), hours plan / worked, week by week, a table per person. A shift counts once it has started; absence = ended shift without a clock-in; leaving early is not counted. A person's days with plan, clock-in and clock-out; „Usprawiedliw” (L4, zamiana, urlop, inne + note) takes the absence or lateness out of the statistics, „Cofnij” returns it (needs `time.manage` for that division).
+- Rekrutacja: new candidates, hired (share), median days to hire, no-shows (interview / trial day), left within 30 days, funnel, sources, rejection reasons, table per division.
+- Candidate card: „Źródło” (also when adding), „Nie przyszedł na rozmowę / na dzień próbny”, „Powód odrzucenia” when rejected. Interview and trial dates one under the other (a full date with the hour no longer pushes into the CV column).
+- Integration test 27, `stats_walkthrough.py`.
+
 ## 0.9.14 — 2026-10-17 (Panel → Powiadomienia)
 
 - New panel section „Powiadomienia” (bell, under „Więcej” on phones), permission `notifications.manage`: division leaders set their own divisions, the owner and zarządzający all of them. Leaders who plan the schedule get it automatically (migration 0019). Employees cannot switch kinds off.

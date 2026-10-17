@@ -1,6 +1,6 @@
 {
   "name": "senator-academy",
-  "version": "0.9.14",
+  "version": "0.9.15",
   "private": true,
   "description": "Senator Academy — wewnętrzna platforma szkoleniowa restauracji Senator",
   "type": "module",

@@ -20,6 +20,7 @@ import { scheduleAdminRoutes, scheduleRoutes } from './routes/schedule';
 import { todayAdminRoutes } from './routes/today';
 import { calendarFeedRoutes, recruitmentAdminRoutes } from './routes/recruitment';
 import { notificationAdminRoutes } from './routes/notifications';
+import { statsAdminRoutes } from './routes/stats';
 import { expireCandidates } from './jobs/candidates';
 import { requireSameOrigin, requireSession } from './auth/session';
 import { runNightlyBackup } from './jobs/backup';
@@ -63,6 +64,7 @@ admin.route('/', scheduleAdminRoutes);
 admin.route('/', todayAdminRoutes);
 admin.route('/', recruitmentAdminRoutes);
 admin.route('/', notificationAdminRoutes);
+admin.route('/', statsAdminRoutes);
 app.route('/api/admin', admin);
 
 // Staff (waiter) views; every path here needs a session.

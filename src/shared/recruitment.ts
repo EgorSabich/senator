@@ -5,6 +5,10 @@ export type Stage = (typeof STAGES)[number];
 /** „Aktywni” on the list: everyone still in the process (and hired ones until the account is made) */
 export const ACTIVE_STAGES: readonly Stage[] = ['new', 'interview', 'trial', 'hired'];
 
+/** Statistics (2026-10-17): where candidates come from and why they are turned down. Labels in i18n/pl.ts. */
+export const SOURCES = ['pracuj', 'olx', 'instagram', 'facebook', 'referral', 'website', 'walk_in', 'other'] as const;
+export const REJECT_REASONS = ['experience', 'availability', 'salary', 'no_show', 'withdrew', 'fit', 'language', 'other'] as const;
+
 export const DAY_MS = 86400_000;
 /** RODO: data removed 6 months after the last change, warning 30 days before */
 export const KEEP_DAYS = 183;

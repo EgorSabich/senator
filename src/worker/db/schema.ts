@@ -758,6 +758,13 @@ export const candidates = sqliteTable(
     cvType: text('cv_type'),
     /** the account made with „Utwórz konto” */
     hiredUserId: text('hired_user_id').references(() => users.id),
+    /** 2026-10-17 (statistics): where the candidate came from — shared/recruitment.ts SOURCES */
+    source: text('source'),
+    /** stage „rejected”: why — shared/recruitment.ts REJECT_REASONS */
+    rejectReason: text('reject_reason'),
+    /** did not come to the interview / trial day */
+    noShowInterview: integer('no_show_interview').notNull().default(0),
+    noShowTrial: integer('no_show_trial').notNull().default(0),
     createdBy: text('created_by').references(() => users.id),
     createdAt: createdAt(),
     updatedAt: integer('updated_at').notNull(),
@@ -841,4 +848,23 @@ export const customNotifications = sqliteTable(
     updatedAt: integer('updated_at').notNull(),
   },
   (t) => [index('custom_notifications_loc_idx').on(t.locationId)],
+);
+
+/**
+ * Statistics (owner, 2026-10-17): a planned shift marked „usprawiedliwione” (L4, zamiana…) — its absence or
+ * lateness does not count in Statystyki. One row per published shift.
+ */
+export const attendanceExcuses = sqliteTable(
+  'attendance_excuses',
+  {
+    shiftId: text('shift_id').primaryKey(),
+    locationId: text('location_id').notNull().references(() => locations.id),
+    userId: text('user_id').notNull().references(() => users.id),
+    date: text('date').notNull(),
+    reason: text('reason').notNull(),
+    note: text('note'),
+    createdBy: text('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index('attendance_excuses_loc_idx').on(t.locationId, t.date)],
 );

@@ -23,6 +23,7 @@ export function purgeUserStatements(db: D1Database, userId: string, login: strin
     s(`DELETE FROM calendar_feeds WHERE user_id = ?`, userId),
     s(`UPDATE notification_rules SET updated_by = NULL WHERE updated_by = ?`, userId),
     s(`UPDATE custom_notifications SET created_by = NULL WHERE created_by = ?`, userId),
+    s(`UPDATE attendance_excuses SET created_by = NULL WHERE created_by = ?`, userId),
     s(`UPDATE candidates SET created_by = NULL WHERE created_by = ?`, userId),
     s(`UPDATE candidates SET hired_user_id = NULL WHERE hired_user_id = ?`, userId),
     s(`UPDATE candidate_comments SET author_id = NULL WHERE author_id = ?`, userId),
@@ -34,6 +35,7 @@ export function purgeUserStatements(db: D1Database, userId: string, login: strin
     s(`DELETE FROM pay_rates WHERE user_id = ?`, userId),
     s(`DELETE FROM schedule_shifts WHERE user_id = ?`, userId),
     s(`DELETE FROM unavailability WHERE user_id = ?`, userId),
+    s(`DELETE FROM attendance_excuses WHERE user_id = ?`, userId),
     // links where they were the actor
     s(`UPDATE extra_attempt_grants SET granted_by = NULL WHERE granted_by = ?`, userId),
     s(`UPDATE assignments SET assigned_by = NULL WHERE assigned_by = ?`, userId),

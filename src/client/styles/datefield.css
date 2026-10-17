@@ -290,3 +290,11 @@
     animation: none;
   }
 }
+
+/* a long date in a narrow column: shorten instead of pushing out of the card */
+.df-value > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

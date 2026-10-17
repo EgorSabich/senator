@@ -10,7 +10,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../env';
 import { POSITIONS, divisionOf } from '../../shared/constants';
-import { CV_MAX_BYTES, deleteAtOf, INTERVIEW_MINUTES, isEmail, normalizePhone, STAGES, TRIAL_MINUTES, type Stage } from '../../shared/recruitment';
+import { CV_MAX_BYTES, deleteAtOf, REJECT_REASONS, SOURCES, INTERVIEW_MINUTES, isEmail, normalizePhone, STAGES, TRIAL_MINUTES, type Stage } from '../../shared/recruitment';
 import { isIsoDate, warsawToMs } from '../../shared/time';
 import { allowedDivisions, loadAccess, requirePermission, type Access } from '../auth/access';
 import { randomToken, sha256 } from '../auth/crypto';
@@ -35,11 +35,15 @@ interface Row {
   cvName: string | null;
   cvType: string | null;
   hiredUserId: string | null;
+  source: string | null;
+  rejectReason: string | null;
+  noShowInterview: number;
+  noShowTrial: number;
   createdAt: number;
   updatedAt: number;
 }
 const SELECT = `SELECT c.id, c.location_id AS locationId, c.name, c.phone, c.email, c.position, c.stage, c.interview_at AS interviewAt, c.trial_at AS trialAt,
-  c.cv_key AS cvKey, c.cv_name AS cvName, c.cv_type AS cvType, c.hired_user_id AS hiredUserId, c.created_at AS createdAt, c.updated_at AS updatedAt
+  c.cv_key AS cvKey, c.cv_name AS cvName, c.cv_type AS cvType, c.hired_user_id AS hiredUserId, c.source, c.reject_reason AS rejectReason, c.no_show_interview AS noShowInterview, c.no_show_trial AS noShowTrial, c.created_at AS createdAt, c.updated_at AS updatedAt
   FROM candidates c`;
 
 const CV_TYPES: Record<string, { ext: string; magic: (b: Uint8Array) => boolean }> = {
@@ -67,6 +71,10 @@ function view(r: Row, comments = 0) {
     trialAt: r.trialAt,
     cv: r.cvKey ? { name: r.cvName, type: r.cvType } : null,
     hiredUserId: r.hiredUserId,
+    source: r.source,
+    rejectReason: r.rejectReason,
+    noShowInterview: Boolean(r.noShowInterview),
+    noShowTrial: Boolean(r.noShowTrial),
     comments,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
@@ -102,10 +110,23 @@ interface Fields {
   stage?: unknown;
   interviewAt?: unknown;
   trialAt?: unknown;
+  source?: unknown;
+  rejectReason?: unknown;
+  noShowInterview?: unknown;
+  noShowTrial?: unknown;
 }
 
 function parse(body: Fields, partial: boolean) {
-  const out: Partial<Pick<Row, 'name' | 'phone' | 'email' | 'position' | 'stage' | 'interviewAt' | 'trialAt'>> = {};
+  const out: Partial<Pick<Row, 'name' | 'phone' | 'email' | 'position' | 'stage' | 'interviewAt' | 'trialAt' | 'source' | 'rejectReason' | 'noShowInterview' | 'noShowTrial'>> = {};
+  const oneOf = (v: unknown, list: readonly string[], code: string) => {
+    if (v === null || v === '') return null;
+    if (typeof v !== 'string' || !list.includes(v)) throw badRequest(code);
+    return v;
+  };
+  if (body.source !== undefined) out.source = oneOf(body.source, SOURCES, 'source_invalid');
+  if (body.rejectReason !== undefined) out.rejectReason = oneOf(body.rejectReason, REJECT_REASONS, 'reason_invalid');
+  if (body.noShowInterview !== undefined) out.noShowInterview = body.noShowInterview === true ? 1 : 0;
+  if (body.noShowTrial !== undefined) out.noShowTrial = body.noShowTrial === true ? 1 : 0;
   if (body.name !== undefined || !partial) {
     const name = str(body.name, 120);
     if (!name) throw badRequest('name_required');
@@ -175,10 +196,10 @@ recruitmentAdminRoutes.post('/locations/:locId/candidates', async (c) => {
   await db.batch([
     db
       .prepare(
-        `INSERT INTO candidates (id, location_id, name, phone, email, position, stage, interview_at, trial_at, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO candidates (id, location_id, name, phone, email, position, stage, interview_at, trial_at, source, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, locId, f.name, f.phone ?? null, f.email ?? null, f.position, stage, f.interviewAt ?? null, f.trialAt ?? null, c.var.user.id, now, now),
+      .bind(id, locId, f.name, f.phone ?? null, f.email ?? null, f.position, stage, f.interviewAt ?? null, f.trialAt ?? null, f.source ?? null, c.var.user.id, now, now),
     // no personal data in the log: it outlives the candidate
     auditStatement(db, { actorId: c.var.user.id, locationId: locId, action: 'candidate.create', entityType: 'candidate', entityId: id, after: { position: f.position, stage } }),
   ]);
@@ -209,7 +230,19 @@ recruitmentAdminRoutes.put('/candidates/:id', async (c) => {
     else if (f.interviewAt && !row.interviewAt && row.stage === 'new') f.stage = 'interview';
   }
   const cols: Record<string, unknown> = {};
-  const map: Record<string, string> = { name: 'name', phone: 'phone', email: 'email', position: 'position', stage: 'stage', interviewAt: 'interview_at', trialAt: 'trial_at' };
+  const map: Record<string, string> = {
+    name: 'name',
+    phone: 'phone',
+    email: 'email',
+    position: 'position',
+    stage: 'stage',
+    interviewAt: 'interview_at',
+    trialAt: 'trial_at',
+    source: 'source',
+    rejectReason: 'reject_reason',
+    noShowInterview: 'no_show_interview',
+    noShowTrial: 'no_show_trial',
+  };
   for (const [k, col] of Object.entries(map)) if (k in f) cols[col] = (f as Record<string, unknown>)[k];
   const now = Date.now();
   const sets = Object.keys(cols).map((k) => `${k} = ?`);
