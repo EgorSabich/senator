@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useLiveRefresh } from '../live';
 import { DateField } from '../DateField';
 import { divisionOf, POSITIONS } from '../../shared/constants';
 import { comparePl, foldPolish } from '../../shared/text';
@@ -60,6 +61,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
   useEffect(() => {
     void load();
   }, [load]);
+  useLiveRefresh(load);
 
   const shown = useMemo(() => {
     const q = foldPolish(query.trim());

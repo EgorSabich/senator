@@ -1,4 +1,6 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
+import { startLive } from '../live';
+import { LiveBar } from '../ui';
 import { api } from '../api';
 import { apiCache } from '../apiCache';
 import type { Me } from '../api';
@@ -33,6 +35,11 @@ export function Academy({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: (
   const online = useOnline();
   const locationId = me.locations[0]?.id ?? '';
   const ctx = useMemo<AcademyCtx>(() => ({ me, locationId, online }), [me, locationId, online]);
+
+  // live: refresh what is on screen when something changes (live.ts)
+  useEffect(() => {
+    if (locationId && me.user.role !== 'terminal') startLive(locationId);
+  }, [locationId, me.user.role]);
 
   // Warm up the other tabs while the phone is idle, so switching shows content at once (it refreshes anyway).
   useEffect(() => {
@@ -91,6 +98,7 @@ export function Academy({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: (
   return (
     <Ctx.Provider value={ctx}>
       <div className="a-app">
+        <LiveBar />
         {!full && (
           <header className="a-header">
             <Brand />

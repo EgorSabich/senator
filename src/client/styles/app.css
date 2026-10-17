@@ -973,3 +973,20 @@ a.a-dish:hover {
   padding: 0 18px;
   flex: none;
 }
+
+/* Start → „Włącz powiadomienia” (PushGate) */
+.push-gate {
+  border-color: var(--accent);
+  gap: 10px;
+}
+.push-gate-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 700;
+}
+.push-gate-title svg {
+  color: var(--accent);
+  flex: none;
+}

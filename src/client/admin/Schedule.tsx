@@ -3,6 +3,7 @@
  * nothing reaches staff until "Opublikuj".
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLiveRefresh } from '../live';
 import { formatHm, shiftColor, weekStart } from '../../shared/schedule';
 import { addDays, businessDate, formatClock } from '../../shared/time';
 import { api, ApiFailure } from '../api';
@@ -133,6 +134,7 @@ export function Schedule() {
   useEffect(() => {
     void load();
   }, [load]);
+  useLiveRefresh(load);
   // a leader starts with their own divisions (owner, 2026-10-17); "Wszyscy" shows everyone
   const defaulted = useRef(false);
   useEffect(() => {

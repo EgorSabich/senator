@@ -10,6 +10,13 @@
 
 
 
+## 0.9.13 — 2026-10-17 (live, stage 1; notifications required on Start)
+
+- Start: until notifications are on, a card at the top asks to switch them on („To obowiązkowe…”), with the right step for the phone: „Włącz powiadomienia”, on an iPhone without the home-screen app „Jak dodać aplikację”, when blocked — where to unblock. Checks again when the person comes back from the phone's settings.
+- Live, stage 1 (`live.ts`, `GET /api/locations/:id/changes`): while the app is on screen it asks every 30 s for a fingerprint of the location (schedule and days off, time, checklist marks, materials, menu, candidates — counts and latest times only). A changed area refreshes the open screen without a reload. Also refreshes when the person comes back to the app (after 15 s away), when the internet comes back and when a push arrives. While someone types in a field the refresh waits. Staff screens (all `useApi`) and panel Dziś, Pracownicy, Czas pracy, Grafik, Listy, Rekrutacja follow it.
+- Panel: a thin bar „Brak internetu…” while offline. Everywhere: „Jest nowa wersja aplikacji — Odśwież” when the server runs a newer version (from this version on).
+- Service worker: change checks and push keys never come from the cache. Integration test 25, `live_walkthrough.py` (a shift published by the manager appears in the open Grafik by itself).
+
 ## 0.9.12 — 2026-10-17
 
 - Date picker on a laptop in a small window: the window measures its real height and opens below, above or as high as fits, scrolls inside itself and follows the page when it scrolls (it used to fall below the screen).

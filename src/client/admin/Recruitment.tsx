@@ -3,6 +3,7 @@
  * /panel/rekrutacja — table; /panel/rekrutacja/kalendarz — month; /panel/rekrutacja/<id> — the candidate's card.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLiveRefresh } from '../live';
 import { divisionOf, POSITIONS } from '../../shared/constants';
 import { ACTIVE_STAGES, formatPhone, INTERVIEW_MINUTES, STAGES, TRIAL_MINUTES, WARN_DAYS } from '../../shared/recruitment';
 import { addDays } from '../../shared/time';
@@ -111,6 +112,7 @@ function useCandidates() {
       .catch((e) => setError(errorText(e instanceof ApiFailure ? e.code : 'generic')));
   }, [locationId]);
   useEffect(load, [load]);
+  useLiveRefresh(load);
   return { data, error, load };
 }
 

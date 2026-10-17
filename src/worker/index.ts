@@ -1,4 +1,5 @@
 import { pushRoutes } from './routes/push';
+import { liveRoutes } from './routes/live';
 import { runReminders } from './lib/reminders';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
@@ -74,6 +75,7 @@ staff.route('/', learnRoutes);
 staff.route('/', checklistRoutes);
 staff.route('/', scheduleRoutes);
 staff.route('/', pushRoutes);
+staff.route('/', liveRoutes);
 // Time clock phone (role "terminal" reaches nothing else — see requireSession).
 const terminal = new Hono<AppEnv>();
 terminal.use('*', requireSession);

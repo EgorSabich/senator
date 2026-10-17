@@ -537,3 +537,36 @@ a.today-tile:active {
     display: none;
   }
 }
+
+/* live bars (live.ts) */
+.live-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: calc(env(safe-area-inset-top) + 8px) 16px 8px;
+  background: #33241a;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  animation: rise-in 300ms ease both;
+}
+.live-bar.off {
+  background: var(--surface-2);
+  color: var(--text-soft);
+}
+.live-bar button {
+  min-height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}

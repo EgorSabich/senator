@@ -1,5 +1,7 @@
 /** Small shared UI pieces following the approved prototype (spec section H). */
 import type { CSSProperties, ReactNode } from 'react';
+import { useLiveState, updateApp } from './live';
+import { pl } from './i18n/pl';
 
 export function Brand({ size = 'm' }: { size?: 'm' | 'l' }) {
   return (
@@ -183,4 +185,25 @@ export function Fold(props: { open: boolean; onToggle: () => void; head: ReactNo
       </div>
     </section>
   );
+}
+
+/** Thin bars at the top: no internet (panel) and „Jest nowa wersja” (everywhere). */
+export function LiveBar({ showOffline = false }: { showOffline?: boolean }) {
+  const st = useLiveState();
+  if (st.newVersion)
+    return (
+      <div className="live-bar" role="status">
+        <span>{pl.live.newVersion}</span>
+        <button type="button" onClick={() => void updateApp()}>
+          {pl.live.update}
+        </button>
+      </div>
+    );
+  if (showOffline && !st.online)
+    return (
+      <div className="live-bar off" role="status">
+        <span>{pl.live.offline}</span>
+      </div>
+    );
+  return null;
 }

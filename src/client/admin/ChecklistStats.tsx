@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
+import { useLiveRefresh } from '../live';
 import { DateField } from '../DateField';
 import { addDays, businessDate, formatClock } from '../../shared/time';
 import { api, ApiFailure } from '../api';
@@ -156,6 +157,7 @@ function Control({ division, setDivision }: { division: string; setDivision: (d:
       void loadStats();
     }
   }, [tab, loadDay, loadStats]);
+  useLiveRefresh(() => (tab === 'day' ? loadDay() : loadStats()));
 
   const present = [...new Set([...(day ?? []), ...(stats?.checklists ?? [])].flatMap((c) => listDivisions(c.positions ?? [])))];
   const dayShown = day?.filter((c) => inDivision(c.positions ?? [], division)) ?? null;

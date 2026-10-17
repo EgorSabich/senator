@@ -11,6 +11,11 @@ function docsWord(n: number): string {
 }
 
 export const pl = {
+  live: {
+    offline: 'Brak internetu — widzisz ostatnio pobrane dane. Odświeżymy, gdy sieć wróci.',
+    newVersion: 'Jest nowa wersja aplikacji.',
+    update: 'Odśwież',
+  },
   dateField: {
     pickDate: 'Wybierz dzień',
     pickDateTime: 'Wybierz dzień i godzinę',
@@ -371,6 +376,15 @@ export const pl = {
       logout: 'Wyloguj',
       offlineInfo: 'Otwarte wcześniej materiały działają bez internetu.',
       saved: 'Zapisano.',
+    },
+    pushGate: {
+      title: 'Włącz powiadomienia',
+      why: 'To obowiązkowe. Bez powiadomień nie dowiesz się na czas o nowym grafiku, zmianach w Twoich godzinach i dokumentach do przeczytania.',
+      ios: 'Na iPhonie powiadomienia działają tylko w aplikacji dodanej do ekranu początkowego. Dodaj ją, otwórz z ikony i włącz powiadomienia.',
+      denied: 'Powiadomienia są zablokowane. Włącz je w ustawieniach telefonu: Ustawienia → Powiadomienia → Senator (na Androidzie: ustawienia przeglądarki dla tej strony) i wróć tutaj.',
+      enable: 'Włącz powiadomienia',
+      howToInstall: 'Jak dodać aplikację',
+      failed: 'Nie udało się włączyć. Spróbuj jeszcze raz — telefon zapyta o zgodę, wybierz „Zezwól”.',
     },
     push: {
       title: 'Powiadomienia',

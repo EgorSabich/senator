@@ -1,11 +1,13 @@
 import { disablePush } from '../push';
+import { startLive } from '../live';
 import { clearPersonalCache } from '../pwa';
 import { TimeTracking } from './TimeTracking';
 import { Schedule } from './Schedule';
 import { Recruitment } from './Recruitment';
 import { Today } from './Today';
 import { ChecklistStats } from './ChecklistStats';
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { LiveBar } from '../ui';
 import type { Me } from '../api';
 import { api } from '../api';
 import { pl } from '../i18n/pl';
@@ -51,6 +53,10 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
     () => ({ me, locationId, isOwner, can: (p) => isOwner || Boolean(current?.permissions.includes(p)), refreshMe }),
     [me, locationId, isOwner, current, refreshMe],
   );
+
+  useEffect(() => {
+    if (locationId) startLive(locationId);
+  }, [locationId]);
 
   // Main items (bottom bar on phones) first; the rest sits under "Więcej" (D39).
   const nav = [
@@ -121,6 +127,7 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
           ))}
         </nav>
         <div className="panel-main">
+          <LiveBar showOffline />
           <header className="topbar">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, letterSpacing: '0.08em' }}>SENATOR</span>

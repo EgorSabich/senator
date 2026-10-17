@@ -4,6 +4,7 @@ import { TodayCard } from './Checklist';
 import { MyTimeCard } from './MyTime';
 import { MyScheduleCard } from './Grafik';
 import { InstallCard } from './Install';
+import { PushGate } from './PushGate';
 import { ModuleList, type ProgramView } from './Program';
 import { contentHref, Fold, Icon, Loading, Problem, useAcademy, useApi } from './shared';
 
@@ -81,6 +82,7 @@ export function Start() {
       {!data && !error && <Loading />}
       {data && (
         <>
+          <PushGate />
           {data.deadlines && <DeadlineNote d={data.deadlines} />}
           <InstallCard />
           <TodayCard />

@@ -1,5 +1,6 @@
 /** "Dziś" for leaders (D45): today's plan against reality, missing exits and checklists — refreshed every minute. */
 import { useCallback, useEffect, useState } from 'react';
+import { useLiveRefresh } from '../live';
 import { storageGet, storageSet } from './common';
 import { formatHm, shiftColor } from '../../shared/schedule';
 import { formatClock } from '../../shared/time';
@@ -58,6 +59,7 @@ export function Today() {
     const id = window.setInterval(() => void load(), 60_000);
     return () => clearInterval(id);
   }, [load]);
+  useLiveRefresh(load);
 
   if (!data) return error ? <ErrorBox message={error} /> : <LogoLoader />;
   const s = data.summary;

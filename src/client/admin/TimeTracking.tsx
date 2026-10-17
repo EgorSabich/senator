@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { useLiveRefresh } from '../live';
 import { divisionOf as divisionOfPosition } from '../../shared/constants';
 import { formatHm, shiftStartMs } from '../../shared/schedule';
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
@@ -122,6 +123,7 @@ export function TimeTracking() {
     setData(null);
     void load();
   }, [load]);
+  useLiveRefresh(load);
 
   const people = useMemo(() => [...(data?.people ?? [])].sort((a, b) => comparePl(`${a.lastName} ${a.firstName}`, `${b.lastName} ${b.firstName}`)), [data]);
   const divisionOf = (p: Person) => {

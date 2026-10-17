@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useLiveRefresh } from '../live';
 import { api, ApiFailure, type Me } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { LogoLoader } from '../ui';
@@ -64,6 +65,8 @@ export function useApi<T>(path: string | null) {
     setDataState(path && apiCache.has(path) ? (apiCache.get(path) as T) : null);
     void load();
   }, [load, path]);
+  // something changed on the server, the person came back to the app, the internet came back (live.ts)
+  useLiveRefresh(load);
   useEffect(() => {
     if (data) restoreScroll();
   }, [data]);

@@ -60,6 +60,8 @@ self.addEventListener('fetch', (event) => {
   if ((p.startsWith('/api/auth/') && p !== '/api/auth/me') || p.startsWith('/api/admin/') || p === '/api/health') return;
   // The time clock must see the real connection state: never answer it from the cache.
   if (p.startsWith('/api/terminal/')) return;
+  // live change checks and push keys always come from the network
+  if (p.endsWith('/changes') || p.startsWith('/api/push/')) return;
   if (p.startsWith('/api/')) {
     event.respondWith(networkFirst(req, DATA));
     return;
@@ -86,6 +88,8 @@ self.addEventListener('push', (event) => {
     msg = { body: event.data ? event.data.text() : '' };
   }
   const title = msg.title ? `Senator · ${msg.title}` : 'Senator';
+  // an open app refreshes what it shows (new schedule, new document)
+  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => list.forEach((c) => c.postMessage({ type: 'refresh' })));
   event.waitUntil(
     self.registration.showNotification(title, {
       body: msg.body || '',
