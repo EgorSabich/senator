@@ -6,6 +6,10 @@ export interface Env {
   APP_ENV: 'production' | 'staging' | 'development';
   /** Server-side pepper for PIN/password hashing and IP hashing. Set with `wrangler secret put AUTH_SECRET`. */
   AUTH_SECRET: string;
+  /** Web Push (2026-10-17), set by the owner in Cloudflare secrets; without them notifications are off. */
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
 }
 
 export interface SessionUser {

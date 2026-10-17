@@ -2237,3 +2237,30 @@ a.sch-person:hover {
 .today-link:hover .today-name {
   text-decoration: underline;
 }
+
+/* Grafik → „Opublikuj” dialog (mockup 1) */
+.pub-people {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+}
+.pub-person {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.pub-name {
+  font-weight: 600;
+}
+.pub-people .link-btn {
+  align-self: flex-start;
+  margin-top: 8px;
+}
+.pub-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

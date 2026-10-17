@@ -92,3 +92,31 @@ export async function myDeadlines(db: D1Database, locId: string, user: { id: str
   const u = await db.prepare(`SELECT first_login_at AS f FROM users WHERE id = ?`).bind(user.id).first<{ f: number | null }>();
   return (await deadlinesFor(db, locId, [{ id: user.id, positions, firstLoginAt: u?.f ?? null }])).get(user.id) ?? empty;
 }
+
+/** Who among these people has a locked Grafik right now (employees only). Used to hold back schedule notifications. */
+export async function lockedUserIds(db: D1Database, locId: string, userIds: string[], now = Date.now()): Promise<Set<string>> {
+  const out = new Set<string>();
+  const ids = [...new Set(userIds)];
+  if (!ids.length) return out;
+  const people: { id: string; positions: string[]; firstLoginAt: number | null }[] = [];
+  for (let i = 0; i < ids.length; i += 80) {
+    const chunk = ids.slice(i, i + 80);
+    const { results } = await db
+      .prepare(
+        `SELECT u.id, u.first_login_at AS f, ul.position FROM users u JOIN user_locations ul ON ul.user_id = u.id AND ul.location_id = ? AND ul.is_active = 1
+         WHERE u.role = 'employee' AND u.id IN (${chunk.map(() => '?').join(', ')})`,
+      )
+      .bind(locId, ...chunk)
+      .all<{ id: string; f: number | null; position: string }>();
+    const byId = new Map<string, { id: string; positions: string[]; firstLoginAt: number | null }>();
+    for (const r of results) {
+      const p = byId.get(r.id) ?? { id: r.id, positions: [], firstLoginAt: r.f };
+      p.positions.push(r.position);
+      byId.set(r.id, p);
+    }
+    people.push(...byId.values());
+  }
+  if (!people.length) return out;
+  for (const [id, d] of await deadlinesFor(db, locId, people, now)) if (d.lockedSince !== null) out.add(id);
+  return out;
+}

@@ -18,6 +18,8 @@ export function purgeUserStatements(db: D1Database, userId: string, login: strin
     s(`DELETE FROM manager_permissions WHERE user_id = ?`, userId),
     s(`DELETE FROM user_locations WHERE user_id = ?`, userId),
     s(`DELETE FROM sessions WHERE user_id = ?`, userId),
+    s(`DELETE FROM push_subscriptions WHERE user_id = ?`, userId),
+    s(`DELETE FROM push_log WHERE user_id = ?`, userId),
     s(`DELETE FROM login_attempts WHERE login = ?`, login),
     s(`UPDATE time_punches SET entry_id = NULL WHERE entry_id IN (SELECT id FROM time_entries WHERE user_id = ?)`, userId),
     s(`DELETE FROM time_entries WHERE user_id = ?`, userId),

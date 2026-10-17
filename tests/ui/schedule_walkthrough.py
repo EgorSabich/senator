@@ -50,7 +50,7 @@ with sync_playwright() as pw:
     dlg.get_by_label("Powód (opcjonalnie)").fill("Prosił telefonicznie"); o.screenshot(path=f"{OUT}/g02c-off-editor.png"); dlg.get_by_role("button",name="Zapisz").first.click()
     dlg.get_by_text("wpisał(a):").wait_for(); o.keyboard.press("Escape")
     o.wait_for_timeout(400); o.screenshot(path=f"{OUT}/g03-panel-draft.png", full_page=True)
-    o.once("dialog", lambda d: d.accept()); o.get_by_role("button",name=re.compile("Opublikuj")).click(); o.get_by_text(re.compile("Opublikowano zmian")).wait_for()
+    o.get_by_role("button",name=re.compile(r"^Opublikuj \(")).click(); o.get_by_role("dialog").get_by_role("button",name=re.compile("^Opublikuj")).last.click(); o.get_by_text(re.compile("Opublikowano zmian")).wait_for()
     o.locator(".sch-legend-item").first.click(); o.wait_for_timeout(300); o.screenshot(path=f"{OUT}/g04-panel-published.png", full_page=True)
     # edit dialog with a published shift; month view; Lokale; Pracownicy checkbox
     o.get_by_role("button",name=f"Zofia N., {nxt+datetime.timedelta(days=1)} — zmiany").click(); o.get_by_role("dialog").wait_for(); o.wait_for_timeout(300)

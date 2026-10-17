@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { disablePush, enablePush, pushState, sendTestPush, type PushState } from '../push';
 import { api } from '../api';
 import { pl } from '../i18n/pl';
 import { clearPersonalCache } from '../pwa';
@@ -14,6 +15,7 @@ export function Account({ onLoggedOut, refreshMe }: { onLoggedOut: () => void; r
   const [done, setDone] = useState(false);
 
   async function logout() {
+    await disablePush();
     await api('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
     await clearPersonalCache();
     onLoggedOut();
@@ -68,6 +70,7 @@ export function Account({ onLoggedOut, refreshMe }: { onLoggedOut: () => void; r
           <Icon name="next" size={18} />
         </a>
       </div>
+      <Notifications />
       <LocationInfo />
       {done && (
         <div className="a-note" role="status">
@@ -87,6 +90,81 @@ export function Account({ onLoggedOut, refreshMe }: { onLoggedOut: () => void; r
   );
 }
 
+
+/** „Powiadomienia” (mockup 2): switching push on for this device. */
+function Notifications() {
+  const tp = pl.academy.push;
+  const [state, setState] = useState<PushState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    pushState()
+      .then(setState)
+      .catch(() => setState('unsupported'));
+  }, []);
+  if (!state) return null;
+  async function run(fn: () => Promise<void>) {
+    setBusy(true);
+    setNote(null);
+    try {
+      await fn();
+    } catch {
+      setNote(tp.error);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const info: Partial<Record<PushState, string>> = { unsupported: tp.unsupported, 'ios-install': tp.iosInstall, denied: tp.denied, 'no-key': tp.noKey };
+  return (
+    <div className="a-card">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <span style={{ fontSize: 18, fontWeight: 700 }}>{tp.title}</span>
+        {state === 'off' && (
+          <button className="a-btn primary center a-btn-sm" disabled={busy} onClick={() => void run(async () => setState(await enablePush()))}>
+            {tp.enable}
+          </button>
+        )}
+        {state === 'on' && (
+          <button
+            className="a-btn a-btn-sm"
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                await disablePush();
+                setState('off');
+              })
+            }
+          >
+            {tp.disable}
+          </button>
+        )}
+      </div>
+      <span className="a-sub">
+        {state === 'on' ? tp.on : info[state] ?? tp.about}
+        {state === 'off' && ` ${tp.iosHint}`}
+      </span>
+      {state === 'on' && (
+        <button
+          className="a-link-btn" style={{ alignSelf: "flex-start" }}
+          disabled={busy}
+          onClick={() =>
+            void run(async () => {
+              const r = await sendTestPush();
+              setNote(r.delivered ? tp.testSent : tp.testNone);
+            })
+          }
+        >
+          {tp.test}
+        </button>
+      )}
+      {note && (
+        <span className="a-sub" role="status">
+          {note}
+        </span>
+      )}
+    </div>
+  );
+}
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 

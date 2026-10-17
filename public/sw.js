@@ -76,3 +76,41 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(networkFirst(req, SHELL, '/'));
   }
 });
+
+// Push notifications (2026-10-17): Grafik, tomorrow's shift, documents to read, days-off deadline.
+self.addEventListener('push', (event) => {
+  let msg = {};
+  try {
+    msg = event.data ? event.data.json() : {};
+  } catch {
+    msg = { body: event.data ? event.data.text() : '' };
+  }
+  const title = msg.title ? `Senator · ${msg.title}` : 'Senator';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: msg.body || '',
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      tag: msg.tag || undefined,
+      renotify: Boolean(msg.tag),
+      data: { url: msg.url || '/' },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if (new URL(c.url).origin === self.location.origin && 'focus' in c) {
+          // the open app moves to the page itself (no reload)
+          c.postMessage({ type: 'open', url });
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
+});

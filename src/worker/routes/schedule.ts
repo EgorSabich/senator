@@ -5,7 +5,9 @@
  */
 import { Hono } from 'hono';
 import { userPositions } from '../lib/learning';
-import { myDeadlines } from '../lib/deadlines';
+import { lockedUserIds, myDeadlines } from '../lib/deadlines';
+import { vapidKeys, withPush } from '../lib/notify';
+import { notifySchedule, type ShiftChange } from '../lib/reminders';
 import { addDays, isIsoDate } from '../../shared/time';
 import { shiftMinutes, unavailabilityDeadline, weekDays, weekStart } from '../../shared/schedule';
 import { divisionOf } from '../../shared/constants';
@@ -238,19 +240,78 @@ scheduleAdminRoutes.post('/schedule/shifts/:id/restore', async (c) => {
   return c.json({ ok: true });
 });
 
-/** Publish the week (all divisions the manager may plan, or the chosen ones). Returns who got changes — for notifications. */
-scheduleAdminRoutes.post('/locations/:locId/schedule/publish', async (c) => {
-  const locId = c.req.param('locId');
-  const access = await guard(c, locId);
-  const db = c.env.DB;
-  const body = await readJson<{ week?: unknown; month?: unknown; divisions?: unknown }>(c.req.raw);
-  const { days, monday } = periodOf(body);
+/** Changes waiting for publication in the chosen period and divisions. */
+async function pendingChanges(c: Ctx, locId: string, access: Access, body: { week?: unknown; month?: unknown; divisions?: unknown }) {
+  const period = periodOf(body);
+  const { days } = period;
   const allowed = allowedDivisions(access, locId);
   let chosen = Array.isArray(body.divisions) ? body.divisions.filter(isDivision) : null;
   if (chosen && !chosen.length) chosen = null;
   const inScope = (d: string) => (!allowed || allowed.has(d)) && (!chosen || chosen.includes(d));
-  const { results } = await db.prepare(`${SHIFT_SELECT} WHERE location_id = ? AND date BETWEEN ? AND ?`).bind(locId, days[0], days[days.length - 1]).all<ShiftRow>();
+  const { results } = await c.env.DB.prepare(`${SHIFT_SELECT} WHERE location_id = ? AND date BETWEEN ? AND ?`).bind(locId, days[0], days[days.length - 1]).all<ShiftRow>();
   const todo = results.filter((s) => inScope(s.division) && changed(s));
+  const changes: ShiftChange[] = todo
+    // a never-published shift that was deleted again changes nothing for the person
+    .filter((s) => !(s.isDeleted && !s.published))
+    .map((s) => ({
+      userId: s.userId,
+      date: s.date,
+      kind: s.isDeleted ? 'deleted' : s.published ? 'changed' : 'new',
+      startMin: s.isDeleted || s.published ? (s.pubStartMin ?? s.startMin) : s.startMin,
+      endMin: s.isDeleted || s.published ? (s.pubEndMin ?? s.endMin) : s.endMin,
+    }));
+  return { period, allowed, chosen, todo, changes };
+}
+
+/** Before publishing: who gets changes, and how many of them will see a notification (mockup 1). */
+scheduleAdminRoutes.post('/locations/:locId/schedule/publish-preview', async (c) => {
+  const locId = c.req.param('locId');
+  const access = await guard(c, locId);
+  const db = c.env.DB;
+  const body = await readJson<{ week?: unknown; month?: unknown; divisions?: unknown }>(c.req.raw);
+  const { todo, changes } = await pendingChanges(c, locId, access, body);
+  const ids = [...new Set(changes.map((x) => x.userId))];
+  const [push, locked] = await Promise.all([withPush(db, ids), lockedUserIds(db, locId, ids)]);
+  const names = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += 80) {
+    const chunk = ids.slice(i, i + 80);
+    const { results } = await db
+      .prepare(`SELECT id, first_name AS f, last_name AS l FROM users WHERE id IN (${chunk.map(() => '?').join(', ')})`)
+      .bind(...chunk)
+      .all<{ id: string; f: string; l: string }>();
+    for (const r of results) names.set(r.id, `${r.f} ${r.l}`.trim());
+  }
+  const people = ids
+    .map((id) => {
+      const mine = changes.filter((x) => x.userId === id);
+      return {
+        id,
+        name: names.get(id) ?? '',
+        added: mine.filter((x) => x.kind === 'new').length,
+        changed: mine.filter((x) => x.kind === 'changed').length,
+        removed: mine.filter((x) => x.kind === 'deleted').length,
+        push: push.has(id) && !locked.has(id),
+        locked: locked.has(id),
+      };
+    })
+    .sort((a, b) => b.added + b.changed + b.removed - (a.added + a.changed + a.removed) || a.name.localeCompare(b.name, 'pl'));
+  return c.json({
+    changes: todo.length,
+    people,
+    withPush: people.filter((p) => p.push).length,
+    locked: people.filter((p) => p.locked).length,
+    pushReady: Boolean(vapidKeys(c.env)),
+  });
+});
+
+/** Publish the week (all divisions the manager may plan, or the chosen ones). With `notify`, people whose shifts changed get a push. */
+scheduleAdminRoutes.post('/locations/:locId/schedule/publish', async (c) => {
+  const locId = c.req.param('locId');
+  const access = await guard(c, locId);
+  const db = c.env.DB;
+  const body = await readJson<{ week?: unknown; month?: unknown; divisions?: unknown; notify?: unknown }>(c.req.raw);
+  const { period, allowed, chosen, todo, changes } = await pendingChanges(c, locId, access, body);
+  const { days, monday } = period;
   const now = Date.now();
   const stmts: D1PreparedStatement[] = [];
   const users = new Set<string>();
@@ -264,7 +325,8 @@ scheduleAdminRoutes.post('/locations/:locId/schedule/publish', async (c) => {
           .bind(now, s.id),
       );
   }
-  if (!stmts.length) return c.json({ published: 0, people: 0, userIds: [] });
+  if (!stmts.length) return c.json({ published: 0, people: 0, userIds: [], notified: false });
+  const sendPush = body.notify === true && changes.length > 0;
   stmts.push(
     auditStatement(db, {
       actorId: c.var.user.id,
@@ -272,11 +334,21 @@ scheduleAdminRoutes.post('/locations/:locId/schedule/publish', async (c) => {
       action: 'schedule.publish',
       entityType: 'schedule',
       entityId: monday ?? days[0]!.slice(0, 7),
-      after: { changes: todo.length, people: users.size, divisions: chosen ?? (allowed ? [...allowed] : 'all') },
+      after: { changes: todo.length, people: users.size, divisions: chosen ?? (allowed ? [...allowed] : 'all'), notify: sendPush },
     }),
   );
   await db.batch(stmts);
-  return c.json({ published: todo.length, people: users.size, userIds: [...users] });
+  if (sendPush) {
+    const job = notifySchedule(c.env, locId, changes, period)
+      .then((r) => console.log(JSON.stringify({ job: 'push.schedule', locId, ...r })))
+      .catch((e) => console.warn('push.schedule', String(e)));
+    try {
+      c.executionCtx.waitUntil(job);
+    } catch {
+      await job; // no execution context (tests)
+    }
+  }
+  return c.json({ published: todo.length, people: users.size, userIds: [...users], notified: sendPush });
 });
 
 /** Copy last week's plan into this week where the person has nothing planned that day (drafts). */

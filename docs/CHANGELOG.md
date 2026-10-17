@@ -10,6 +10,15 @@
 
 
 
+## 0.9.7 — 2026-10-17 (iteration 3, step 3: publishing and push notifications)
+
+- Web Push without libraries (`lib/webpush.ts`: RFC 8291 aes128gcm + RFC 8292 VAPID on WebCrypto). Keys: Cloudflare secrets `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`; without them nothing is sent and nothing breaks. Migration 0017: `push_subscriptions` (one row per device), `push_log` (a reminder goes out once; cleaned after 60 days by the nightly job).
+- Konto → „Powiadomienia”: Włącz / Wyłącz / Wyślij próbne; clear states for an iPhone without the home-screen app, blocked notifications, missing keys. Logout switches the device off. A tapped notification opens its page.
+- Grafik → „Opublikuj (N)” opens a dialog: who changed (nowe / zmienione / usunięte), „Opublikuj i powiadom N osób” or „Opublikuj bez powiadomienia”, how many have notifications on. Only people whose shifts changed get a push; people with a locked Grafik get none. `POST …/schedule/publish-preview`; `publish` takes `notify`.
+- A new or significantly changed mandatory document: a push to everyone who now has it to read („Masz N dni”). Clarifications and imports are not announced.
+- Hourly cron (`0 * * * *`), active at 18:00 Warsaw: „Jutro zmiana” for tomorrow's shift; the day before the days-off deadline, a reminder to people with nothing marked for that week. Locked people are skipped.
+- `scripts/vapid-keys.html`: offline key generator for the owner. Integration test 21 (fake push service, decrypts what arrives), `push_walkthrough.py`; schedule walkthrough uses the dialog.
+
 ## 0.9.6 — 2026-10-17 (iteration 3, step 2: reading period)
 
 - Lokale → „Dni na zapoznanie się z dokumentami obowiązkowymi” (default 3). Period: a new person from their first sign-in; a new document from its publication; a significant change from that version's publication. Migration 0016: `locations.ack_days`, `users.first_login_at` (people who already signed in start their period at deploy time).

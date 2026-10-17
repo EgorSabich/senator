@@ -1,4 +1,5 @@
 import { apiCache } from './apiCache';
+import { navigate } from './router';
 /**
  * PWA: service worker registration and clearing cached personal data.
  * The worker (public/sw.js) keeps the app shell and the API answers a person opened, so read
@@ -12,6 +13,17 @@ export function registerServiceWorker(): void {
   if (location.protocol !== 'https:' && !local) return;
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => undefined);
+  });
+  // a tapped notification while the app is open: go to its page without reloading
+  navigator.serviceWorker.addEventListener('message', (e: MessageEvent) => {
+    const d = e.data as { type?: string; url?: string } | null;
+    if (d?.type !== 'open' || !d.url) return;
+    try {
+      const u = new URL(d.url, location.origin);
+      if (u.origin === location.origin) navigate(u.pathname + u.search);
+    } catch {
+      /* ignore */
+    }
   });
 }
 

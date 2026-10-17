@@ -149,25 +149,14 @@ export function Schedule() {
     storageSet(DIV_KEY, JSON.stringify(next));
   };
 
+  const [publishing, setPublishing] = useState(false);
   const live = (data?.shifts ?? []).filter((s) => !s.deleted && shown.includes(s.division));
   const starts = [...new Set(live.map((s) => s.startMin))].sort((a, b) => a - b);
 
-  async function publish() {
-    if (!data) return;
-    if (!window.confirm(t.publishConfirm(data.unpublished))) return;
-    setBusy(true);
-    try {
-      const r = await api<{ published: number; people: number }>(`/api/admin/locations/${locationId}/schedule/publish`, {
-        method: 'POST',
-        body: mode === 'month' ? { month } : { week },
-      });
-      setNotice(t.published(r.published, r.people));
-      await load();
-    } catch (e) {
-      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
-    } finally {
-      setBusy(false);
-    }
+  async function published(r: { published: number; people: number; notified: boolean }) {
+    setPublishing(false);
+    setNotice(r.notified ? t.publishDialog.doneNotified(r.published, r.people) : t.published(r.published, r.people));
+    await load();
   }
   async function copyWeek() {
     if (!window.confirm(t.copyConfirm)) return;
@@ -196,7 +185,7 @@ export function Schedule() {
               {t.copyWeek}
             </Btn>
           )}
-          <Btn kind="primary" onClick={() => void publish()} disabled={busy || !data?.unpublished}>
+          <Btn kind="primary" onClick={() => setPublishing(true)} disabled={busy || !data?.unpublished}>
             {data?.unpublished ? t.publish(data.unpublished) : t.allPublished}
           </Btn>
         </div>
@@ -409,6 +398,9 @@ export function Schedule() {
         {t.help}
       </p>
       {data && <Templates templates={data.templates.filter((x) => shown.includes(x.division))} onChanged={load} onError={setError} />}
+      {publishing && data && (
+        <PublishModal locationId={locationId} body={mode === 'month' ? { month } : { week }} onDone={(r) => void published(r)} onClose={() => setPublishing(false)} />
+      )}
       {exporting && data && (
         <ExportDialog
           onClose={() => setExporting(false)}
@@ -808,5 +800,93 @@ function OffEditor(props: { locationId: string; userId: string; date: string; of
         <Btn onClick={() => setEditing(false)}>{pl.common.cancel}</Btn>
       </div>
     </form>
+  );
+}
+
+interface PublishPreview {
+  changes: number;
+  people: { id: string; name: string; added: number; changed: number; removed: number; push: boolean; locked: boolean }[];
+  withPush: number;
+  locked: number;
+  pushReady: boolean;
+}
+
+/** „Opublikować grafik?” (mockup 1): who gets changes; publish with a notification or without one. */
+function PublishModal(props: {
+  locationId: string;
+  body: { week?: string; month?: string };
+  onDone: (r: { published: number; people: number; notified: boolean }) => void;
+  onClose: () => void;
+}) {
+  const t = pl.admin.schedule.publishDialog;
+  const [preview, setPreview] = useState<PublishPreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [all, setAll] = useState(false);
+  useEffect(() => {
+    api<PublishPreview>(`/api/admin/locations/${props.locationId}/schedule/publish-preview`, { method: 'POST', body: props.body })
+      .then(setPreview)
+      .catch((e) => setError(errorText(e instanceof ApiFailure ? e.code : 'generic')));
+  }, [props.locationId, props.body.week, props.body.month]);
+  async function go(notify: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      props.onDone(await api(`/api/admin/locations/${props.locationId}/schedule/publish`, { method: 'POST', body: { ...props.body, notify } }));
+    } catch (e) {
+      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+      setBusy(false);
+    }
+  }
+  const n = preview?.people.length ?? 0;
+  const shown = preview ? (all ? preview.people : preview.people.slice(0, 5)) : [];
+  const canNotify = Boolean(preview?.pushReady && n > 0);
+  return (
+    <Modal title={t.title} onClose={props.onClose}>
+      {!preview && !error && <p className="muted" style={{ margin: 0 }}>{pl.app.loading}</p>}
+      {preview && (
+        <>
+          <p style={{ margin: 0 }}>{t.summary(preview.changes, n)}</p>
+          {n > 0 && (
+            <div className="pub-people">
+              {shown.map((p) => (
+                <div key={p.id} className="pub-person">
+                  <span className="pub-name">{p.name}</span>
+                  <span className="muted">
+                    {t.diff(p.added, p.changed, p.removed)}
+                    {p.locked ? ` · ${t.lockedTag}` : ''}
+                  </span>
+                </div>
+              ))}
+              {preview.people.length > shown.length && (
+                <button type="button" className="link-btn" onClick={() => setAll(true)}>
+                  {t.more(preview.people.length - shown.length)}
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+      {error && <div className="notice warn-notice" role="alert">{error}</div>}
+      <div className="pub-actions">
+        {canNotify && (
+          <Btn kind="primary" onClick={() => void go(true)} disabled={busy || !preview}>
+            {t.notify(n)}
+          </Btn>
+        )}
+        <Btn kind={canNotify ? 'secondary' : 'primary'} onClick={() => void go(false)} disabled={busy || !preview}>
+          {canNotify ? t.silent : t.publishOnly}
+        </Btn>
+        <Btn onClick={props.onClose} disabled={busy}>
+          {t.cancel}
+        </Btn>
+      </div>
+      {preview && (
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+          {!preview.pushReady ? t.noKeys : t.hint(preview.withPush, n)}
+          {preview.locked > 0 && ` ${t.lockedHint(preview.locked)}`}
+        </p>
+      )}
+    </Modal>
   );
 }

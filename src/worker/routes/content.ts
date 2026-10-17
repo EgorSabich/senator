@@ -4,6 +4,7 @@
  * Shared content (location_id NULL) is edited only by the owner.
  */
 import { Hono } from 'hono';
+import { notifyDocument } from '../lib/reminders';
 import { CHANGE_LEVELS, CONTENT_KINDS, POSITIONS, type ChangeLevel } from '../../shared/constants';
 import { docToText, emptyDoc, sanitizeDoc } from '../../shared/richtext';
 import { foldPolish } from '../../shared/text';
@@ -14,7 +15,7 @@ import { indexStatements, unindexStatement } from '../lib/search';
 import { allowedDivisions, loadAccess, requireOwner, requirePermission, requirePositionsInScope, type Access } from '../auth/access';
 import { storeUpload } from './media';
 import { deleteKeys } from '../jobs/punchPhotos';
-import { DEFAULT_TAB } from '../lib/learning';
+import { DEFAULT_TAB, MANDATORY_KINDS } from '../lib/learning';
 import { confirmMatches, purgeContentStatements } from '../lib/purge';
 import { CONTENT_BUNDLE_FORMAT, CONTENT_IMPORT_CHUNK } from '../../shared/contentBundle';
 
@@ -535,6 +536,17 @@ contentAdminRoutes.post('/content/:id/publish', async (c) => {
   const note = body.changeNote === undefined || body.changeNote === null || body.changeNote === '' ? null : str(body.changeNote, 500);
 
   const res = await publishDraft(db, item, c.var.user.id, level, note);
+  // a new or significantly changed mandatory document: a push to everyone who now has to read it
+  if (level === 'significant' && item.requiresAck && !item.externalUrl && (MANDATORY_KINDS as readonly string[]).includes(item.kind)) {
+    const job = notifyDocument(c.env, { id: item.id, locationId: item.locationId, title: item.draftTitle ?? item.title }, res.versionId, first)
+      .then((r) => console.log(JSON.stringify({ job: 'push.document', id: item.id, ...r })))
+      .catch((e) => console.warn('push.document', String(e)));
+    try {
+      c.executionCtx.waitUntil(job);
+    } catch {
+      await job;
+    }
+  }
   return c.json({ ...res, changeLevel: level });
 });
 

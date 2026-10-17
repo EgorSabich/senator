@@ -1,3 +1,5 @@
+import { pushRoutes } from './routes/push';
+import { runReminders } from './lib/reminders';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { AppEnv, Env } from './env';
@@ -59,10 +61,12 @@ staff.use('/locations/*', requireSession);
 staff.use('/menu/*', requireSession);
 staff.use('/content/*', requireSession);
 staff.use('/checklists/*', requireSession);
+staff.use('/push/*', requireSession);
 staff.route('/', menuRoutes);
 staff.route('/', learnRoutes);
 staff.route('/', checklistRoutes);
 staff.route('/', scheduleRoutes);
+staff.route('/', pushRoutes);
 // Time clock phone (role "terminal" reaches nothing else — see requireSession).
 const terminal = new Hono<AppEnv>();
 terminal.use('*', requireSession);
@@ -83,13 +87,25 @@ app.onError((err, c) => {
   return c.json({ error: 'internal_error' }, 500);
 });
 
+const HOURLY = '0 * * * *';
+
 export default {
   fetch: app.fetch,
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     const now = new Date(controller.scheduledTime);
+    if (controller.cron === HOURLY) {
+      // reminders (tomorrow's shift, days-off deadline) — only the 18:00 Warsaw run does anything
+      ctx.waitUntil(
+        runReminders(env, controller.scheduledTime, env.APP_ENV === 'development') // local tests: any hour
+          .then((r) => console.log(JSON.stringify({ job: 'reminders', ...r })))
+          .catch((e) => console.warn('reminders', String(e))),
+      );
+      return;
+    }
     ctx.waitUntil(
       (async () => {
+        await env.DB.prepare(`DELETE FROM push_log WHERE created_at < ?`).bind(now.getTime() - 60 * 86400_000).run().catch(() => undefined);
         const backup = await runNightlyBackup(env, now);
         const anonymized = await anonymizeExpiredUsers(env.DB, now);
         const punchPhotos = await expirePunchPhotos(env.DB, env.PHOTOS, now).catch((e) => `error: ${String(e)}`);

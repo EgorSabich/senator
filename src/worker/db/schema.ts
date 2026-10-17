@@ -707,3 +707,30 @@ export const unavailability = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.locationId, t.date] }), index('unavailability_loc_date_idx').on(t.locationId, t.date)],
 );
+
+/** Web Push (2026-10-17): one row per browser/phone that allowed notifications. */
+export const pushSubscriptions = sqliteTable(
+  'push_subscriptions',
+  {
+    id: id(),
+    userId: text('user_id').notNull().references(() => users.id),
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    createdAt: createdAt(),
+    lastSentAt: integer('last_sent_at'),
+  },
+  (t) => [uniqueIndex('push_subscriptions_endpoint_uq').on(t.endpoint), index('push_subscriptions_user_idx').on(t.userId)],
+);
+
+/** Sent notifications, so a reminder goes out once (kind + ref per person). Kept 60 days. */
+export const pushLog = sqliteTable(
+  'push_log',
+  {
+    userId: text('user_id').notNull().references(() => users.id),
+    kind: text('kind').notNull(),
+    ref: text('ref').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('push_log_uq').on(t.userId, t.kind, t.ref)],
+);

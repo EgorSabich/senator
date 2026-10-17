@@ -1,3 +1,4 @@
+import { disablePush } from '../push';
 import { TimeTracking } from './TimeTracking';
 import { Schedule } from './Schedule';
 import { Today } from './Today';
@@ -88,6 +89,7 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
   else if (nav[0]) page = <Redirect to={nav[0].path} />;
 
   async function logout() {
+    await disablePush();
     await api('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
     onLoggedOut();
   }

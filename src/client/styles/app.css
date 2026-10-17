@@ -966,3 +966,10 @@ a.a-dish:hover {
 .g-locked > svg {
   color: var(--bad-fg);
 }
+
+/* Konto → Powiadomienia: a compact button next to the title */
+.a-btn.a-btn-sm {
+  min-height: 40px;
+  padding: 0 18px;
+  flex: none;
+}
