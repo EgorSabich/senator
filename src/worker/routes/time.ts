@@ -409,6 +409,24 @@ timeAdminRoutes.put('/locations/:locId/users/:id/rate', async (c) => {
 });
 
 /** Card of a person in "Pracownicy": materials read, mandatory documents, hours this and last month (+ cost and rate with wages.manage). */
+/** Praca zdalna on/off (2026-10-17): only for people with the call-center position. */
+timeAdminRoutes.put('/locations/:locId/users/:id/remote', async (c) => {
+  const locId = c.req.param('locId');
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  requirePermission(access, locId, 'employees.manage');
+  const person = await employeeOf(db, c.req.param('id'), locId);
+  if (!person || !(await userInScope(db, access, locId, person.id))) throw notFound();
+  const body = await readJson<{ enabled?: unknown }>(c.req.raw);
+  const enabled = body.enabled === true;
+  if (enabled && !(await positionsAt(db, locId)).get(person.id)?.positions.includes('call_center')) throw badRequest('remote_call_center_only');
+  await db.batch([
+    db.prepare(`UPDATE users SET remote_work = ?, updated_at = ? WHERE id = ?`).bind(enabled ? 1 : 0, Date.now(), person.id),
+    auditStatement(db, { actorId: c.var.user.id, locationId: locId, action: 'user.remote_work', entityType: 'user', entityId: person.id, after: { enabled } }),
+  ]);
+  return c.json({ ok: true });
+});
+
 timeAdminRoutes.get('/locations/:locId/users/:id/summary', async (c) => {
   const locId = c.req.param('locId');
   const db = c.env.DB;
@@ -472,8 +490,9 @@ timeAdminRoutes.get('/locations/:locId/users/:id/summary', async (c) => {
 
   const first = await db.prepare(`SELECT first_login_at AS f FROM users WHERE id = ?`).bind(person.id).first<{ f: number | null }>();
   const dl = (await deadlinesFor(db, locId, [{ id: person.id, positions, firstLoginAt: first?.f ?? null }])).get(person.id)!;
+  const rw = await db.prepare(`SELECT remote_work AS rw FROM users WHERE id = ?`).bind(person.id).first<{ rw: number }>();
   return c.json({
-    deadlines: { lockedSince: dl.lockedSince, nextDue: dl.nextDue, due: Object.fromEntries(dl.items.map((i) => [i.id, i.due])) },
+    remoteWork: Boolean(rw?.rw),
     lessons: { done: lessons.filter((l) => done(l.id)).length, total: lessons.length },
     mandatory: {
       done: mandatory.filter((m) => done(m.id)).length,

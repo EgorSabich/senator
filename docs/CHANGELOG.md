@@ -10,6 +10,13 @@
 
 
 
+## 0.9.18 — 2026-10-17 (Praca zdalna)
+
+- Pracownicy → card of a call-center person: „Praca zdalna” (mockup 18; `employees.manage`, only with the call-center position). Migration 0022 (`users.remote_work`).
+- The person's Start: „Praca zdalna” card with today's planned shift, „Rozpocznij pracę” → „Pracujesz od 12:02 · 1 h 14 min” → „Zakończ pracę”. No terminal; one open shift at a time (a terminal shift is ended on the terminal).
+- Czas pracy shows such entries as „zdalnie”; they count in hours, cost and statistics like any other.
+- Integration test 29, `remote_walkthrough.py`.
+
 ## 0.9.17 — 2026-10-17 (Dostępy: hourly leaders, switch access off)
 
 - „Rozlicza czas pracy (stawka godzinowa)” on a leader's card (mockup 17): the position the hours count in, hourly rate (with `wages.manage`) and from when. At the next sign-in the leader sets a 6-digit PIN for the time clock (his password stays for the panel). He then clocks in on the terminal and is shown in Czas pracy, Grafik, Dziś and the statistics like an employee. Switching it off removes the PIN. Migration 0021 (`users.tracks_time`).

@@ -22,6 +22,7 @@ import { calendarFeedRoutes, recruitmentAdminRoutes } from './routes/recruitment
 import { notificationAdminRoutes } from './routes/notifications';
 import { statsAdminRoutes } from './routes/stats';
 import { managerAdminRoutes } from './routes/managers';
+import { remoteRoutes } from './routes/remote';
 import { expireCandidates } from './jobs/candidates';
 import { requireSameOrigin, requireSession } from './auth/session';
 import { runNightlyBackup } from './jobs/backup';
@@ -82,6 +83,7 @@ staff.route('/', checklistRoutes);
 staff.route('/', scheduleRoutes);
 staff.route('/', pushRoutes);
 staff.route('/', liveRoutes);
+staff.route('/', remoteRoutes);
 // Time clock phone (role "terminal" reaches nothing else — see requireSession).
 const terminal = new Hono<AppEnv>();
 terminal.use('*', requireSession);

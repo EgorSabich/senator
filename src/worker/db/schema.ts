@@ -79,6 +79,8 @@ export const users = sqliteTable(
     pinLookup: text('pin_lookup'),
     /** 2026-10-17: a manager paid by the hour — clocks in with a PIN, planned in Grafik, counted in Czas pracy (Dostępy) */
     tracksTime: integer('tracks_time').notNull().default(0),
+    /** 2026-10-17: call center working from home — starts and ends work in the app, without the terminal */
+    remoteWork: integer('remote_work').notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

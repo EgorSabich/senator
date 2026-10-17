@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `remote_work` integer DEFAULT 0 NOT NULL;

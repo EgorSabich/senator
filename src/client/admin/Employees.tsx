@@ -514,6 +514,7 @@ function AddEmployee({
 }
 
 interface SummaryData {
+  remoteWork?: boolean;
   deadlines?: { lockedSince: number | null; nextDue: number | null; due: Record<string, number> };
   lessons: { done: number; total: number };
   mandatory: { done: number; total: number; missing: { id: string; title: string; status: string }[] };
@@ -636,6 +637,42 @@ function Summary({ userId, locationId, canManage, allowed }: { userId: string; l
         </span>
       ) : null}
       <Positions data={data} userId={userId} locationId={locationId} canManage={canManage} allowed={allowed} onChanged={load} />
+      {data.positions.some((p) => p.position === 'call_center') && (
+        <RemoteToggle on={Boolean(data.remoteWork)} disabled={!canManage} userId={userId} locationId={locationId} onChanged={load} />
+      )}
+    </div>
+  );
+}
+
+/** Praca zdalna (owner, 2026-10-17; mockup 18): call center starts and ends work in the app. */
+function RemoteToggle(props: { on: boolean; disabled: boolean; userId: string; locationId: string; onChanged: () => Promise<void> }) {
+  const r = pl.admin.employees.remote;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function flip() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/api/admin/locations/${props.locationId}/users/${props.userId}/remote`, { method: 'PUT', body: { enabled: !props.on } });
+      await props.onChanged();
+    } catch (e) {
+      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="mgr-box">
+      <div className="mgr-row">
+        <div>
+          <b>{r.title}</b>
+          <p className="muted">{r.hint}</p>
+        </div>
+        <button type="button" role="switch" aria-checked={props.on} aria-label={r.title} className="ntf-switch" disabled={busy || props.disabled} onClick={() => void flip()}>
+          <span />
+        </button>
+      </div>
+      <ErrorBox message={error} />
     </div>
   );
 }

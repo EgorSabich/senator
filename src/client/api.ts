@@ -42,6 +42,7 @@ export interface Me {
     mustChangeSecret: boolean;
     tracksTime?: boolean;
     needsPin?: boolean;
+    remoteWork?: boolean;
   };
   locations: { id: string; name: string; permissions: string[] }[];
 }

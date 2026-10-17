@@ -5,6 +5,7 @@ import { MyTimeCard } from './MyTime';
 import { MyScheduleCard } from './Grafik';
 import { InstallCard } from './Install';
 import { PushGate } from './PushGate';
+import { RemoteCard } from './Remote';
 import { ModuleList, type ProgramView } from './Program';
 import { contentHref, Fold, Icon, Loading, Problem, useAcademy, useApi } from './shared';
 
@@ -85,6 +86,7 @@ export function Start() {
           <PushGate />
           {data.deadlines && <DeadlineNote d={data.deadlines} />}
           <InstallCard />
+          {me.user.remoteWork && <RemoteCard />}
           <TodayCard />
           <MyScheduleCard />
           <MyTimeCard />

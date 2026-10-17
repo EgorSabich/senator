@@ -138,7 +138,7 @@ authRoutes.get('/me', requireSession, async (c) => {
     for (const r of results) names.set(r.id, r.name);
   }
   // a manager paid by the hour must have a PIN for the time clock (Dostępy, 2026-10-17)
-  const t = user.role === 'manager' ? await c.env.DB.prepare(`SELECT tracks_time AS tt, pin_lookup AS pl FROM users WHERE id = ?`).bind(user.id).first<{ tt: number; pl: string | null }>() : null;
+  const t = user.role === 'manager' || user.role === 'employee' ? await c.env.DB.prepare(`SELECT tracks_time AS tt, pin_lookup AS pl, remote_work AS rw FROM users WHERE id = ?`).bind(user.id).first<{ tt: number; pl: string | null; rw: number }>() : null;
   return c.json({
     user: {
       id: user.id,
@@ -149,7 +149,8 @@ authRoutes.get('/me', requireSession, async (c) => {
       secretKind: user.secretKind,
       mustChangeSecret: user.mustChangeSecret,
       tracksTime: Boolean(t?.tt),
-      needsPin: Boolean(t?.tt && !t.pl),
+      needsPin: Boolean(user.role === 'manager' && t?.tt && !t.pl),
+      remoteWork: Boolean(user.role === 'employee' && t?.rw),
     },
     locations: ids.map((id) => ({ id, name: names.get(id) ?? '', permissions: [...access.locations.get(id)!] })),
   });

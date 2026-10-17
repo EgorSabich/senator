@@ -990,3 +990,8 @@ a.a-dish:hover {
   color: var(--accent);
   flex: none;
 }
+
+/* Praca zdalna (mockup 18) */
+.remote-now {
+  font-size: 17px;
+}
