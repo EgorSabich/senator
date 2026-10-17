@@ -114,7 +114,7 @@ describe('hourly rates and the employee card', () => {
     expect((await owner.req('PUT', `/api/admin/locations/${SENATOR}/users/${annaId}/rate`, { rate: -1 })).data.error).toBe('rate_invalid');
     const cal = await owner.get(`/api/admin/locations/${SENATOR}/time?from=${day(1)}&to=${day(0)}`);
     expect(cal.data.wages).toBe(true);
-    expect(cal.data.rates).toEqual(expect.arrayContaining([{ userId: annaId, rateGrosze: 3050, validFrom: '2026-01-01' }]));
+    expect(cal.data.rates).toEqual(expect.arrayContaining([{ userId: annaId, position: '', rateGrosze: 3050, validFrom: '2026-01-01' }]));
     const sum = await owner.get(`/api/admin/locations/${SENATOR}/users/${annaId}/summary`);
     expect(sum.status).toBe(200);
     expect(sum.data.rate.current).toBe(3050);

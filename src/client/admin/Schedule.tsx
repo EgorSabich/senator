@@ -334,9 +334,19 @@ export function Schedule() {
                         ) : (
                           <span className="name">{short(p)}</span>
                         )}
+                        {p.divisions.length > 1 && (
+                          <span className="sch-also">
+                            + {p.divisions
+                              .filter((x) => x !== g)
+                              .map((x) => (pl.admin.positions[x] ?? x).split(' ')[0])
+                              .join(', ')}
+                          </span>
+                        )}
                       </th>
                       {data.days.map((d) => {
                         const own = data.shifts.filter((s) => s.userId === p.id && s.date === d && s.division === g);
+                        // two positions (2026-10-17): the same day on the other position, so nobody plans an overlap
+                        const elsewhere = data.shifts.filter((s) => s.userId === p.id && s.date === d && s.division !== g && !s.deleted);
                         const off = data.unavailability.find((u) => u.userId === p.id && u.date === d);
                         const act = data.actual.filter((a) => a.userId === p.id && a.date === d);
                         return (
@@ -355,6 +365,11 @@ export function Schedule() {
                                   style={{ ['--c' as string]: shiftColor(s.startMin) }}
                                                 >
                                   {mode === 'month' ? `${compact(s.startMin)}–${compact(s.endMin)}` : range(s)}
+                                </span>
+                              ))}
+                              {elsewhere.map((s) => (
+                                <span key={s.id} className="sch-elsewhere" title={t.elsewhere(pl.admin.divisions[s.division] ?? s.division, range(s))}>
+                                  {(pl.admin.positions[s.division] ?? s.division).split(' ')[0]} {mode === 'month' ? `${compact(s.startMin)}–${compact(s.endMin)}` : range(s)}
                                 </span>
                               ))}
                               {off && !own.length && (

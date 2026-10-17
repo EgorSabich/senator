@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Klucze push — Senator Academy</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; background: #fff; color: #111; font: 16px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 26px; margin: 0 0 8px; }
+  p { margin: 0 0 12px; color: #333; }
+  .muted { color: #666; font-size: 14px; }
+  button { min-height: 44px; padding: 0 18px; border: 1px solid #111; border-radius: 10px; background: #111; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  button.ghost { background: #fff; color: #111; }
+  .key { margin: 18px 0 0; padding: 14px; border: 1px solid #ccc; border-radius: 12px; }
+  .key b { display: block; margin: 0 0 6px; }
+  code { display: block; word-break: break-all; padding: 10px; background: #f2f2f2; border-radius: 8px; font: 13px/1.5 ui-monospace, Menlo, monospace; margin: 0 0 8px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Klucze do powiadomień push</h1>
+  <p>Ten plik tworzy parę kluczy w Twojej przeglądarce. Nic nie jest wysyłane do internetu — działa także bez sieci.</p>
+  <p class="muted">Klucz prywatny wklej tylko w Cloudflare (Secrets). Nie wysyłaj go nikomu, także w czacie.</p>
+  <button id="go" type="button">Utwórz klucze</button>
+
+  <div id="out" class="hidden">
+    <div class="key">
+      <b>VAPID_PUBLIC_KEY</b>
+      <code id="pub"></code>
+      <button class="ghost" type="button" data-copy="pub">Kopiuj</button>
+    </div>
+    <div class="key">
+      <b>VAPID_PRIVATE_KEY</b>
+      <code id="priv"></code>
+      <button class="ghost" type="button" data-copy="priv">Kopiuj</button>
+    </div>
+    <div class="key">
+      <b>VAPID_SUBJECT</b>
+      <code>mailto:twój-adres@email.pl</code>
+      <span class="muted">Wpisz swój adres e-mail (służy tylko do kontaktu od Apple/Google w razie problemów).</span>
+    </div>
+    <p class="muted" style="margin-top:16px">Po wklejeniu w Cloudflare zamknij tę kartę. Klucze nie są nigdzie zapisane — jeśli je zgubisz, utwórz nowe (wtedy pracownicy raz jeszcze włączą powiadomienia).</p>
+  </div>
+</main>
+<script>
+  const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  document.getElementById('go').addEventListener('click', async () => {
+    if (!window.crypto || !crypto.subtle) {
+      alert('Ta przeglądarka nie potrafi tworzyć kluczy. Otwórz plik w Chrome, Safari lub Edge.');
+      return;
+    }
+    const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+    const pub = await crypto.subtle.exportKey('raw', pair.publicKey); // 65 bytes, uncompressed point
+    const jwk = await crypto.subtle.exportKey('jwk', pair.privateKey); // d = private scalar (base64url)
+    document.getElementById('pub').textContent = b64url(pub);
+    document.getElementById('priv').textContent = jwk.d;
+    document.getElementById('out').classList.remove('hidden');
+    document.getElementById('go').textContent = 'Utwórz nowe klucze';
+  });
+  document.addEventListener('click', async (e) => {
+    const id = e.target.getAttribute && e.target.getAttribute('data-copy');
+    if (!id) return;
+    const text = document.getElementById(id).textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const r = document.createRange();
+      r.selectNodeContents(document.getElementById(id));
+      const s = getSelection();
+      s.removeAllRanges();
+      s.addRange(r);
+      document.execCommand('copy');
+    }
+    e.target.textContent = 'Skopiowano';
+    setTimeout(() => (e.target.textContent = 'Kopiuj'), 1500);
+  });
+</script>
+</body>
+</html>

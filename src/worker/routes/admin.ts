@@ -217,20 +217,82 @@ adminRoutes.get('/locations/:locId/employees', async (c) => {
   requirePermission(access, locId, 'employees.view');
   const scope = allowedDivisions(access, locId);
   const now = Date.now();
+  // one row per person; several positions (2026-10-17) — `position` is the main one
   const { results } = await c.env.DB.prepare(
     `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName, u.login, u.role, u.status,
-            ul.position, ul.start_date AS startDate, u.last_login_at AS lastLoginAt,
-            CASE WHEN u.locked_until > ? THEN 1 ELSE 0 END AS locked
-     FROM user_locations ul JOIN users u ON u.id = ul.user_id
-     WHERE ul.location_id = ? AND u.status <> 'anonymized'
+            (SELECT p.position FROM user_locations p WHERE p.user_id = u.id AND p.location_id = ?2 ORDER BY p.is_primary DESC, p.created_at LIMIT 1) AS position,
+            (SELECT group_concat(x.position) FROM (SELECT p.position FROM user_locations p WHERE p.user_id = u.id AND p.location_id = ?2 ORDER BY p.is_primary DESC, p.created_at) x) AS positionsCsv,
+            (SELECT p.start_date FROM user_locations p WHERE p.user_id = u.id AND p.location_id = ?2 ORDER BY p.is_primary DESC, p.created_at LIMIT 1) AS startDate,
+            u.last_login_at AS lastLoginAt,
+            CASE WHEN u.locked_until > ?1 THEN 1 ELSE 0 END AS locked
+     FROM users u
+     WHERE u.status <> 'anonymized' AND EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?2)
      ORDER BY u.last_name, u.first_name`,
   )
     .bind(now, locId)
-    .all<{ position: string; role: string }>();
+    .all<{ position: string; role: string; positionsCsv: string | null }>();
   // D44: a chef sees the kitchen, a floor manager the floor… (managers themselves only for unscoped people)
   // leaders are listed in "Kadra kierownicza", not among the staff (owner, 2026-10-17)
-  const staff = results.filter((r) => r.role === 'employee');
-  return c.json({ employees: scope ? staff.filter((r) => scope.has(r.position)) : staff, divisions: scope ? [...(access.divisions.get(locId) ?? [])] : null });
+  const staff = results
+    .filter((r) => r.role === 'employee')
+    .map(({ positionsCsv, ...r }) => ({ ...r, positions: positionsCsv ? positionsCsv.split(',') : [r.position] }));
+  return c.json({ employees: scope ? staff.filter((r) => r.positions.some((p) => scope.has(p))) : staff, divisions: scope ? [...(access.divisions.get(locId) ?? [])] : null });
+});
+
+/**
+ * Positions of a person (owner, 2026-10-17): add, remove, choose the main one. A leader changes only positions of their
+ * divisions; others stay as they are. At least one position stays; time and rates history is kept.
+ */
+adminRoutes.put('/locations/:locId/users/:id/positions', async (c) => {
+  const locId = c.req.param('locId');
+  const db = c.env.DB;
+  const access = await loadAccess(db, c.var.user);
+  requirePermission(access, locId, 'employees.manage');
+  const target = await requireManageableUser(db, access, c.req.param('id'), 'employees.manage');
+  if (target.role !== 'employee') throw notFound();
+  const body = await readJson<{ positions?: unknown; primary?: unknown }>(c.req.raw);
+  if (!Array.isArray(body.positions) || !body.positions.length || body.positions.length > 6) throw badRequest('positions_invalid');
+  const wanted = new Map<string, string | null>();
+  for (const p of body.positions as unknown[]) {
+    const pos = (p as { position?: unknown })?.position;
+    const start = (p as { startDate?: unknown })?.startDate;
+    if (typeof pos !== 'string' || !(POSITIONS as readonly string[]).includes(pos)) throw badRequest('positions_invalid');
+    if (start !== undefined && start !== null && !isIsoDate(start)) throw badRequest('invalid_input');
+    wanted.set(pos, (start as string | null | undefined) ?? null);
+  }
+  const primary = typeof body.primary === 'string' && wanted.has(body.primary) ? body.primary : [...wanted.keys()][0]!;
+  const { results: current } = await db
+    .prepare(`SELECT id, position, start_date AS startDate FROM user_locations WHERE user_id = ? AND location_id = ?`)
+    .bind(target.id, locId)
+    .all<{ id: string; position: string; startDate: string | null }>();
+  const scope = allowedDivisions(access, locId);
+  const mayTouch = (p: string) => !scope || scope.has(p);
+  for (const cur of current) if (!wanted.has(cur.position) && !mayTouch(cur.position)) wanted.set(cur.position, cur.startDate); // not theirs: keep
+  for (const p of wanted.keys()) if (!current.some((x) => x.position === p) && !mayTouch(p)) throw new ApiError(403, 'outside_divisions');
+  if (!mayTouch(primary) && !current.some((x) => x.position === primary)) throw new ApiError(403, 'outside_divisions');
+  const statements: D1PreparedStatement[] = [];
+  for (const cur of current) if (!wanted.has(cur.position)) statements.push(db.prepare(`DELETE FROM user_locations WHERE id = ?`).bind(cur.id));
+  for (const [p, start] of wanted) {
+    const cur = current.find((x) => x.position === p);
+    if (cur) statements.push(db.prepare(`UPDATE user_locations SET start_date = ?, is_primary = ? WHERE id = ?`).bind(start ?? cur.startDate, p === primary ? 1 : 0, cur.id));
+    else
+      statements.push(
+        db.prepare(`INSERT INTO user_locations (id, user_id, location_id, position, start_date, is_primary) VALUES (?, ?, ?, ?, ?, ?)`).bind(newId('ul'), target.id, locId, p, start, p === primary ? 1 : 0),
+      );
+  }
+  statements.push(
+    auditStatement(db, {
+      actorId: c.var.user.id,
+      locationId: locId,
+      action: 'user.positions',
+      entityType: 'user',
+      entityId: target.id,
+      before: { positions: current.map((x) => x.position) },
+      after: { positions: [...wanted.keys()], primary },
+    }),
+  );
+  await db.batch(statements);
+  return c.json({ ok: true, positions: [...wanted.keys()], primary });
 });
 
 adminRoutes.post('/locations/:locId/employees', async (c) => {
@@ -262,7 +324,7 @@ adminRoutes.post('/locations/:locId/employees', async (c) => {
       )
       .bind(id, firstName, lastName, login, hash, salt),
     db
-      .prepare(`INSERT INTO user_locations (id, user_id, location_id, position, start_date) VALUES (?, ?, ?, ?, ?)`)
+      .prepare(`INSERT INTO user_locations (id, user_id, location_id, position, start_date, is_primary) VALUES (?, ?, ?, ?, ?, 1)`)
       .bind(newId('ul'), id, locId, position, (body.startDate as string | undefined) ?? null),
     auditStatement(db, {
       actorId: c.var.user.id,
@@ -440,7 +502,7 @@ adminRoutes.post('/managers', async (c) => {
       )
       .bind(id, firstName, lastName, login, hash, salt),
     db
-      .prepare(`INSERT INTO user_locations (id, user_id, location_id, position) VALUES (?, ?, ?, 'shift_manager')`)
+      .prepare(`INSERT INTO user_locations (id, user_id, location_id, position, is_primary) VALUES (?, ?, ?, 'shift_manager', 1)`)
       .bind(newId('ul'), id, locationId),
     ...permissions.map((p) =>
       db

@@ -92,7 +92,7 @@ with sync_playwright() as pw:
     # rate in the employee card (opens under the name)
     zid=emps[0][0]["id"]
     o.goto(BASE+f"/panel/pracownicy/{zid}"); o.get_by_text("Lekcje przeczytane").wait_for(); o.wait_for_timeout(600)
-    o.get_by_label("Nowa stawka (zł/h)").fill("32,50"); o.get_by_label("Obowiązuje od").fill("2026-01-01"); o.get_by_role("button", name="Zapisz stawkę").click()
+    o.locator(".emp-pos").first.get_by_role("button", name="Stawka").click(); o.get_by_label(re.compile("Nowa stawka")).fill("32,50"); o.get_by_label("Obowiązuje od").fill("2026-01-01"); o.get_by_role("button", name="Zapisz stawkę").click()
     o.get_by_text("32,50 zł / h").wait_for(); o.wait_for_timeout(500); o.screenshot(path=f"{OUT}/15b-employee-card.png", full_page=True)
     o.goto(BASE+"/panel/czas"); o.get_by_text("Teraz na zmianie").wait_for(); o.wait_for_timeout(900); o.screenshot(path=f"{OUT}/15c-panel-costs.png", full_page=True)
     o.goto(BASE+"/panel/listy"); o.get_by_text("Lista kontrolna zamknięcia").first.wait_for(); o.wait_for_timeout(700); o.screenshot(path=f"{OUT}/16-panel-checklists.png", full_page=True)

@@ -92,6 +92,8 @@ export const userLocations = sqliteTable(
     position: text('position').notNull(),
     startDate: text('start_date'), // ISO date YYYY-MM-DD
     isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+    /** 2026-10-17: a person may hold several positions; the main one groups them in lists and prices unplanned shifts. */
+    isPrimary: integer('is_primary', { mode: 'boolean' }).notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('user_locations_uq').on(t.userId, t.locationId, t.position), index('user_locations_loc_idx').on(t.locationId)],
@@ -547,6 +549,8 @@ export const timeEntries = sqliteTable(
     inTerminalId: text('in_terminal_id'),
     outTerminalId: text('out_terminal_id'),
     note: text('note'),
+    /** 2026-10-17: position set by a manager; otherwise taken from the schedule, else the main position */
+    position: text('position'),
     editedBy: text('edited_by').references(() => users.id),
     editedAt: integer('edited_at'),
     createdAt: createdAt(),
@@ -626,11 +630,13 @@ export const payRates = sqliteTable(
     locationId: text('location_id').notNull().references(() => locations.id),
     /** grosze per hour (PLN × 100) */
     rateGrosze: integer('rate_grosze').notNull(),
+    /** 2026-10-17: '' = every position (rates entered before), otherwise the position this rate is for */
+    position: text('position').notNull().default(''),
     validFrom: text('valid_from').notNull(),
     createdBy: text('created_by').references(() => users.id),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex('pay_rates_uq').on(t.userId, t.locationId, t.validFrom), index('pay_rates_loc_idx').on(t.locationId)],
+  (t) => [uniqueIndex('pay_rates_uq').on(t.userId, t.locationId, t.position, t.validFrom), index('pay_rates_loc_idx').on(t.locationId)],
 );
 
 /**

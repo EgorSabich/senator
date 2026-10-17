@@ -13,6 +13,7 @@ import { generateTempPassword, hashSecret } from '../auth/crypto';
 import { revokeUserSessions } from '../auth/session';
 import { loadAccess, requirePermission, scopedUserIds, userInScope, type Access } from '../auth/access';
 import { MANDATORY_KINDS, progressFor, visibleContent } from '../lib/learning';
+import { entryPositions, positionsAt, rateFor, type RateRow } from '../lib/positions';
 
 export const timeAdminRoutes = new Hono<AppEnv>();
 
@@ -28,11 +29,12 @@ interface EntryRow {
   note: string | null;
   editedAt: number | null;
   editedByName: string | null;
+  position?: string | null;
 }
 
 const ENTRY_SELECT = `SELECT e.id, e.location_id AS locationId, e.user_id AS userId, e.business_date AS businessDate,
   e.clock_in_at AS clockInAt, e.clock_out_at AS clockOutAt, e.in_source AS inSource, e.out_source AS outSource, e.note,
-  e.edited_at AS editedAt, CASE WHEN ed.id IS NULL THEN NULL ELSE ed.first_name || ' ' || ed.last_name END AS editedByName
+  e.edited_at AS editedAt, e.position, CASE WHEN ed.id IS NULL THEN NULL ELSE ed.first_name || ' ' || ed.last_name END AS editedByName
   FROM time_entries e LEFT JOIN users ed ON ed.id = e.edited_by`;
 
 /** Calendar: people of the location × days, with every shift in the range. */
@@ -52,7 +54,8 @@ timeAdminRoutes.get('/locations/:locId/time', async (c) => {
     db
       .prepare(
         `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName, u.role, u.status,
-                (SELECT ul.position FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?1 ORDER BY ul.is_active DESC LIMIT 1) AS position
+                (SELECT ul.position FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?1 ORDER BY ul.is_active DESC, ul.is_primary DESC LIMIT 1) AS position,
+                (SELECT group_concat(ul.position) FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?1) AS positions
          FROM users u
          WHERE u.role = 'employee' AND u.status <> 'anonymized' AND (
            (u.status = 'active' AND EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?1 AND ul.is_active = 1))
@@ -70,9 +73,9 @@ timeAdminRoutes.get('/locations/:locId/time', async (c) => {
   const rates = wages
     ? (
         await db
-          .prepare(`SELECT user_id AS userId, rate_grosze AS rateGrosze, valid_from AS validFrom FROM pay_rates WHERE location_id = ? ORDER BY valid_from`)
+          .prepare(`SELECT user_id AS userId, position, rate_grosze AS rateGrosze, valid_from AS validFrom FROM pay_rates WHERE location_id = ? ORDER BY valid_from`)
           .bind(locId)
-          .all<{ userId: string; rateGrosze: number; validFrom: string }>()
+          .all<{ userId: string; position: string; rateGrosze: number; validFrom: string }>()
       ).results
     : [];
   // D43: the published plan, to compare with the real times
@@ -84,6 +87,10 @@ timeAdminRoutes.get('/locations/:locId/time', async (c) => {
     .bind(locId, from, last)
     .all<{ userId: string; date: string; startMin: number; endMin: number }>();
   const mine = <T extends { userId?: string; id?: string }>(rows: T[], key: 'userId' | 'id' = 'userId') => (scope ? rows.filter((r) => scope.has(String(r[key]))) : rows);
+  // 2026-10-17: every entry says which position it was worked on (pay by that position's rate)
+  const allEntries = [...(entries!.results as EntryRow[]), ...stale.results];
+  const posOf = await entryPositions(db, locId, allEntries);
+  const withPos = (rows: EntryRow[]) => rows.map((e) => ({ ...e, position: posOf.get(e.id) ?? null, positionSet: e.position ?? null }));
   return c.json({
     days,
     now: Date.now(),
@@ -92,8 +99,8 @@ timeAdminRoutes.get('/locations/:locId/time', async (c) => {
     rates: mine(rates),
     ...(await locationRules(db, locId)),
     people: mine(people!.results as { id: string }[], 'id'),
-    entries: mine(entries!.results as { userId: string }[]),
-    openBefore: mine(stale.results),
+    entries: mine(withPos(entries!.results as EntryRow[])),
+    openBefore: mine(withPos(stale.results)),
   });
 });
 
@@ -171,21 +178,30 @@ async function loadEntry(c: { env: AppEnv['Bindings']; var: AppEnv['Variables'] 
 timeAdminRoutes.put('/time/entries/:id', async (c) => {
   const db = c.env.DB;
   const e = await loadEntry(c, c.req.param('id'));
-  const body = await readJson<{ clockInAt?: unknown; clockOutAt?: unknown; note?: unknown }>(c.req.raw);
+  const body = await readJson<{ clockInAt?: unknown; clockOutAt?: unknown; note?: unknown; position?: unknown }>(c.req.raw);
   const { inAt, outAt } = parseTimes(body);
   if (await overlaps(db, e.userId, inAt, outAt, e.id)) throw new ApiError(409, 'time_overlap');
   const note = body.note === undefined ? e.note : str(body.note, 300);
+  let position = (e as { position?: string | null }).position ?? null;
+  if (body.position !== undefined) {
+    if (body.position === null || body.position === '') position = null;
+    else {
+      const mine = (await positionsAt(db, e.locationId)).get(e.userId);
+      if (typeof body.position !== 'string' || !mine?.positions.includes(body.position)) throw badRequest('position_invalid');
+      position = body.position;
+    }
+  }
   const { dayStartHour } = await locationRules(db, e.locationId);
   const now = Date.now();
   await db.batch([
     db
       .prepare(
-        `UPDATE time_entries SET clock_in_at = ?, clock_out_at = ?, business_date = ?, note = ?,
+        `UPDATE time_entries SET clock_in_at = ?, clock_out_at = ?, business_date = ?, note = ?, position = ?,
            in_source = CASE WHEN clock_in_at = ? THEN in_source ELSE 'manual' END,
            out_source = CASE WHEN ? IS NULL THEN NULL WHEN clock_out_at = ? THEN out_source ELSE 'manual' END,
            edited_by = ?, edited_at = ? WHERE id = ?`,
       )
-      .bind(inAt, outAt, businessDate(inAt, dayStartHour), note, inAt, outAt, outAt, c.var.user.id, now, e.id),
+      .bind(inAt, outAt, businessDate(inAt, dayStartHour), note, position, inAt, outAt, outAt, c.var.user.id, now, e.id),
     auditStatement(db, {
       actorId: c.var.user.id,
       locationId: e.locationId,
@@ -193,7 +209,7 @@ timeAdminRoutes.put('/time/entries/:id', async (c) => {
       entityType: 'time_entry',
       entityId: e.id,
       before: { clockInAt: e.clockInAt, clockOutAt: e.clockOutAt, note: e.note },
-      after: { clockInAt: inAt, clockOutAt: outAt, note },
+      after: { clockInAt: inAt, clockOutAt: outAt, note, position },
     }),
   ]);
   return c.json({ ok: true });
@@ -355,7 +371,7 @@ async function employeeOf(db: D1Database, userId: string, locId: string) {
   return db
     .prepare(
       `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName,
-              (SELECT ul.position FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ? ORDER BY ul.is_active DESC LIMIT 1) AS position
+              (SELECT ul.position FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ? ORDER BY ul.is_active DESC, ul.is_primary DESC LIMIT 1) AS position
        FROM users u WHERE u.id = ? AND u.status <> 'anonymized'
          AND EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?)`,
     )
@@ -370,7 +386,10 @@ timeAdminRoutes.put('/locations/:locId/users/:id/rate', async (c) => {
   requirePermission(access, locId, 'wages.manage');
   const person = await employeeOf(db, c.req.param('id'), locId);
   if (!person || !(await userInScope(db, access, locId, person.id))) throw notFound();
-  const body = await readJson<{ rate?: unknown; validFrom?: unknown }>(c.req.raw);
+  const body = await readJson<{ rate?: unknown; validFrom?: unknown; position?: unknown }>(c.req.raw);
+  // 2026-10-17: a rate per position ('' = every position)
+  const position = body.position === undefined || body.position === null ? '' : body.position;
+  if (typeof position !== 'string' || (position !== '' && !(await positionsAt(db, locId)).get(person.id)?.positions.includes(position))) throw badRequest('position_invalid');
   const rate = typeof body.rate === 'number' ? body.rate : typeof body.rate === 'string' ? Number(body.rate.replace(',', '.')) : NaN;
   if (!Number.isFinite(rate) || rate < 0 || rate > 10_000) throw badRequest('rate_invalid');
   const validFrom = body.validFrom === undefined ? businessDate(Date.now(), (await locationRules(db, locId)).dayStartHour) : body.validFrom;
@@ -379,11 +398,11 @@ timeAdminRoutes.put('/locations/:locId/users/:id/rate', async (c) => {
   await db.batch([
     db
       .prepare(
-        `INSERT INTO pay_rates (id, user_id, location_id, rate_grosze, valid_from, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (user_id, location_id, valid_from) DO UPDATE SET rate_grosze = excluded.rate_grosze, created_by = excluded.created_by, created_at = excluded.created_at`,
+        `INSERT INTO pay_rates (id, user_id, location_id, position, rate_grosze, valid_from, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (user_id, location_id, position, valid_from) DO UPDATE SET rate_grosze = excluded.rate_grosze, created_by = excluded.created_by, created_at = excluded.created_at`,
       )
-      .bind(newId('rate'), person.id, locId, grosze, validFrom, c.var.user.id, Date.now()),
-    auditStatement(db, { actorId: c.var.user.id, locationId: locId, action: 'user.rate', entityType: 'user', entityId: person.id, after: { rateGrosze: grosze, validFrom } }),
+      .bind(newId('rate'), person.id, locId, position, grosze, validFrom, c.var.user.id, Date.now()),
+    auditStatement(db, { actorId: c.var.user.id, locationId: locId, action: 'user.rate', entityType: 'user', entityId: person.id, after: { rateGrosze: grosze, validFrom, position: position || null } }),
   ]);
   return c.json({ ok: true });
 });
@@ -397,9 +416,9 @@ timeAdminRoutes.get('/locations/:locId/users/:id/summary', async (c) => {
   const person = await employeeOf(db, c.req.param('id'), locId);
   if (!person || !(await userInScope(db, access, locId, person.id))) throw notFound();
   const { results: posRows } = await db
-    .prepare(`SELECT position FROM user_locations WHERE user_id = ? AND location_id = ?`)
+    .prepare(`SELECT position, start_date AS startDate, is_primary AS isPrimary FROM user_locations WHERE user_id = ? AND location_id = ? ORDER BY is_primary DESC, created_at`)
     .bind(person.id, locId)
-    .all<{ position: string }>();
+    .all<{ position: string; startDate: string | null; isPrimary: number }>();
   const positions = posRows.map((r) => r.position);
 
   const items = await visibleContent(db, locId, positions);
@@ -415,18 +434,23 @@ timeAdminRoutes.get('/locations/:locId/users/:id/summary', async (c) => {
   const prevMonth = d.toISOString().slice(0, 7);
   const { results: entries } = await db
     .prepare(
-      `SELECT business_date AS date, clock_in_at AS inAt, clock_out_at AS outAt FROM time_entries
+      `SELECT id, business_date AS date, clock_in_at AS inAt, clock_out_at AS outAt, position FROM time_entries
        WHERE user_id = ? AND location_id = ? AND business_date >= ? ORDER BY clock_in_at`,
     )
     .bind(person.id, locId, prevMonth + '-01')
-    .all<{ date: string; inAt: number; outAt: number | null }>();
+    .all<{ id: string; date: string; inAt: number; outAt: number | null; position: string | null }>();
+  const posOf = await entryPositions(
+    db,
+    locId,
+    entries.map((e) => ({ id: e.id, userId: person.id, businessDate: e.date, clockInAt: e.inAt, position: e.position })),
+  );
   const wages = Boolean(access.locations.get(locId)?.has('wages.manage'));
   const rates = wages
     ? (
         await db
-          .prepare(`SELECT rate_grosze AS rateGrosze, valid_from AS validFrom FROM pay_rates WHERE user_id = ? AND location_id = ? ORDER BY valid_from`)
+          .prepare(`SELECT position, rate_grosze AS rateGrosze, valid_from AS validFrom FROM pay_rates WHERE user_id = ? AND location_id = ? ORDER BY valid_from`)
           .bind(person.id, locId)
-          .all<{ rateGrosze: number; validFrom: string }>()
+          .all<RateRow>()
       ).results
     : [];
   const month = (m: string) => {
@@ -438,7 +462,7 @@ timeAdminRoutes.get('/locations/:locId/users/:id/summary', async (c) => {
       if (!e.outAt) continue;
       const mins = (e.outAt - e.inAt) / 60000;
       minutes += mins;
-      const r = rateOn(rates, e.date);
+      const r = rateFor(rates, posOf.get(e.id) ?? null, e.date);
       if (r === null) missingRate = true;
       else cost += (mins / 60) * r;
     }
@@ -454,6 +478,19 @@ timeAdminRoutes.get('/locations/:locId/users/:id/summary', async (c) => {
     },
     hours: { thisMonth: month(thisMonth), prevMonth: month(prevMonth) },
     wages,
-    rate: wages ? { current: rateOn(rates, today), history: rates } : null,
+    rate: wages ? { current: rateFor(rates, posRows[0]?.position ?? null, today), history: rates } : null,
+    // 2026-10-17: positions with their own rates
+    positions: posRows.map((p) => ({
+      position: p.position,
+      startDate: p.startDate,
+      primary: Boolean(p.isPrimary),
+      ...(wages
+        ? {
+            rate: rateFor(rates, p.position, today),
+            ownRate: rates.some((r) => r.position === p.position),
+            history: rates.filter((r) => r.position === p.position || r.position === ''),
+          }
+        : {}),
+    })),
   });
 });

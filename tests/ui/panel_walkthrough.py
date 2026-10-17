@@ -33,6 +33,7 @@ with sync_playwright() as p:
     page.get_by_role("heading", name="Dziś", exact=True).wait_for()
 
     # add employee
+    page.goto(BASE + "/panel/pracownicy")
     page.get_by_role("button", name="Dodaj pracownika").first.click()
     page.get_by_label("Imię").fill("Anna")
     page.get_by_label("Nazwisko").fill("Kowalska")
@@ -98,11 +99,11 @@ with sync_playwright() as p:
     page.get_by_role("link", name="Materiały").first.click()
     page.wait_for_timeout(500)
     shot(page, "10-content-list")
-    page.get_by_role("link", name="Menedżerowie").first.click()
-    page.get_by_role("button", name="Dodaj menedżera").click()
+    page.get_by_role("link", name="Kadra").first.click()
+    page.get_by_role("button", name="Dodaj osobę").click()
     page.get_by_label("Imię").fill("Marek")
     page.get_by_label("Nazwisko").fill("Nowak")
-    page.get_by_role("dialog").get_by_role("button", name="Dodaj menedżera").click()
+    page.get_by_role("dialog").get_by_role("button", name="Dodaj osobę").click()
     page.get_by_role("button", name="Zamknij").click()
     page.wait_for_timeout(400)
     shot(page, "11-managers")

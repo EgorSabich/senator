@@ -18,6 +18,7 @@ interface Employee {
   role: string;
   status: 'active' | 'inactive';
   position: string;
+  positions: string[];
   startDate: string | null;
   lastLoginAt: number | null;
   locked: number;
@@ -64,12 +65,12 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
     return (list ?? [])
       .filter((e) => (filter === 'all' ? true : filter === 'active' ? e.status === 'active' : filter === 'inactive' ? e.status === 'inactive' : e.locked === 1))
       .filter((e) => !q || foldPolish(`${e.firstName} ${e.lastName} ${e.login}`).includes(q))
-      .filter((e) => !positions.length || positions.includes(e.position))
+      .filter((e) => !positions.length || positions.some((p) => (e.positions ?? [e.position]).includes(p)))
       .sort(
         (a, b) => (byPosition ? posRank(a.position) - posRank(b.position) : 0) || comparePl(`${a.lastName} ${a.firstName}`, `${b.lastName} ${b.firstName}`),
       );
   }, [list, query, filter, positions, byPosition]);
-  const presentPositions = useMemo(() => [...new Set((list ?? []).map((e) => e.position))].sort((a, b) => posRank(a) - posRank(b)), [list]);
+  const presentPositions = useMemo(() => [...new Set((list ?? []).flatMap((e) => e.positions ?? [e.position]))].sort((a, b) => posRank(a) - posRank(b)), [list]);
 
   const selected = list?.find((e) => e.id === selectedId) ?? null;
   useScrollIntoView(list ? selectedId : null);
@@ -199,7 +200,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                   aria-pressed={positions.includes(p)}
                   onClick={() => setPositions(positions.includes(p) ? positions.filter((x) => x !== p) : [...positions, p])}
                 >
-                  {pl.admin.positions[p] ?? p} · {(list ?? []).filter((e) => e.position === p).length}
+                  {pl.admin.positions[p] ?? p} · {(list ?? []).filter((e) => (e.positions ?? [e.position]).includes(p)).length}
                 </button>
               ))}
             </div>
@@ -243,7 +244,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                     <StatusBadge e={e} />
                   </span>
                   <span className="muted" style={{ fontSize: 12 }}>
-                    {pl.admin.positions[e.position] ?? e.position} · {e.login}
+                    {(e.positions ?? [e.position]).map((p) => pl.admin.positions[p] ?? p).join(' + ')} · {e.login}
                   </span>
                 </button>
                 <div className="emp-detail" inert={e.id !== selectedId}>
@@ -283,7 +284,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                           <Stat label={t.login} value={e.login} />
                           <Stat label={t.lastLogin} value={e.lastLoginAt ? formatDateTime(e.lastLoginAt) : t.never} />
                         </dl>
-                        {e.role === 'employee' && <Summary key={e.id} userId={e.id} locationId={locationId} />}
+                        {e.role === 'employee' && <Summary key={e.id} userId={e.id} locationId={locationId} canManage={canManage} allowed={POSITIONS.filter((p) => !divisions || divisions.includes(p))} />}
                         {canManage && e.id !== me.user.id && (e.role === 'employee' || (isOwner && e.role === 'manager')) && (
                           <div className="btn-row">
                             {e.status === 'active' && (
@@ -506,18 +507,16 @@ interface SummaryData {
   hours: Record<'thisMonth' | 'prevMonth', { month: string; minutes: number; shifts: number; open: number; costGrosze?: number; missingRate?: boolean }>;
   wages: boolean;
   rate: { current: number | null; history: { rateGrosze: number; validFrom: string }[] } | null;
+  positions: { position: string; startDate: string | null; primary: boolean; rate?: number | null; ownRate?: boolean; history?: { position: string; rateGrosze: number; validFrom: string }[] }[];
 }
 
 const monthName = (m: string) => new Intl.DateTimeFormat('pl-PL', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(m + '-15T12:00:00Z'));
 
 /** Training progress, hours of this and last month, hourly rate (D37). */
-function Summary({ userId, locationId }: { userId: string; locationId: string }) {
+function Summary({ userId, locationId, canManage, allowed }: { userId: string; locationId: string; canManage: boolean; allowed: string[] }) {
   const s = pl.admin.employees.summary;
   const [data, setData] = useState<SummaryData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [rate, setRate] = useState('');
-  const [from, setFrom] = useState(businessDate(Date.now()));
-  const [saved, setSaved] = useState(false);
   const load = useCallback(async () => {
     try {
       setData(await api<SummaryData>(`/api/admin/locations/${locationId}/users/${userId}/summary`));
@@ -528,20 +527,6 @@ function Summary({ userId, locationId }: { userId: string; locationId: string })
   useEffect(() => {
     void load();
   }, [load]);
-
-  async function saveRate(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSaved(false);
-    try {
-      await api(`/api/admin/locations/${locationId}/users/${userId}/rate`, { method: 'PUT', body: { rate, validFrom: from } });
-      setRate('');
-      setSaved(true);
-      await load();
-    } catch (err) {
-      setError(errorText(err instanceof ApiFailure ? err.code : 'generic'));
-    }
-  }
 
   if (!data) return error ? <ErrorBox message={error} /> : <LogoLoader />;
   const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
@@ -612,46 +597,7 @@ function Summary({ userId, locationId }: { userId: string; locationId: string })
           {s.allConfirmed}
         </span>
       ) : null}
-      {data.rate && (
-        <form className="emp-rate" onSubmit={saveRate}>
-          <div className="emp-stat" style={{ flex: '1 1 160px' }}>
-            <span className="k">{s.rate}</span>
-            <span className="v">{data.rate.current === null ? s.noRate : `${formatMoney(data.rate.current)} / h`}</span>
-            {data.rate.history.length > 1 && (
-              <span className="sub">
-                {s.history}:{' '}
-                {data.rate.history
-                  .slice(-3)
-                  .map((r) => `${formatMoney(r.rateGrosze)} ${s.from} ${r.validFrom}`)
-                  .join(' · ')}
-              </span>
-            )}
-          </div>
-          <div className="field" style={{ flex: '1 1 120px' }}>
-            <label htmlFor={`rate-${userId}`}>{s.newRate}</label>
-            <input
-              id={`rate-${userId}`}
-              inputMode="decimal"
-              value={rate}
-              onChange={(e) => setRate(e.target.value.replace(/[^0-9.,]/g, ''))}
-              placeholder="np. 32,50"
-            />
-          </div>
-          <div className="field" style={{ flex: '1 1 150px' }}>
-            <label htmlFor={`rate-from-${userId}`}>{s.validFrom}</label>
-            <input id={`rate-from-${userId}`} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <Btn kind="primary" type="submit" disabled={!rate || !from}>
-            {s.saveRate}
-          </Btn>
-          {saved && (
-            <span className="muted" style={{ fontSize: 13, alignSelf: 'center' }}>
-              {s.saved}
-            </span>
-          )}
-          {error && <ErrorBox message={error} />}
-        </form>
-      )}
+      <Positions data={data} userId={userId} locationId={locationId} canManage={canManage} allowed={allowed} onChanged={load} />
     </div>
   );
 }
@@ -676,4 +622,157 @@ export function useScrollIntoView(id: string | null) {
       clearTimeout(b);
     };
   }, [id]);
+}
+
+/** Positions of a person with their own rates (owner, 2026-10-17). */
+function Positions(props: { data: SummaryData; userId: string; locationId: string; canManage: boolean; allowed: string[]; onChanged: () => Promise<void> }) {
+  const s = pl.admin.employees.positionsCard;
+  const { data } = props;
+  const [error, setError] = useState<string | null>(null);
+  const [rateFor, setRateFor] = useState<string | null>(null);
+  const [rate, setRate] = useState('');
+  const [from, setFrom] = useState(businessDate(Date.now()));
+  const [adding, setAdding] = useState(false);
+  const [newPos, setNewPos] = useState('');
+  const [newStart, setNewStart] = useState(businessDate(Date.now()));
+  const [busy, setBusy] = useState(false);
+  const list = data.positions;
+  const primary = list.find((p) => p.primary)?.position ?? list[0]?.position;
+  const free = props.allowed.filter((p) => !list.some((x) => x.position === p));
+  const canTouch = (p: string) => props.canManage && props.allowed.includes(p);
+
+  async function run(fn: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      await props.onChanged();
+      return true;
+    } catch (e) {
+      setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+  const save = (positions: { position: string; startDate: string | null }[], main: string | undefined) =>
+    run(() => api(`/api/admin/locations/${props.locationId}/users/${props.userId}/positions`, { method: 'PUT', body: { positions, primary: main } }));
+  const current = () => list.map((p) => ({ position: p.position, startDate: p.startDate }));
+
+  return (
+    <div className="emp-positions">
+      <div className="label">{s.title}</div>
+      <div className="emp-pos-list">
+        {list.map((p) => (
+          <div key={p.position} className="emp-pos">
+            <div className="emp-pos-main">
+              <span className="emp-pos-name">
+                {pl.admin.positions[p.position] ?? p.position}
+                {p.primary && list.length > 1 && <span className="badge neutral">{s.primary}</span>}
+              </span>
+              <span className="muted" style={{ fontSize: 12 }}>
+                {[p.startDate ? s.since(p.startDate) : null, data.wages ? (p.rate == null ? s.noRate : `${formatMoney(p.rate)} / h${p.ownRate ? '' : ` · ${s.commonRate}`}`) : null]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            </div>
+            <div className="btn-row">
+              {canTouch(p.position) && !p.primary && list.length > 1 && (
+                <Btn disabled={busy} onClick={() => void save(current(), p.position)}>
+                  {s.makePrimary}
+                </Btn>
+              )}
+              {data.wages && (
+                <Btn disabled={busy} onClick={() => (setRateFor(rateFor === p.position ? null : p.position), setRate(''))}>
+                  {s.rate}
+                </Btn>
+              )}
+              {canTouch(p.position) && list.length > 1 && (
+                <Btn
+                  kind="danger"
+                  disabled={busy}
+                  onClick={() =>
+                    window.confirm(s.confirmRemove(pl.admin.positions[p.position] ?? p.position)) &&
+                    void save(
+                      current().filter((x) => x.position !== p.position),
+                      p.primary ? list.find((x) => x.position !== p.position)?.position : primary,
+                    )
+                  }
+                >
+                  {s.remove}
+                </Btn>
+              )}
+            </div>
+            {rateFor === p.position && (
+              <form
+                className="emp-rate"
+                onSubmit={async (e: FormEvent) => {
+                  e.preventDefault();
+                  if (await run(() => api(`/api/admin/locations/${props.locationId}/users/${props.userId}/rate`, { method: 'PUT', body: { rate, validFrom: from, position: p.position } }))) setRateFor(null);
+                }}
+              >
+                <div className="field" style={{ flex: '1 1 120px' }}>
+                  <label htmlFor={`rate-${p.position}`}>{s.newRate(pl.admin.positions[p.position] ?? p.position)}</label>
+                  <input id={`rate-${p.position}`} inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value.replace(/[^0-9.,]/g, ''))} placeholder="np. 32,50" />
+                </div>
+                <div className="field" style={{ flex: '1 1 150px' }}>
+                  <label htmlFor={`rate-from-${p.position}`}>{pl.admin.employees.summary.validFrom}</label>
+                  <input id={`rate-from-${p.position}`} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+                </div>
+                <Btn kind="primary" type="submit" disabled={busy || !rate || !from}>
+                  {pl.admin.employees.summary.saveRate}
+                </Btn>
+                {p.history && p.history.length > 0 && (
+                  <span className="muted" style={{ fontSize: 12, flexBasis: '100%' }}>
+                    {pl.admin.employees.summary.history}:{' '}
+                    {p.history
+                      .slice(-4)
+                      .map((r) => `${formatMoney(r.rateGrosze)} ${pl.admin.employees.summary.from} ${r.validFrom}${r.position ? '' : ` (${s.commonRate})`}`)
+                      .join(' · ')}
+                  </span>
+                )}
+              </form>
+            )}
+          </div>
+        ))}
+      </div>
+      {props.canManage && free.length > 0 && !adding && (
+        <div>
+          <Btn onClick={() => (setAdding(true), setNewPos(free[0]!))}>{s.add}</Btn>
+        </div>
+      )}
+      {adding && (
+        <form
+          className="emp-rate"
+          onSubmit={async (e: FormEvent) => {
+            e.preventDefault();
+            if (await save([...current(), { position: newPos, startDate: newStart || null }], primary)) setAdding(false);
+          }}
+        >
+          <div className="field" style={{ flex: '1 1 160px' }}>
+            <label htmlFor="new-pos">{s.position}</label>
+            <select id="new-pos" value={newPos} onChange={(e) => setNewPos(e.target.value)}>
+              {free.map((p) => (
+                <option key={p} value={p}>
+                  {pl.admin.positions[p] ?? p}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field" style={{ flex: '1 1 150px' }}>
+            <label htmlFor="new-pos-start">{s.startDate}</label>
+            <input id="new-pos-start" type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
+          </div>
+          <Btn kind="primary" type="submit" disabled={busy || !newPos}>
+            {s.addShort}
+          </Btn>
+          <Btn onClick={() => setAdding(false)}>{pl.admin.cancel}</Btn>
+        </form>
+      )}
+      <span className="muted" style={{ fontSize: 12 }}>
+        {s.hint}
+      </span>
+      <ErrorBox message={error} />
+    </div>
+  );
 }

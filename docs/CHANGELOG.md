@@ -8,6 +8,14 @@
 
 
 
+
+## 0.9.5 — 2026-10-17 (iteration 3, step 1: positions)
+
+- Several positions per person: „Stanowiska” in the employee card — add (with start date), make main, remove (history kept, at least one stays). Leaders change only positions of their divisions. The list shows a person once („Kelner + Host”), filters by any of their positions. Migration 0015: `user_locations.is_primary` (the first position became main), `pay_rates.position` ('' = rate for every position, as before), `time_entries.position`.
+- A rate per position. A shift is paid by: the manager's choice on the entry („Stanowisko na tej zmianie”), else the published Grafik shift's division, else the main position. `/time` entries carry `position`; card cost and Czas pracy cost use it.
+- Grafik: a two-position person appears in both divisions with „+ Host”; a cell shows the same day's shift on the other position; overlapping shifts across positions are refused (as before).
+- Walkthroughs updated (panel: Kadra, time: rate per position).
+
 ## 0.9.4 — 2026-10-17
 
 - Checklists: who ticks is chosen per item — „Każdy” (everyone on shift, e.g. „Przebierz się”) or „Jeden za zmianę” (one tick for the team, others see who). Migration 0014 (`checklist_shared_keys`); every existing item became „Każdy” (owner). „Wymaga zdjęcia” works for both kinds. Lists are no longer closed for the day (old closings stay in history). Panel day view, Statystyka and Dziś count personal items per person and shared items once.

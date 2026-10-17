@@ -29,6 +29,7 @@ interface Person {
   role: string;
   status: string;
   position: string | null;
+  positions?: string | null;
 }
 interface Entry {
   id: string;
@@ -41,9 +42,13 @@ interface Entry {
   note: string | null;
   editedAt: number | null;
   editedByName: string | null;
+  /** position the shift was worked on (manager's choice, plan, or main) */
+  position?: string | null;
+  positionSet?: string | null;
 }
 interface Rate {
   userId: string;
+  position?: string;
   rateGrosze: number;
   validFrom: string;
 }
@@ -128,7 +133,10 @@ export function TimeTracking() {
   const costOf = (e: Entry): number | null => {
     if (!data?.wages || !e.clockOutAt) return null;
     // rates come sorted by valid_from; before the first one the first one applies
-    const mine = data.rates.filter((x) => x.userId === e.userId);
+    // 2026-10-17: the position's own rates, else the common ones; before the first one the first one applies
+    const all = data.rates.filter((x) => x.userId === e.userId);
+    const own = e.position ? all.filter((x) => x.position === e.position) : [];
+    const mine = own.length ? own : all.filter((x) => !x.position);
     let r: number | null = mine[0]?.rateGrosze ?? null;
     for (const x of mine) if (x.validFrom <= e.businessDate) r = x.rateGrosze;
     return r === null ? null : Math.round((minutesOf(e) / 60) * r);
@@ -411,11 +419,12 @@ export const TimeField = forwardRef<HTMLInputElement, { id: string; value: strin
   },
 );
 
-function EntryEditor({ entry, date, dayStartHour, onSave, onDelete }: { entry: Entry | null; date: string; dayStartHour: number; onSave: (inAt: number, outAt: number | null, note: string) => Promise<string | null>; onDelete?: () => Promise<void> }) {
+function EntryEditor({ entry, date, dayStartHour, positions = [], onSave, onDelete }: { entry: Entry | null; date: string; dayStartHour: number; positions?: string[]; onSave: (inAt: number, outAt: number | null, note: string, position?: string | null) => Promise<string | null>; onDelete?: () => Promise<void> }) {
   const toHHMM = (ms: number) => formatClock(ms);
   const [inT, setIn] = useState(entry ? toHHMM(entry.clockInAt) : '');
   const [outT, setOut] = useState(entry?.clockOutAt ? toHHMM(entry.clockOutAt) : '');
   const [note, setNote] = useState(entry?.note ?? '');
+  const [position, setPosition] = useState(entry?.positionSet ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // the original entry may start on another business day (open shift from earlier): keep its own date
@@ -431,7 +440,7 @@ function EntryEditor({ entry, date, dayStartHour, onSave, onDelete }: { entry: E
     const inAt = businessTimeToMs(day, inT, dayStartHour);
     let outAt = outT ? businessTimeToMs(day, outT, dayStartHour) : null;
     if (outAt !== null && outAt <= inAt) outAt += 24 * 3600_000; // e.g. 05:00 → 07:00 next morning
-    setError(await onSave(inAt, outAt, note));
+    setError(await onSave(inAt, outAt, note, positions.length > 1 ? position || null : undefined));
     setBusy(false);
   }
   return (
@@ -446,6 +455,19 @@ function EntryEditor({ entry, date, dayStartHour, onSave, onDelete }: { entry: E
           <TimeField id={`${uid}-out`} ref={outRef} value={outT} onChange={setOut} onComplete={() => noteRef.current?.focus()} />
         </div>
       </div>
+      {entry && positions.length > 1 && (
+        <div className="field">
+          <label htmlFor={`${uid}-pos`}>{t.position}</label>
+          <select id={`${uid}-pos`} value={position} onChange={(e) => setPosition(e.target.value)}>
+            <option value="">{t.positionAuto(pl.admin.positions[entry.position ?? ''] ?? entry.position ?? '—')}</option>
+            {positions.map((p) => (
+              <option key={p} value={p}>
+                {pl.admin.positions[p] ?? p}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="field">
         <label>{t.note}</label>
         <input ref={noteRef} value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} />
@@ -503,8 +525,9 @@ function DayDialog(props: { locationId: string; person: Person; date: string; da
           key={`${e.id}-${e.clockInAt}-${e.clockOutAt}`}
           entry={e}
           date={props.date}
-          onSave={async (inAt, outAt, note) => {
-            const err = await run(() => api(`/api/admin/time/entries/${e.id}`, { method: 'PUT', body: { clockInAt: inAt, clockOutAt: outAt, note } }));
+          positions={props.person.positions ? props.person.positions.split(',') : []}
+          onSave={async (inAt, outAt, note, position) => {
+            const err = await run(() => api(`/api/admin/time/entries/${e.id}`, { method: 'PUT', body: { clockInAt: inAt, clockOutAt: outAt, note, ...(position !== undefined ? { position } : {}) } }));
             if (!err) props.onClose(); // saved: back to the calendar (owner, 2026-10-17)
             return err;
           }}
