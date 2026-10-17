@@ -10,6 +10,13 @@
 
 
 
+## 0.9.17 — 2026-10-17 (Dostępy: hourly leaders, switch access off)
+
+- „Rozlicza czas pracy (stawka godzinowa)” on a leader's card (mockup 17): the position the hours count in, hourly rate (with `wages.manage`) and from when. At the next sign-in the leader sets a 6-digit PIN for the time clock (his password stays for the panel). He then clocks in on the terminal and is shown in Czas pracy, Grafik, Dziś and the statistics like an employee. Switching it off removes the PIN. Migration 0021 (`users.tracks_time`).
+- „Wyłącz dostęp” for leaders: cannot sign in, history stays; „Włącz ponownie” gives a new temporary password; „Usuń na zawsze” (only switched off, login typed). The owner or a zarządzający with „Nadaje dostępy”; never yourself.
+- A PIN taken over by someone else no longer forces a leader to change his password — he is only asked for a new PIN.
+- Integration test 28, `managers_walkthrough.py`.
+
 ## 0.9.16 — 2026-10-17 (instant start, smoother, keyboard)
 
 - Instant start: the staff app keeps its last answers on the phone (IndexedDB; panel data stays in memory only — it holds other people's data). The app opens straight away with them, also without internet, and refreshes in the background; an unchanged answer does not redraw the screen. Removed on logout and on login. The app page itself opens from the phone (service worker), its scripts are stored right away; „Jest nowa wersja” loads the new one. A part missing after an update reloads the app once.

@@ -35,7 +35,7 @@ todayAdminRoutes.get('/locations/:locId/today', async (c) => {
       .prepare(
         `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName, group_concat(ul.position) AS positions, u.first_login_at AS firstLoginAt, u.status
          FROM users u JOIN user_locations ul ON ul.user_id = u.id AND ul.location_id = ? AND ul.is_active = 1
-         WHERE u.role = 'employee' GROUP BY u.id`,
+         WHERE (u.role = 'employee' OR u.tracks_time = 1) GROUP BY u.id`,
       )
       .bind(locId),
     db

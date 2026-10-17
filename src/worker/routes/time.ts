@@ -58,7 +58,7 @@ timeAdminRoutes.get('/locations/:locId/time', async (c) => {
                 (SELECT ul.position FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?1 ORDER BY ul.is_active DESC, ul.is_primary DESC LIMIT 1) AS position,
                 (SELECT group_concat(ul.position) FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?1) AS positions
          FROM users u
-         WHERE u.role = 'employee' AND u.status <> 'anonymized' AND (
+         WHERE (u.role = 'employee' OR u.tracks_time = 1) AND u.status <> 'anonymized' AND (
            (u.status = 'active' AND EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?1 AND ul.is_active = 1))
            OR EXISTS (SELECT 1 FROM time_entries e WHERE e.user_id = u.id AND e.location_id = ?1 AND e.business_date BETWEEN ?2 AND ?3))`,
       )
@@ -141,7 +141,7 @@ timeAdminRoutes.post('/locations/:locId/time/entries', async (c) => {
   if (!(await userInScope(db, access, locId, userId))) throw new ApiError(403, 'outside_divisions');
   const person = await db
     .prepare(
-      `SELECT u.id FROM users u WHERE u.id = ? AND u.role = 'employee' AND u.status <> 'anonymized'
+      `SELECT u.id FROM users u WHERE u.id = ? AND (u.role = 'employee' OR u.tracks_time = 1) AND u.status <> 'anonymized'
          AND EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ?)`,
     )
     .bind(userId, locId)

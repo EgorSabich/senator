@@ -64,7 +64,7 @@ async function personByPin(db: D1Database, secret: string, pin: string, location
   const found = await db
     .prepare(
       `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName FROM users u
-       WHERE u.pin_lookup = ? AND u.status = 'active' AND u.role = 'employee'
+       WHERE u.pin_lookup = ? AND u.status = 'active' AND (u.role = 'employee' OR u.tracks_time = 1)
          AND EXISTS (SELECT 1 FROM user_locations ul WHERE ul.user_id = u.id AND ul.location_id = ? AND ul.is_active = 1)`,
     )
     .bind(lookup, locationId)

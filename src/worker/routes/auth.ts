@@ -137,6 +137,8 @@ authRoutes.get('/me', requireSession, async (c) => {
       .all<{ id: string; name: string }>();
     for (const r of results) names.set(r.id, r.name);
   }
+  // a manager paid by the hour must have a PIN for the time clock (Dostępy, 2026-10-17)
+  const t = user.role === 'manager' ? await c.env.DB.prepare(`SELECT tracks_time AS tt, pin_lookup AS pl FROM users WHERE id = ?`).bind(user.id).first<{ tt: number; pl: string | null }>() : null;
   return c.json({
     user: {
       id: user.id,
@@ -146,9 +148,34 @@ authRoutes.get('/me', requireSession, async (c) => {
       role: user.role,
       secretKind: user.secretKind,
       mustChangeSecret: user.mustChangeSecret,
+      tracksTime: Boolean(t?.tt),
+      needsPin: Boolean(t?.tt && !t.pl),
     },
     locations: ids.map((id) => ({ id, name: names.get(id) ?? '', permissions: [...access.locations.get(id)!] })),
   });
+});
+
+/** A manager paid by the hour sets the 6-digit PIN for the time clock (his password stays for the panel). */
+authRoutes.post('/set-pin', requireSession, async (c) => {
+  const user = c.var.user;
+  const db = c.env.DB;
+  const row = await db.prepare(`SELECT tracks_time AS tt FROM users WHERE id = ?`).bind(user.id).first<{ tt: number }>();
+  if (user.role !== 'manager' || !row?.tt) throw new ApiError(403, 'forbidden');
+  const body = await readJson<{ pin?: unknown }>(c.req.raw);
+  const pin = typeof body.pin === 'string' ? body.pin : '';
+  const problem = checkSecret('pin', pin);
+  if (problem) throw badRequest(problem);
+  const lookup = await pinLookup(pin, c.env.AUTH_SECRET);
+  const holder = await pinTaken(db, user.id, lookup);
+  if (holder) {
+    await burnPinStatement(db, holder).run();
+    throw badRequest('pin_unavailable');
+  }
+  await db.batch([
+    db.prepare(`UPDATE users SET pin_lookup = ?, updated_at = ? WHERE id = ?`).bind(lookup, Date.now(), user.id),
+    auditStatement(db, { actorId: user.id, action: 'user.set_pin', entityType: 'user', entityId: user.id }),
+  ]);
+  return c.json({ ok: true });
 });
 
 authRoutes.post('/change-secret', requireSession, async (c) => {

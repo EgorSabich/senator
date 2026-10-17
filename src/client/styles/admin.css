@@ -3373,3 +3373,37 @@ a.sch-person:hover {
 .st-ex {
   font-size: 12px;
 }
+
+/* Dostępy: hourly pay and access (mockup 17) */
+.mgr-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.mgr-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.mgr-row > div:first-child {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.mgr-row p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.mgr-three {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.mgr-pin {
+  margin: 0;
+  font-size: 13px;
+}

@@ -40,6 +40,8 @@ export interface Me {
     role: 'owner' | 'manager' | 'employee' | 'terminal';
     secretKind: 'pin' | 'password';
     mustChangeSecret: boolean;
+    tracksTime?: boolean;
+    needsPin?: boolean;
   };
   locations: { id: string; name: string; permissions: string[] }[];
 }

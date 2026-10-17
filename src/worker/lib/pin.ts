@@ -10,7 +10,7 @@ export async function assignPinLookup(db: D1Database, userId: string, lookup: st
   const now = Date.now();
   if (other) {
     await db.batch([
-      db.prepare(`UPDATE users SET pin_lookup = NULL, must_change_secret = 1, updated_at = ? WHERE id = ?`).bind(now, other.id),
+      db.prepare(`UPDATE users SET pin_lookup = NULL, must_change_secret = CASE WHEN secret_kind = 'pin' THEN 1 ELSE must_change_secret END, updated_at = ? WHERE id = ?`).bind(now, other.id),
       db.prepare(`UPDATE users SET pin_lookup = NULL, updated_at = ? WHERE id = ?`).bind(now, userId),
     ]);
     return 'conflict';
@@ -27,5 +27,8 @@ export async function pinTaken(db: D1Database, userId: string, lookup: string): 
 
 /** The PIN became known (someone else tried to choose it): its holder must pick a new one. */
 export function burnPinStatement(db: D1Database, holderId: string): D1PreparedStatement {
-  return db.prepare(`UPDATE users SET pin_lookup = NULL, must_change_secret = 1, updated_at = ? WHERE id = ?`).bind(Date.now(), holderId);
+  // a manager paid by the hour keeps his password: he is only asked for a new PIN (needsPin)
+  return db
+    .prepare(`UPDATE users SET pin_lookup = NULL, must_change_secret = CASE WHEN secret_kind = 'pin' THEN 1 ELSE must_change_secret END, updated_at = ? WHERE id = ?`)
+    .bind(Date.now(), holderId);
 }

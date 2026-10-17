@@ -82,7 +82,7 @@ async function people(db: D1Database, locId: string) {
     .prepare(
       `SELECT u.id, u.first_name AS firstName, u.last_name AS lastName, group_concat(ul.position) AS positions
        FROM users u JOIN user_locations ul ON ul.user_id = u.id AND ul.location_id = ? AND ul.is_active = 1
-       WHERE u.role = 'employee' AND u.status = 'active'
+       WHERE (u.role = 'employee' OR u.tracks_time = 1) AND u.status = 'active'
        GROUP BY u.id ORDER BY u.first_name, u.last_name`,
     )
     .bind(locId)

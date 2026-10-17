@@ -4,7 +4,9 @@ import { DIVISION_SCOPE_PREFIX, divisionOf, MANAGER_ROLES, PERMISSIONS, POSITION
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { ErrorBox } from '../ui';
-import { Btn, formatDateTime, Modal, SecretCardModal, type SecretInfo } from './common';
+import { Btn, DeleteForeverModal, formatDateTime, Modal, SecretCardModal, type SecretInfo } from './common';
+import { DateField } from '../DateField';
+import { RateInput } from './Employees';
 import { usePanel } from './Panel';
 
 interface Manager {
@@ -16,6 +18,9 @@ interface Manager {
   lastLoginAt: number | null;
   permissions: Record<string, string[]>;
   self?: boolean;
+  tracksTime?: boolean;
+  pinSet?: boolean;
+  hours?: Record<string, { position: string; startDate: string | null; rate: number | null; rateFrom: string | null }>;
 }
 
 /** Permissions + divisions of a role preset (D44), stored with "role:<key>" so the card shows the role. */
@@ -75,6 +80,11 @@ export function Managers() {
               await load();
             }}
             onError={setError}
+            onSecret={setSecret}
+            onRemoved={async () => {
+              setNotice(t.removed);
+              await load();
+            }}
           />
         ))}
       </div>
@@ -94,7 +104,15 @@ export function Managers() {
   );
 }
 
-function ManagerCard(props: { m: Manager; locationId: string; locName: string; onSaved: () => void; onError: (s: string) => void }) {
+function ManagerCard(props: {
+  m: Manager;
+  locationId: string;
+  locName: string;
+  onSaved: () => void;
+  onError: (s: string) => void;
+  onSecret: (i: SecretInfo) => void;
+  onRemoved: () => void;
+}) {
   const { m } = props;
   const [perms, setPerms] = useState<string[]>(m.permissions[props.locationId] ?? []);
   const [busy, setBusy] = useState(false);
@@ -122,6 +140,8 @@ function ManagerCard(props: { m: Manager; locationId: string; locName: string; o
             {m.firstName} {m.lastName}
           </span>
           <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {m.status === 'inactive' && <span className="badge bad">{t.inactive}</span>}
+            {m.tracksTime && <span className="badge neutral">{t.hourlyBadge}</span>}
             <span className="badge neutral">{savedRole ? t.roles[savedRole] : t.customRole}</span>
             <span className={`chev${open ? ' up' : ''}`} aria-hidden="true">
               ▾
@@ -212,10 +232,156 @@ function ManagerCard(props: { m: Manager; locationId: string; locName: string; o
                 {t.save}
               </Btn>
             </div>
+            {!m.self && (
+              <>
+                <Hourly m={m} locationId={props.locationId} onSaved={props.onSaved} onError={props.onError} />
+                <Access m={m} onSaved={props.onSaved} onError={props.onError} onSecret={props.onSecret} onRemoved={props.onRemoved} />
+              </>
+            )}
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+const POS_LABEL = (p: string) => pl.admin.positions[p] ?? p;
+
+/** „Rozlicza czas pracy” (mockup 17): position for the hours, hourly rate, from when; PIN state. */
+function Hourly({ m, locationId, onSaved, onError }: { m: Manager; locationId: string; onSaved: () => void; onError: (s: string) => void }) {
+  const { can } = usePanel();
+  const cur = m.hours?.[locationId];
+  const [on, setOn] = useState(Boolean(m.tracksTime && cur));
+  const [position, setPosition] = useState(cur?.position && cur.position !== 'shift_manager' ? cur.position : 'shift_manager');
+  const [rate, setRate] = useState(cur?.rate != null ? String(cur.rate).replace('.', ',') : '');
+  const [from, setFrom] = useState(cur?.rateFrom ?? cur?.startDate ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw' }).format(new Date()));
+  const [busy, setBusy] = useState(false);
+  const wages = can('wages.manage');
+  async function send(enabled: boolean) {
+    setBusy(true);
+    try {
+      await api(`/api/admin/managers/${m.id}/time`, {
+        method: 'PUT',
+        body: enabled ? { locationId, enabled: true, position, rate: wages && rate ? rate : null, validFrom: from } : { locationId, enabled: false },
+      });
+      onSaved();
+    } catch (e) {
+      onError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="mgr-box">
+      <div className="mgr-row">
+        <div>
+          <b>{t.hourly}</b>
+          <p className="muted">{t.hourlyHint}</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label={t.hourly}
+          className="ntf-switch"
+          disabled={busy}
+          onClick={() => {
+            if (on && m.tracksTime) void send(false);
+            setOn(!on);
+          }}
+        >
+          <span />
+        </button>
+      </div>
+      {on && (
+        <>
+          <div className="mgr-three">
+            <div className="field">
+              <label htmlFor={`hp-${m.id}`}>{t.hourlyPosition}</label>
+              <select id={`hp-${m.id}`} value={position} onChange={(e) => setPosition(e.target.value)}>
+                {POSITIONS.map((p) => (
+                  <option key={p} value={p}>
+                    {POS_LABEL(p)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {wages && (
+              <div className="field">
+                <label htmlFor={`hr-${m.id}`}>{t.hourlyRate}</label>
+                <RateInput id={`hr-${m.id}`} value={rate} onChange={setRate} />
+              </div>
+            )}
+            <div className="field">
+              <label htmlFor={`hf-${m.id}`}>{t.hourlyFrom}</label>
+              <DateField id={`hf-${m.id}`} value={from} onChange={(v) => v && setFrom(v)} />
+            </div>
+          </div>
+          {m.tracksTime && <p className="muted mgr-pin">{m.pinSet ? t.pinSet : t.pinMissing}</p>}
+          <div>
+            <Btn kind="primary" disabled={busy} onClick={() => void send(true)}>
+              {m.tracksTime ? t.hourlySave : t.hourlyEnable}
+            </Btn>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** „Wyłącz dostęp” → „Włącz ponownie” / „Usuń na zawsze” (owner, 2026-10-17). */
+function Access({ m, onSaved, onError, onSecret, onRemoved }: { m: Manager; onSaved: () => void; onError: (s: string) => void; onSecret: (i: SecretInfo) => void; onRemoved: () => void }) {
+  const [deleting, setDeleting] = useState(false);
+  async function post(action: 'deactivate' | 'reactivate') {
+    if (action === 'deactivate' && !window.confirm(t.deactivateConfirm(`${m.firstName} ${m.lastName}`))) return;
+    try {
+      const r = await api<{ login?: string; tempSecret?: string }>(`/api/admin/managers/${m.id}/${action}`, { method: 'POST' });
+      if (r.tempSecret) onSecret({ name: `${m.firstName} ${m.lastName}`, login: r.login!, tempSecret: r.tempSecret, secretKind: 'password' });
+      onSaved();
+    } catch (e) {
+      onError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
+    }
+  }
+  return (
+    <section className="mgr-box">
+      {m.status === 'active' ? (
+        <div className="mgr-row">
+          <div>
+            <b>{t.deactivate}</b>
+            <p className="muted">{t.deactivateHint}</p>
+          </div>
+          <Btn kind="danger" onClick={() => void post('deactivate')}>
+            {t.deactivate}
+          </Btn>
+        </div>
+      ) : (
+        <div className="mgr-row">
+          <div>
+            <b>{t.inactiveTitle}</b>
+            <p className="muted">{t.inactiveHint}</p>
+          </div>
+          <div className="btn-row">
+            <Btn onClick={() => void post('reactivate')}>{t.reactivate}</Btn>
+            <Btn kind="danger" onClick={() => setDeleting(true)}>
+              {t.deleteForever}
+            </Btn>
+          </div>
+        </div>
+      )}
+      {deleting && (
+        <DeleteForeverModal
+          title={t.deleteTitle(`${m.firstName} ${m.lastName}`)}
+          impactPath={null}
+          confirmText={m.login}
+          deletePath={`/api/admin/managers/${m.id}`}
+          onDeleted={() => {
+            setDeleting(false);
+            onRemoved();
+          }}
+          onClose={() => setDeleting(false)}
+        />
+      )}
+    </section>
   );
 }
 

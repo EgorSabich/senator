@@ -77,6 +77,8 @@ export const users = sqliteTable(
     anonymizedAt: integer('anonymized_at'),
     /** HMAC(AUTH_SECRET, PIN) — finds the person on the time terminal by PIN alone (D35). Unique; null until set. */
     pinLookup: text('pin_lookup'),
+    /** 2026-10-17: a manager paid by the hour — clocks in with a PIN, planned in Grafik, counted in Czas pracy (Dostępy) */
+    tracksTime: integer('tracks_time').notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

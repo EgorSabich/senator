@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `tracks_time` integer DEFAULT 0 NOT NULL;

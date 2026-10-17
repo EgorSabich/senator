@@ -565,11 +565,19 @@ adminRoutes.get('/managers', async (c) => {
   const now = Date.now();
   const { results: managers } = await c.env.DB.prepare(
     `SELECT id, first_name AS firstName, last_name AS lastName, login, status, last_login_at AS lastLoginAt,
-            CASE WHEN locked_until > ? THEN 1 ELSE 0 END AS locked
+            CASE WHEN locked_until > ? THEN 1 ELSE 0 END AS locked, tracks_time AS tracksTime, CASE WHEN pin_lookup IS NULL THEN 0 ELSE 1 END AS pinSet
      FROM users WHERE role = 'manager' AND status <> 'anonymized' ORDER BY last_name, first_name`,
   )
     .bind(now)
-    .all<{ id: string }>();
+    .all<{ id: string; tracksTime: number; pinSet: number }>();
+  // hourly leaders (2026-10-17): the position their hours count in, and the current rate (with wages.manage)
+  const { results: places } = await c.env.DB.prepare(
+    `SELECT ul.user_id AS userId, ul.location_id AS locationId, ul.position, ul.start_date AS startDate FROM user_locations ul JOIN users u ON u.id = ul.user_id WHERE u.role = 'manager' AND ul.is_primary = 1`,
+  ).all<{ userId: string; locationId: string; position: string; startDate: string | null }>();
+  const { results: rates } = await c.env.DB.prepare(
+    `SELECT r.user_id AS userId, r.location_id AS locationId, r.rate_grosze AS grosze, r.valid_from AS validFrom FROM pay_rates r JOIN users u ON u.id = r.user_id
+     WHERE u.role = 'manager' AND r.position = '' ORDER BY r.valid_from`,
+  ).all<{ userId: string; locationId: string; grosze: number; validFrom: string }>();
   const { results: perms } = await c.env.DB.prepare(
     `SELECT mp.user_id AS userId, mp.location_id AS locationId, mp.permission FROM manager_permissions mp
      JOIN users u ON u.id = mp.user_id WHERE u.role = 'manager'`,
@@ -578,7 +586,14 @@ adminRoutes.get('/managers', async (c) => {
     managers: managers.map((m) => {
       const byLoc: Record<string, string[]> = {};
       for (const p of perms) if (p.userId === m.id && (access.role === 'owner' || access.locations.get(p.locationId)?.has('managers.manage'))) (byLoc[p.locationId] ??= []).push(p.permission);
-      return { ...m, permissions: byLoc, self: m.id === c.var.user.id };
+      const hours: Record<string, { position: string; startDate: string | null; rate: number | null; rateFrom: string | null }> = {};
+      if (m.tracksTime)
+        for (const p of places)
+          if (p.userId === m.id && byLoc[p.locationId]) {
+            const r = access.role === 'owner' || access.locations.get(p.locationId)?.has('wages.manage') ? rates.filter((x) => x.userId === m.id && x.locationId === p.locationId).pop() : undefined;
+            hours[p.locationId] = { position: p.position, startDate: p.startDate, rate: r ? r.grosze / 100 : null, rateFrom: r?.validFrom ?? null };
+          }
+      return { ...m, tracksTime: Boolean(m.tracksTime), pinSet: Boolean(m.pinSet), hours, permissions: byLoc, self: m.id === c.var.user.id };
     })
       .filter((m) => access.role === 'owner' || Object.keys(m.permissions).length > 0),
   });

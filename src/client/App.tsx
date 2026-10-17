@@ -3,6 +3,7 @@ import { api, ApiFailure, cached, type Me } from './api';
 import { errorText, pl } from './i18n/pl';
 import { Redirect, usePath } from './router';
 import { ChangeSecret } from './screens/ChangeSecret';
+import { SetPin } from './screens/SetPin';
 import { maybeShowInstallGuide } from './app/Install';
 import { Login } from './screens/Login';
 import { Brand, ErrorBox, LogoLoader, SecondaryButton, screen } from './ui';
@@ -124,6 +125,8 @@ export function App() {
         }}
       />
     );
+
+  if (me.user.needsPin) return <SetPin onDone={() => void refresh()} />;
 
   const loggedOut = () => {
     void clearPersonalCache();
