@@ -16,6 +16,7 @@ export const PERMISSIONS = [
   'checklists.view',
   'wages.manage',
   'schedule.manage',
+  'recruitment.manage',
   'managers.manage',
   'locations.manage',
   'audit.view',
@@ -42,6 +43,7 @@ const LEAD: Permission[] = [
   'checklists.view',
   'wages.manage',
   'schedule.manage',
+  'recruitment.manage',
 ];
 
 /**

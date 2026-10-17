@@ -57,6 +57,12 @@ const paths: Record<string, ReactNode> = {
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,
+  recruit: (
+    <>
+      <circle cx="10" cy="8" r="4" />
+      <path d="M2 21c1.5-4 4.5-6 8-6 1.6 0 3 .4 4.3 1.2M19 14v6M16 17h6" />
+    </>
+  ),
   learn: (
     <>
       <path d="M3 7l9-4 9 4-9 4z" />

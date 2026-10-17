@@ -10,6 +10,16 @@
 
 
 
+## 0.9.8 — 2026-10-17 (iteration 3, step 4: Rekrutacja)
+
+- Panel → „Rekrutacja” (mockups 7–9). Table: stage chips with counts („Aktywni” = Nowy, Rozmowa, Dzień próbny, Przyjęty), division chips, search by name or phone, sort by name / nearest date / added, stage changed straight from the row; on a phone each row is a compact card. RODO warning for candidates deleted within 30 days.
+- Candidate card: name, phone (formats itself, +48 by default, foreign numbers with their code), e-mail, position, interview and trial-day date (setting one moves „Nowy” → „Rozmowa” → „Dzień próbny”), „→ Kalendarz Google” links, stage chips, comments (author removes own; owner any), CV (PDF or JPG/PNG/WebP, up to 10 MB, preview in the app, served only through the API to people with access), „Zachowaj” (restarts the RODO period), „Usuń kandydata”.
+- „Utwórz konto” for a hired candidate makes the employee account (same rules as Pracownicy, needs `employees.manage`), shows the login card, deletes the CV.
+- Calendar month view (agenda on phones) and „Subskrybuj w Kalendarzu Google”: a personal ICS link, shown once, only its hash stored, a new link revokes the old one, „Unieważnij link”. The feed holds names and positions only (no phones, no CVs), only of the link owner's divisions, and stops for deactivated accounts.
+- Access: new permission `recruitment.manage` (in every leader preset); migration 0018 grants it to every leader who plans the schedule. Leaders see candidates of their divisions; the owner and zarządzający see all.
+- RODO: the nightly job deletes candidates 6 months after the last change, with comments and CV. The log keeps no personal data. Nightly backups (30 days) still hold deleted data until they expire.
+- Employee creation moved to `lib/employees.ts` (shared by Pracownicy and Rekrutacja). Integration test 22, `recruitment_walkthrough.py`.
+
 ## 0.9.7 — 2026-10-17 (iteration 3, step 3: publishing and push notifications)
 
 - Web Push without libraries (`lib/webpush.ts`: RFC 8291 aes128gcm + RFC 8292 VAPID on WebCrypto). Keys: Cloudflare secrets `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`; without them nothing is sent and nothing breaks. Migration 0017: `push_subscriptions` (one row per device), `push_log` (a reminder goes out once; cleaned after 60 days by the nightly job).

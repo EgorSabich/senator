@@ -734,3 +734,60 @@ export const pushLog = sqliteTable(
   },
   (t) => [uniqueIndex('push_log_uq').on(t.userId, t.kind, t.ref)],
 );
+
+/**
+ * Rekrutacja (2026-10-17). Candidates of one location; a leader sees those whose position is in their divisions.
+ * RODO: a candidate is deleted 6 months after the last change (nightly job), with a warning 30 days before.
+ */
+export const candidates = sqliteTable(
+  'candidates',
+  {
+    id: id(),
+    locationId: text('location_id').notNull().references(() => locations.id),
+    name: text('name').notNull(),
+    /** stored as +48601234567 */
+    phone: text('phone'),
+    email: text('email'),
+    position: text('position').notNull(),
+    /** new | interview | trial | hired | reserve | rejected */
+    stage: text('stage').notNull().default('new'),
+    interviewAt: integer('interview_at'),
+    trialAt: integer('trial_at'),
+    cvKey: text('cv_key'),
+    cvName: text('cv_name'),
+    cvType: text('cv_type'),
+    /** the account made with „Utwórz konto” */
+    hiredUserId: text('hired_user_id').references(() => users.id),
+    createdBy: text('created_by').references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('candidates_loc_idx').on(t.locationId, t.stage), index('candidates_updated_idx').on(t.updatedAt)],
+);
+
+export const candidateComments = sqliteTable(
+  'candidate_comments',
+  {
+    id: id(),
+    candidateId: text('candidate_id').notNull().references(() => candidates.id),
+    authorId: text('author_id').references(() => users.id),
+    /** kept when the author's account is deleted */
+    authorName: text('author_name').notNull(),
+    body: text('body').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('candidate_comments_candidate_idx').on(t.candidateId)],
+);
+
+/** Personal ICS links (Google Calendar subscription). Only a hash of the token is kept; a new link revokes the old one. */
+export const calendarFeeds = sqliteTable(
+  'calendar_feeds',
+  {
+    id: id(),
+    userId: text('user_id').notNull().references(() => users.id),
+    tokenHash: text('token_hash').notNull(),
+    createdAt: createdAt(),
+    lastUsedAt: integer('last_used_at'),
+  },
+  (t) => [uniqueIndex('calendar_feeds_token_uq').on(t.tokenHash), uniqueIndex('calendar_feeds_user_uq').on(t.userId)],
+);

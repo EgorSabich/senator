@@ -2264,3 +2264,326 @@ a.sch-person:hover {
   flex-direction: column;
   gap: 8px;
 }
+
+/* ───────── Rekrutacja (mockups 7–9) ───────── */
+.btn-link-secondary,
+.btn-link-primary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.btn-link-primary {
+  border: none;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+.btn-link-secondary:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.btn-link-primary:hover {
+  color: var(--on-accent);
+}
+.back-link {
+  align-self: flex-start;
+  color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.rec-chips {
+  gap: 8px;
+}
+.rec-search {
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+.th-sort {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.th-sort[aria-pressed='true'] {
+  color: var(--text);
+}
+.rec-table table {
+  min-width: 860px;
+}
+.rec-table th.c,
+.rec-table td.c {
+  text-align: center;
+}
+.rec-row {
+  cursor: pointer;
+}
+@media (hover: hover) and (min-width: 721px) {
+  .rec-row:hover td {
+    background: var(--surface-2);
+  }
+}
+.rec-table td {
+  vertical-align: middle;
+}
+.rec-name a {
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+}
+.rec-rodo {
+  display: block;
+  margin-top: 2px;
+  color: var(--warn-fg);
+  font-size: 12px;
+}
+.rec-phone {
+  white-space: nowrap;
+}
+.rec-stage {
+  position: relative;
+  cursor: pointer;
+  font-size: 12px;
+}
+.rec-stage select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.rec-hire {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.rec-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text);
+}
+.rec-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.rec-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+}
+.rec-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.rec-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.rec-h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.rec-cv {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 420px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.rec-cv iframe {
+  width: 100%;
+  height: 560px;
+  border: none;
+  background: #fff;
+}
+.rec-cv img {
+  max-width: 100%;
+  max-height: 560px;
+  object-fit: contain;
+}
+.rec-comment {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 14px;
+}
+.rec-comment-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+.rec-comment-add {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.rec-comment-add textarea {
+  flex: 1;
+  min-height: 48px;
+  resize: vertical;
+}
+.rec-feed-url {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 12px;
+  word-break: break-all;
+}
+.rec-cal {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.rec-cal-dow {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+.rec-cal-day {
+  min-height: 110px;
+  padding: 6px;
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rec-cal-day:nth-child(7n + 1) {
+  border-left: none;
+}
+.rec-cal-day.out {
+  opacity: 0.4;
+}
+.rec-cal-day.today .rec-cal-num {
+  color: var(--accent);
+  font-weight: 700;
+}
+.rec-cal-num {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+.rec-ev {
+  display: block;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text);
+  text-decoration: none;
+  background: var(--warn-bg);
+}
+.rec-ev.trial {
+  background: var(--ok-bg);
+}
+.rec-agenda {
+  display: none;
+}
+.rec-agenda-day {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.rec-agenda .rec-ev {
+  padding: 10px 12px;
+  font-size: 14px;
+}
+@media (max-width: 900px) {
+  .rec-card {
+    grid-template-columns: 1fr;
+  }
+  .rec-cv {
+    min-height: 240px;
+  }
+  .rec-cv iframe {
+    height: 420px;
+  }
+}
+@media (max-width: 720px) {
+  /* phone: each row as a compact card (name, position, stage, date) */
+  .rec-table {
+    border: none;
+    overflow: visible;
+  }
+  .rec-table table,
+  .rec-table tbody {
+    display: block;
+    min-width: 0;
+  }
+  .rec-table thead {
+    display: none;
+  }
+  .rec-table tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+  .rec-table td {
+    padding: 0;
+    border: none;
+  }
+  .rec-table td[data-label='Telefon'],
+  .rec-table td[data-label='CV'],
+  .rec-table td[data-label='Kom.'],
+  .rec-table td[data-label='Dodano'] {
+    display: none;
+  }
+  .rec-table td[data-label='Stanowisko'] {
+    grid-column: 1;
+    color: var(--text-soft);
+    font-size: 13px;
+  }
+  .rec-table td[data-label='Etap'] {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .rec-table td[data-label='Najbliższy termin'] {
+    grid-column: 1 / -1;
+    font-size: 13px;
+  }
+  .rec-two {
+    grid-template-columns: 1fr;
+  }
+  .rec-cal {
+    display: none;
+  }
+  .rec-agenda {
+    display: block;
+  }
+}

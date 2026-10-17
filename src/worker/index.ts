@@ -17,6 +17,8 @@ import { timeAdminRoutes } from './routes/time';
 import { checklistAdminRoutes, checklistRoutes } from './routes/checklists';
 import { scheduleAdminRoutes, scheduleRoutes } from './routes/schedule';
 import { todayAdminRoutes } from './routes/today';
+import { calendarFeedRoutes, recruitmentAdminRoutes } from './routes/recruitment';
+import { expireCandidates } from './jobs/candidates';
 import { requireSameOrigin, requireSession } from './auth/session';
 import { runNightlyBackup } from './jobs/backup';
 import { anonymizeExpiredUsers } from './jobs/anonymize';
@@ -53,6 +55,7 @@ admin.route('/', timeAdminRoutes);
 admin.route('/', checklistAdminRoutes);
 admin.route('/', scheduleAdminRoutes);
 admin.route('/', todayAdminRoutes);
+admin.route('/', recruitmentAdminRoutes);
 app.route('/api/admin', admin);
 
 // Staff (waiter) views; every path here needs a session.
@@ -72,6 +75,8 @@ const terminal = new Hono<AppEnv>();
 terminal.use('*', requireSession);
 terminal.route('/', terminalRoutes);
 app.route('/api/terminal', terminal);
+// Google Calendar subscription: no session, a secret link (routes/recruitment.ts)
+app.route('/api', calendarFeedRoutes);
 app.route('/api', staff);
 app.route('/media', mediaPublicRoutes);
 
@@ -110,7 +115,8 @@ export default {
         const anonymized = await anonymizeExpiredUsers(env.DB, now);
         const punchPhotos = await expirePunchPhotos(env.DB, env.PHOTOS, now).catch((e) => `error: ${String(e)}`);
         const checklistPhotos = await expireChecklistPhotos(env.DB, env.PHOTOS, now).catch((e) => `error: ${String(e)}`);
-        console.log(JSON.stringify({ job: 'nightly', backup, anonymized, punchPhotos, checklistPhotos }));
+        const candidates = await expireCandidates(env, now).catch((e) => `error: ${String(e)}`);
+        console.log(JSON.stringify({ job: 'nightly', backup, anonymized, punchPhotos, checklistPhotos, candidates }));
       })(),
     );
   },

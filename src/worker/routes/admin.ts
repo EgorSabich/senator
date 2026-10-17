@@ -21,18 +21,10 @@ import { allowedDivisions, loadAccess, requireManageableUser, requireOwner, requ
 import { confirmMatches, purgeUserStatements } from '../lib/purge';
 import { deleteKeys } from '../jobs/punchPhotos';
 
+import { newEmployee, uniqueLogin } from '../lib/employees';
+
 export const adminRoutes = new Hono<AppEnv>();
 // Session is enforced by the /api/admin router (index.ts).
-
-async function uniqueLogin(db: D1Database, base: string): Promise<string> {
-  const root = base || 'pracownik';
-  for (let i = 1; i < 1000; i++) {
-    const candidate = i === 1 ? root : `${root}${i}`;
-    const hit = await db.prepare(`SELECT 1 FROM users WHERE login = ?`).bind(candidate).first();
-    if (!hit) return candidate;
-  }
-  throw new ApiError(409, 'login_taken');
-}
 
 function isIsoDate(v: unknown): v is string {
   return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
@@ -315,31 +307,16 @@ adminRoutes.post('/locations/:locId/employees', async (c) => {
   if (scope && !scope.has(position)) throw new ApiError(403, 'outside_divisions');
   if (body.startDate !== undefined && body.startDate !== null && !isIsoDate(body.startDate)) throw badRequest('start_date_invalid');
 
-  const id = newId('usr');
-  const login = await uniqueLogin(db, proposeLogin(firstName, lastName));
-  const tempSecret = generateTempPin();
-  const { hash, salt } = await hashSecret(tempSecret, c.env.AUTH_SECRET);
-
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO users (id, first_name, last_name, login, role, status, secret_hash, secret_salt, secret_kind, must_change_secret)
-         VALUES (?, ?, ?, ?, 'employee', 'active', ?, ?, 'pin', 1)`,
-      )
-      .bind(id, firstName, lastName, login, hash, salt),
-    db
-      .prepare(`INSERT INTO user_locations (id, user_id, location_id, position, start_date, is_primary) VALUES (?, ?, ?, ?, ?, 1)`)
-      .bind(newId('ul'), id, locId, position, (body.startDate as string | undefined) ?? null),
-    auditStatement(db, {
-      actorId: c.var.user.id,
-      locationId: locId,
-      action: 'user.create',
-      entityType: 'user',
-      entityId: id,
-      after: { firstName, lastName, login, position, startDate: body.startDate ?? null },
-    }),
-  ]);
-  // The temporary PIN is shown once and never stored in clear text.
+  const made = await newEmployee(db, c.env.AUTH_SECRET, {
+    firstName,
+    lastName,
+    position,
+    locationId: locId,
+    startDate: (body.startDate as string | undefined) ?? null,
+    actorId: c.var.user.id,
+  });
+  await db.batch(made.statements);
+  const { id, login, tempSecret } = made;
   return c.json({ id, login, tempSecret, secretKind: 'pin' }, 201);
 });
 

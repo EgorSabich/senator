@@ -127,6 +127,13 @@
       "when": 1792207258974,
       "tag": "0017_push",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1792228917138,
+      "tag": "0018_recruitment",
+      "breakpoints": true
     }
   ]
 }
