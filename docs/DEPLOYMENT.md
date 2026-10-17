@@ -40,3 +40,9 @@ Option B — nightly NDJSON export (independent copy, 30 days):
 4. Check counts against `manifest.json`.
 
 Option B is exercised by `scripts/smoke-local.sh` on every run.
+
+## Note (2026-10-17): never re-run an old build
+
+Cloudflare Workers Builds deploys whatever commit a build was started for. Re-running ("Retry build") the build of an older commit
+puts that older version live over a newer one — this happened on 2026-10-17 (rollback commit a1bde70 rebuilt at 03:29 over 0.9.3).
+To go back, revert in git and push; to check what is live, open `/api/health` (field `version`) or Konto in the app.
