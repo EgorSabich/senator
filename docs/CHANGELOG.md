@@ -5,6 +5,11 @@
 
 
 
+
+## 0.9.2 — 2026-10-17 (iteration 2 again, one feature at a time: 1/4)
+
+- Photo items in individual checklists (from 0.10.0, nothing else): the leader picks „Zadania ze zdjęciem” in the list editor; on the phone such a task opens the camera and is ticked only with a photo (≤1024 px JPEG, ≤220 KB); panel day view shows a camera chip by the name, the photo opens in a window. Private PHOTOS bucket, deleted after 30 days, removed with the person / material on permanent deletion. Uses migration 0012 (already applied).
+
 ## Rollback to 0.9.1 — 2026-10-17
 
 - On the owner's request the app code is back to 0.9.1 (commit c1d2959); 0.10.0–0.10.2 are reverted.

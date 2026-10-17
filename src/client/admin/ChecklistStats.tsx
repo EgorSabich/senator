@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { addDays, businessDate, formatClock } from '../../shared/time';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { ErrorBox, Fold, LogoLoader } from '../ui';
-import { Btn } from './common';
+import { Btn, Icon, Modal } from './common';
 import { usePanel } from './Panel';
 
 const t = pl.admin.checklists;
@@ -14,7 +14,8 @@ interface DayItem {
   text: string;
   mark: { userId: string; name: string; at: number } | null;
   count?: number;
-  by?: { name: string; at: number }[];
+  by?: { name: string; at: number; photoId?: string | null }[];
+  photo?: boolean;
 }
 interface DayChecklist {
   id: string;
@@ -64,6 +65,7 @@ export function ChecklistStats() {
   const [error, setError] = useState<string | null>(null);
   // Sections: unfinished ones open, finished ones folded — until the leader toggles them.
   const [foldState, setFoldState] = useState<Record<string, boolean>>({});
+  const [photo, setPhoto] = useState<{ id: string; title: string } | null>(null);
 
   const loadDay = useCallback(async () => {
     try {
@@ -96,6 +98,11 @@ export function ChecklistStats() {
 
   return (
     <div className="page">
+      {photo && (
+        <Modal title={photo.title} onClose={() => setPhoto(null)}>
+          <img className="cl-photo-big" src={`/api/admin/checklists/marks/${photo.id}/photo`} alt={photo.title} />
+        </Modal>
+      )}
       <h1 className="page-title">{t.title}</h1>
       <div className="btn-row" role="tablist">
         {(['day', 'stats'] as const).map((x) => (
@@ -183,10 +190,25 @@ export function ChecklistStats() {
                           cl.mode === 'individual' ? (
                             <div key={it.key} className={`cl-item${isDone(it) ? ' done' : ''}`}>
                               <span className="cl-dot" aria-hidden="true" />
-                              <span className="cl-text">{it.text}</span>
+                              <span className="cl-text">
+                                {it.text}
+                                {it.photo && <span className="muted"> · {t.photoNeeded}</span>}
+                              </span>
                               <span className="cl-who" title={(it.by ?? []).map((b) => `${b.name} · ${formatClock(b.at)}`).join('\n')}>
                                 {t.peopleDid(it.count ?? 0, crowd)}
-                                {(it.by ?? []).length > 0 && ` · ${(it.by ?? []).map((b) => short(b.name)).join(', ')}`}
+                                {(it.by ?? []).length > 0 && ' · '}
+                                {(it.by ?? []).map((b, bi) => (
+                                  <Fragment key={bi}>
+                                    {bi > 0 && ', '}
+                                    {b.photoId ? (
+                                      <button type="button" className="cl-photo-btn" onClick={() => setPhoto({ id: b.photoId!, title: `${b.name} · ${formatClock(b.at)}` })}>
+                                        <Icon name="camera" size={13} /> {short(b.name)}
+                                      </button>
+                                    ) : (
+                                      short(b.name)
+                                    )}
+                                  </Fragment>
+                                ))}
                               </span>
                             </div>
                           ) : (

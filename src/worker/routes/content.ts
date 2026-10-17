@@ -13,6 +13,7 @@ import { ApiError, badRequest, newId, notFound, readJson, str } from '../lib/htt
 import { indexStatements, unindexStatement } from '../lib/search';
 import { allowedDivisions, loadAccess, requireOwner, requirePermission, requirePositionsInScope, type Access } from '../auth/access';
 import { storeUpload } from './media';
+import { deleteKeys } from '../jobs/punchPhotos';
 import { confirmMatches, purgeContentStatements } from '../lib/purge';
 import { CONTENT_BUNDLE_FORMAT, CONTENT_IMPORT_CHUNK } from '../../shared/contentBundle';
 
@@ -21,6 +22,7 @@ export const contentAdminRoutes = new Hono<AppEnv>();
 
 interface ItemRow {
   checklistMode: string;
+  checklistPhotoKeys: string | null;
   id: string;
   locationId: string | null;
   kind: string;
@@ -43,7 +45,7 @@ interface ItemRow {
 const ITEM_COLUMNS = `id, location_id AS locationId, kind, title, slug, section, status, current_version_id AS currentVersionId,
   requires_ack AS requiresAck, external_url AS externalUrl, attachment_key AS attachmentKey, attachment_name AS attachmentName,
   draft_title AS draftTitle, draft_body_json AS draftBodyJson, draft_updated_at AS draftUpdatedAt, sort_order AS sortOrder,
-  updated_at AS updatedAt, checklist_mode AS checklistMode`;
+  updated_at AS updatedAt, checklist_mode AS checklistMode, checklist_photo_keys AS checklistPhotoKeys`;
 
 function requireEdit(access: Access, locationId: string | null): void {
   if (locationId === null) requireOwner(access);
@@ -227,6 +229,7 @@ contentAdminRoutes.get('/content/:id', async (c) => {
       sortOrder: item.sortOrder,
       editable: item.editable,
       checklistMode: item.kind === 'checklist' ? item.checklistMode : null,
+      checklistPhotoKeys: item.kind === 'checklist' && item.checklistPhotoKeys ? (JSON.parse(item.checklistPhotoKeys) as string[]) : [],
       currentAcknowledgements: ackCount?.n ?? 0,
     },
     draft: item.draftBodyJson
@@ -269,6 +272,7 @@ contentAdminRoutes.put('/content/:id', async (c) => {
     externalUrl?: unknown;
     sortOrder?: unknown;
     checklistMode?: unknown;
+    checklistPhotoKeys?: unknown;
   }>(c.req.raw);
   const now = Date.now();
   const statements: D1PreparedStatement[] = [];
@@ -317,6 +321,14 @@ contentAdminRoutes.put('/content/:id', async (c) => {
     if (item.kind !== 'checklist' || (body.checklistMode !== 'individual' && body.checklistMode !== 'shared')) throw badRequest('checklist_mode_invalid');
     statements.push(db.prepare(`UPDATE content_items SET checklist_mode = ?, updated_at = ? WHERE id = ?`).bind(body.checklistMode, now, item.id));
     settingsChange.checklistMode = body.checklistMode;
+  }
+  if (body.checklistPhotoKeys !== undefined) {
+    const keys = body.checklistPhotoKeys;
+    if (item.kind !== 'checklist' || !Array.isArray(keys) || keys.length > 300 || !keys.every((k) => typeof k === 'string' && /^[0-9a-f]{16}$/.test(k)))
+      throw badRequest('invalid_input');
+    const unique = [...new Set(keys as string[])];
+    statements.push(db.prepare(`UPDATE content_items SET checklist_photo_keys = ?, updated_at = ? WHERE id = ?`).bind(unique.length ? JSON.stringify(unique) : null, now, item.id));
+    settingsChange.checklistPhotoKeys = unique.length;
   }
   if (body.positions !== undefined) {
     const positions = parsePositions(body.positions);
@@ -494,10 +506,15 @@ contentAdminRoutes.delete('/content/:id', async (c) => {
   if (item.status !== 'archived') throw new ApiError(409, 'delete_needs_archive');
   const body = await readJson<{ confirm?: unknown }>(c.req.raw);
   if (!confirmMatches(body.confirm, item.title)) throw badRequest('delete_confirm_mismatch');
+  const photos = await db.prepare(`SELECT photo_key AS k FROM checklist_marks WHERE content_item_id = ? AND photo_key IS NOT NULL`).bind(item.id).all<{ k: string }>();
   await db.batch([
     ...purgeContentStatements(db, item.id),
     auditStatement(db, { actorId: c.var.user.id, locationId: item.locationId, action: 'content.delete', entityType: 'content', entityId: item.id, before: { title: item.title, kind: item.kind } }),
   ]);
+  await deleteKeys(
+    c.env.PHOTOS,
+    photos.results.map((r) => r.k),
+  ).catch(() => undefined);
   return c.json({ ok: true });
 });
 

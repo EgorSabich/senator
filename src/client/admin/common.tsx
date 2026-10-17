@@ -5,6 +5,12 @@ import { errorText, pl } from '../i18n/pl';
 /* ───────── Icons (inline stroke SVG, decorative) ───────── */
 
 const paths: Record<string, ReactNode> = {
+  camera: (
+    <>
+      <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </>
+  ),
   sun: (
     <>
       <circle cx="12" cy="12" r="4" />

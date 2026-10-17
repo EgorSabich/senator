@@ -3,6 +3,7 @@ import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/r
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { POSITIONS } from '../../shared/constants';
 import type { RtNode } from '../../shared/richtext';
+import { checklistItems } from '../../shared/checklist';
 import { api, ApiFailure } from '../api';
 import { diffLines } from '../editor/diff';
 import { editorExtensions } from '../editor/extensions';
@@ -30,6 +31,7 @@ interface Detail {
     attachment: { src: string; name: string } | null;
     positions: string[];
     checklistMode: 'individual' | 'shared' | null;
+    checklistPhotoKeys?: string[];
     editable?: boolean;
     currentAcknowledgements: number;
   };
@@ -231,6 +233,9 @@ export function ContentEditor({ id }: { id: string }) {
                   {item.checklistMode === 'individual' ? t.checklistModeHint.individual : t.checklistModeHint.shared}
                 </span>
               </div>
+            )}
+            {item.kind === 'checklist' && item.checklistMode === 'individual' && editor && (
+              <PhotoItems editor={editor} keys={item.checklistPhotoKeys ?? []} onSave={(keys) => void saveSettings({ checklistPhotoKeys: keys })} />
             )}
             <fieldset style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
               <legend style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-soft)', marginBottom: 6 }}>{t.positions}</legend>
@@ -571,6 +576,48 @@ function CompareDialog({ itemId, versions, versionId, onClose }: { itemId: strin
       )}
       <Btn onClick={onClose}>{pl.admin.card.close}</Btn>
     </Modal>
+  );
+}
+
+
+/** Individual checklists: the leader picks the tasks that are ticked only with a photo (2026-10-17). */
+function PhotoItems({ editor, keys, onSave }: { editor: Editor; keys: string[]; onSave: (keys: string[]) => void }) {
+  const items = useEditorState({ editor, selector: ({ editor: ed }) => JSON.stringify(checklistItems(ed.getJSON() as RtNode)) });
+  const list = JSON.parse(items) as ReturnType<typeof checklistItems>;
+  const chosen = new Set(keys);
+  const lost = keys.filter((k) => !list.some((i) => i.key === k)).length;
+  let section: string | null | undefined;
+  return (
+    <fieldset className="photo-items">
+      <legend>{t.photoItems}</legend>
+      <span className="muted" style={{ fontSize: 12 }}>
+        {t.photoItemsHint}
+      </span>
+      {list.length === 0 && <span className="muted">{t.photoItemsEmpty}</span>}
+      <div className="photo-items-list">
+        {list.map((it) => {
+          const head = it.section !== section ? it.section : undefined;
+          section = it.section;
+          return (
+            <div key={it.key}>
+              {head && <div className="photo-items-sec">{head}</div>}
+              <label className="check">
+                <input type="checkbox" checked={chosen.has(it.key)} onChange={(e) => onSave(e.target.checked ? [...keys, it.key] : keys.filter((k) => k !== it.key))} />
+                <span>{it.text}</span>
+              </label>
+            </div>
+          );
+        })}
+      </div>
+      {lost > 0 && (
+        <span className="muted" style={{ fontSize: 12 }}>
+          {t.photoItemsLost(lost)}{' '}
+          <button type="button" className="link-btn" onClick={() => onSave(keys.filter((k) => list.some((i) => i.key === k)))}>
+            {t.photoItemsClean}
+          </button>
+        </span>
+      )}
+    </fieldset>
   );
 }
 

@@ -203,6 +203,9 @@ export const pl = {
     next: 'Następny miesiąc',
   },
   checklists: {
+    needsPhoto: 'Odhacz ze zdjęciem — otworzy się aparat',
+    withPhoto: 'ze zdjęciem',
+    photoFailed: 'Nie udało się przygotować zdjęcia. Spróbuj jeszcze raz.',
     expandAll: 'Rozwiń wszystko',
     collapseAll: 'Zwiń wszystko',
     otherItems: 'Zadania',
@@ -548,6 +551,7 @@ export const pl = {
       used: (n: number) => `użyty ${n}×`,
     },
     checklists: {
+      photoNeeded: 'ze zdjęciem',
       sectionLeft: (left: number, done: number, total: number) => `brakuje ${left} · ${done}/${total}`,
       title: 'Listy kontrolne',
       day: 'Dzień',
@@ -889,6 +893,11 @@ export const pl = {
       readOnlyOutside: 'Ten materiał jest dla wszystkich albo dla innego działu — możesz go przeczytać, ale zmienia go zarządzający lub właściciel.',
       checklistMode: 'Tryb listy',
       checklistModes: { individual: 'Indywidualna — każdy na zmianie robi wszystkie zadania', shared: 'Wspólna — jedno zadanie robi jedna osoba' },
+      photoItems: 'Zadania ze zdjęciem',
+      photoItemsHint: 'Zaznaczone zadanie pracownik odhacza tylko ze zdjęciem z aparatu. Zdjęcia są w małej rozdzielczości i znikają po 30 dniach.',
+      photoItemsEmpty: 'Dodaj punkty listy w treści — pojawią się tutaj.',
+      photoItemsLost: (n: number) => `${n} zaznaczonych zadań zmieniło treść lub zniknęło z listy.`,
+      photoItemsClean: 'Usuń je z wyboru',
       checklistModeHint: {
         individual: 'Każdy pracownik na zmianie ma swoją kopię listy. W panelu widać postęp każdej osoby.',
         shared: 'Zespół dzieli zadania: kto pierwszy odhaczy, ten robi. Listę można zamknąć na dzień.',
@@ -1033,6 +1042,7 @@ export const pl = {
     saveError: 'Nie udało się zapisać.',
   },
   errors: {
+    photo_required: 'To zadanie odhaczasz ze zdjęciem z aparatu.',
     invalid_credentials: 'Nieprawidłowy login lub PIN.',
     locked: 'Zbyt wiele nieudanych prób. Spróbuj ponownie za 15 minut albo poproś menedżera o odblokowanie.',
     too_many_attempts: 'Zbyt wiele prób z tego urządzenia. Spróbuj ponownie za 15 minut.',
