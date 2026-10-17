@@ -2,7 +2,8 @@
    Shell: cache-first for hashed assets, network-first for pages.
    Data: network-first for staff API GETs and /media, kept in a cache cleared on logout/login.
    Never cached: auth (except /api/auth/me), admin API, non-GET, error answers. */
-const SHELL = 'sa-shell-v4'; // v4: drops files saved by mistake as a page (blank screen after a deploy)
+const BUILD = '__SW_BUILD__'; // replaced at build time: a new file on every deploy
+const SHELL = `sa-shell-${BUILD}`; // v4: drops files saved by mistake as a page (blank screen after a deploy)
 const DATA = 'sa-data-v1';
 
 self.addEventListener('install', (event) => {
@@ -15,11 +16,23 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
+  let updated = false; // an older version was here before (not the very first visit)
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL && k !== DATA).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim()),
+      .then((keys) => {
+        const old = keys.filter((k) => k !== SHELL && k !== DATA);
+        updated = old.some((k) => k.startsWith('sa-shell-'));
+        return Promise.all(old.map((k) => caches.delete(k)));
+      })
+      .then(() => self.clients.claim())
+      // Screens opened with an older version reload themselves, so nobody keeps old code after a deploy
+      // (a home-screen app on iPhone can stay open for days). No reinstall needed.
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then((wins) => {
+        // not awaited: the reload goes through this worker, which must finish activating first
+        if (updated) for (const w of wins) if (w.navigate) w.navigate(w.url).catch(() => undefined);
+      }),
   );
 });
 
@@ -33,6 +46,22 @@ async function networkFirst(request, cacheName, fallbackKey) {
     return res;
   } catch (err) {
     const hit = await caches.match(fallbackKey || request, { cacheName });
+    if (hit) return hit;
+    throw err;
+  }
+}
+
+/** App page: from the server, past the browser's HTTP cache; the saved copy only when offline. */
+async function page(req) {
+  try {
+    const res = await fetch(req.url, { cache: 'no-store', credentials: 'same-origin' });
+    if (res.ok) {
+      const copy = res.clone();
+      caches.open(SHELL).then((c) => c.put('/', copy));
+    }
+    return res;
+  } catch (err) {
+    const hit = await caches.match('/', { cacheName: SHELL });
     if (hit) return hit;
     throw err;
   }
@@ -75,6 +104,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (req.mode === 'navigate') {
-    event.respondWith(networkFirst(req, SHELL, '/'));
+    // always the newest page from the server (never the browser's HTTP cache); the saved copy only without internet
+    event.respondWith(page(req));
   }
 });

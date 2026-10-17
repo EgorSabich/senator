@@ -3,6 +3,13 @@
 
 
 
+
+## 0.10.2 — 2026-10-17
+
+- Installed apps move to a new version by themselves, no reinstall: every build stamps `sw.js` with its own id, so phones see a new service worker; when it takes over from an older one it reloads the open screens (not awaited inside `activate` — that would deadlock).
+- App pages come from the server past the browser's HTTP cache (`cache: 'no-store'`; `_headers`: `/`, `/index.html` no-cache); the saved page only offline.
+- The app also asks the service worker to check for an update whenever it comes back to the screen.
+
 ## 0.10.1 — 2026-10-17
 
 - Phones stay on the newest version: the app asks `/api/health` for the version when it comes back to the screen and every 10 minutes; a newer one reloads the app on return, or shows „Nowa wersja — dotknij, aby odświeżyć”.

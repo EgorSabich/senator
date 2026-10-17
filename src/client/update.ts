@@ -65,8 +65,10 @@ export function watchForUpdates(onNewVersion: () => void): void {
     }
     onNewVersion();
   };
+  const swCheck = () => navigator.serviceWorker?.getRegistration().then((r) => r?.update()).catch(() => undefined);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
+    void swCheck();
     if (pending) {
       reloadOnce(`version:${__APP_VERSION__}`);
       return;
