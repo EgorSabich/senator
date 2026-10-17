@@ -1,4 +1,5 @@
 import { disablePush } from '../push';
+import { clearPersonalCache } from '../pwa';
 import { TimeTracking } from './TimeTracking';
 import { Schedule } from './Schedule';
 import { Recruitment } from './Recruitment';
@@ -94,6 +95,7 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
   async function logout() {
     await disablePush();
     await api('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+    await clearPersonalCache();
     onLoggedOut();
   }
 

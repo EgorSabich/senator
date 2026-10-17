@@ -2,6 +2,14 @@
  * Wszystkie teksty widoczne dla użytkownika — tylko po polsku.
  * Nowe teksty dodajemy wyłącznie tutaj, nigdy bezpośrednio w komponentach.
  */
+/** 1 dokument, 2–4 dokumenty, 5+ dokumentów (12–14 dokumentów) */
+function docsWord(n: number): string {
+  if (n === 1) return '1 dokument';
+  const t = n % 10;
+  const h = n % 100;
+  return t >= 2 && t <= 4 && (h < 12 || h > 14) ? `${n} dokumenty` : `${n} dokumentów`;
+}
+
 export const pl = {
   app: {
     name: 'SENATOR',
@@ -500,8 +508,11 @@ export const pl = {
     today: {
       documents: 'Dokumenty obowiązkowe',
       toPeople: 'Pracownicy',
-      docsOverdue: (n: number, since: string) => `${n === 1 ? '1 dokument' : `${n} dokumenty`} po terminie od ${since}`,
-      docsPending: (n: number, until: string) => `${n === 1 ? '1 dokument' : `${n} dokumenty`} do przeczytania, termin ${until}`,
+      docsOverdue: (n: number, since: string) => `${docsWord(n)} po terminie od ${since}`,
+      docsPending: (n: number, until: string) => `${docsWord(n)} do przeczytania, termin ${until}`,
+      lockedCount: (n: number) => `${n} zablok.`,
+      lockedShort: 'Zablokowany',
+      readingCount: (n: number) => `${n} w terminie`,
       locked: 'Grafik zablokowany',
       daysLeft: (n: number) => (n === 0 ? 'ostatni dzień' : n === 1 ? '1 dzień' : `${n} dni`),
       title: 'Dziś',
@@ -905,8 +916,15 @@ export const pl = {
     card: {
       copy: 'Kopiuj dane logowania',
       copied: 'Skopiowano ✓',
-      copyText: (name: string, url: string, login: string, label: string, secret: string, note: string) =>
-        `Senator Academy — dane logowania\n${name}\n\nAdres: ${url}\nLogin: ${login}\n${label}: ${secret}\n\n${note}`,
+      // the copied message (sent to the person): what the app is and how to start — without the note for the manager
+      copyText: (name: string, url: string, login: string, label: string, secret: string, _note: string) =>
+        `Senator Academy — dane logowania\n${name}\n\n` +
+        `Senator Academy to aplikacja zespołu restauracji Senator: Twój grafik i czas pracy, listy zadań na zmianę, regulaminy, Service Book, menu i szkolenia — wszystko w telefonie.\n\n` +
+        `Adres: ${url}\nLogin: ${login}\n${label}: ${secret}\n\n` +
+        `Jak zacząć:\n` +
+        `1. Otwórz adres w telefonie i zaloguj się.\n` +
+        `2. Dodaj aplikację do ekranu początkowego — aplikacja pokaże, jak to zrobić.\n` +
+        `3. Otwórz aplikację z ikony na ekranie, wejdź w Konto → Powiadomienia i kliknij „Włącz”. To obowiązkowe: tak dowiesz się o nowym grafiku, zmianach i dokumentach do przeczytania.`,
       title: 'Dane do pierwszego logowania',
       login: 'Login',
       pin: 'Tymczasowy PIN',

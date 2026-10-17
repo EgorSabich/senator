@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { divisionOf, POSITIONS } from '../../shared/constants';
 import { comparePl, foldPolish } from '../../shared/text';
-import { api, ApiFailure } from '../api';
+import { api, ApiFailure, cached } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { navigate } from '../router';
 import { ErrorBox, LogoLoader } from '../ui';
@@ -34,7 +34,7 @@ const t = pl.admin.employees;
 
 export function Employees({ selectedId }: { selectedId: string | null }) {
   const { locationId, can, isOwner, me } = usePanel();
-  const [list, setList] = useState<Employee[] | null>(null);
+  const [list, setList] = useState<Employee[] | null>(() => cached<{ employees: Employee[] }>(`/api/admin/locations/${locationId}/employees`)?.employees ?? null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('active');
@@ -45,7 +45,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const canManage = can('employees.manage');
-  const [divisions, setDivisions] = useState<string[] | null>(null);
+  const [divisions, setDivisions] = useState<string[] | null>(() => cached<{ divisions?: string[] | null }>(`/api/admin/locations/${locationId}/employees`)?.divisions ?? null);
 
   const load = useCallback(async () => {
     try {
@@ -226,6 +226,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
               <div className={`emp${e.id === selectedId ? ' open' : ''}`} data-emp={e.id}>
                 <button
                   className="row-btn"
+                  onPointerDown={() => e.role === 'employee' && e.id !== selectedId && void prefetchSummary(locationId, e.id).catch(() => undefined)}
                   aria-current={e.id === selectedId}
                   aria-expanded={e.id === selectedId}
                   onClick={() => navigate(e.id === selectedId ? '/panel/pracownicy' : `/panel/pracownicy/${e.id}`, { keepScroll: true })}
@@ -250,13 +251,7 @@ export function Employees({ selectedId }: { selectedId: string | null }) {
                 <div className="emp-detail" inert={e.id !== selectedId}>
                   <div className="emp-detail-inner">
                     {(e.id === selectedId || e.id === closingId) && (
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 18,
-                        }}
-                      >
+                      <div className="emp-detail-body">
                         <div
                           style={{
                             display: 'flex',
@@ -514,13 +509,31 @@ interface SummaryData {
 const monthName = (m: string) => new Intl.DateTimeFormat('pl-PL', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(m + '-15T12:00:00Z'));
 
 /** Training progress, hours of this and last month, hourly rate (D37). */
+/**
+ * Card data is fetched when the finger touches the row (before the card opens) and kept for a minute,
+ * so the opening card already has its content and nothing pops in afterwards.
+ */
+const summaryCache = new Map<string, { at: number; p: Promise<SummaryData> }>();
+export function prefetchSummary(locationId: string, userId: string, fresh = false): Promise<SummaryData> {
+  const key = `${locationId}:${userId}`;
+  const hit = summaryCache.get(key);
+  if (hit && !fresh && Date.now() - hit.at < 60_000) return hit.p;
+  const p = api<SummaryData>(`/api/admin/locations/${locationId}/users/${userId}/summary`);
+  summaryCache.set(key, { at: Date.now(), p });
+  p.catch(() => summaryCache.delete(key));
+  return p;
+}
+
 function Summary({ userId, locationId, canManage, allowed }: { userId: string; locationId: string; canManage: boolean; allowed: string[] }) {
   const s = pl.admin.employees.summary;
   const [data, setData] = useState<SummaryData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const first = useRef(true);
   const load = useCallback(async () => {
     try {
-      setData(await api<SummaryData>(`/api/admin/locations/${locationId}/users/${userId}/summary`));
+      // the first load uses the prefetched answer; later reloads (after a change) ask again
+      setData(await prefetchSummary(locationId, userId, !first.current));
+      first.current = false;
     } catch (e) {
       setError(errorText(e instanceof ApiFailure ? e.code : 'generic'));
     }
@@ -529,7 +542,7 @@ function Summary({ userId, locationId, canManage, allowed }: { userId: string; l
     void load();
   }, [load]);
 
-  if (!data) return error ? <ErrorBox message={error} /> : <LogoLoader />;
+  if (!data) return error ? <ErrorBox message={error} /> : <div className="emp-summary-wait"><LogoLoader /></div>;
   const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
   const month = (k: 'thisMonth' | 'prevMonth') => {
     const h = data.hours[k];

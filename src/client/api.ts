@@ -1,3 +1,4 @@
+import { apiCache } from './apiCache';
 export class ApiFailure extends Error {
   constructor(
     public status: number,
@@ -21,7 +22,13 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   }
   const data = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) throw new ApiFailure(res.status, data.error ?? 'generic');
+  if ((init.method ?? 'GET') === 'GET') apiCache.set(path, data);
   return data as T;
+}
+
+/** The last answer for this GET (this tab only): a page opened again — or reached by swiping back — shows it at once. */
+export function cached<T>(path: string): T | null {
+  return apiCache.has(path) ? (apiCache.get(path) as T) : null;
 }
 
 export interface Me {

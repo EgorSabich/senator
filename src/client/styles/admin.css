@@ -88,6 +88,10 @@
   .rail {
     display: none;
   }
+  /* iOS 26 softly blurs the strip right under the status bar; the brand sits below it */
+  .topbar {
+    padding-top: calc(env(safe-area-inset-top) + 26px);
+  }
   .tabbar {
     display: flex;
     overflow-x: auto;
@@ -836,6 +840,28 @@
     opacity 420ms ease 80ms,
     transform 560ms cubic-bezier(0.32, 0.72, 0, 1);
 }
+/* The card's content comes in step by step after the card starts opening (not all at once). */
+.emp-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.emp.open .emp-detail-body > *,
+.emp.open .emp-summary > * {
+  animation: rise-in 460ms cubic-bezier(0.22, 0.7, 0.2, 1) both;
+}
+.emp.open .emp-detail-body > :nth-child(1) { animation-delay: 120ms; }
+.emp.open .emp-detail-body > :nth-child(2) { animation-delay: 170ms; }
+.emp.open .emp-detail-body > :nth-child(3) { animation-delay: 220ms; }
+.emp.open .emp-detail-body > :nth-child(n + 4) { animation-delay: 300ms; }
+.emp.open .emp-summary > :nth-child(1) { animation-delay: 220ms; }
+.emp.open .emp-summary > :nth-child(2) { animation-delay: 270ms; }
+.emp.open .emp-summary > :nth-child(3) { animation-delay: 320ms; }
+.emp.open .emp-summary > :nth-child(n + 4) { animation-delay: 370ms; }
+/* while the data is still on its way: room of about the final height, so the card does not jump */
+.emp-summary-wait {
+  min-height: 220px;
+}
 /* Padding and frame live on the child, so the folded row really is 0 high and the height animates evenly. */
 .emp-detail-inner > * {
   padding: 18px;
@@ -854,6 +880,10 @@
   .emp-detail,
   .emp-detail-inner {
     transition: none !important;
+  }
+  .emp.open .emp-detail-body > *,
+  .emp.open .emp-summary > * {
+    animation: none !important;
   }
 }
 .emp-summary {
@@ -2585,5 +2615,117 @@ a.sch-person:hover {
   }
   .rec-agenda {
     display: block;
+  }
+}
+
+/* ───────── Folding card (Dziś → Dokumenty obowiązkowe) ───────── */
+.fold-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fold-sum {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.fold-chev {
+  display: block;
+  flex: none;
+  margin-left: 2px;
+  color: var(--text-muted);
+  transition: transform 420ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.fold.open .fold-chev {
+  transform: rotate(180deg);
+}
+.fold-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 520ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.fold.open .fold-body {
+  grid-template-rows: 1fr;
+}
+.fold-inner {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.fold.open .fold-inner {
+  opacity: 1;
+  transition: opacity 380ms ease 80ms;
+}
+.fold.open .today-doc {
+  animation: rise-in 420ms cubic-bezier(0.22, 0.7, 0.2, 1) both;
+}
+.fold.open .today-doc:nth-child(1) { animation-delay: 80ms; }
+.fold.open .today-doc:nth-child(2) { animation-delay: 120ms; }
+.fold.open .today-doc:nth-child(3) { animation-delay: 160ms; }
+.fold.open .today-doc:nth-child(4) { animation-delay: 200ms; }
+.fold.open .today-doc:nth-child(n + 5) { animation-delay: 240ms; }
+.today-docs {
+  display: flex;
+  flex-direction: column;
+  padding-top: 6px;
+}
+.today-doc {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+}
+.today-doc-icon {
+  display: flex;
+  color: var(--text-muted);
+}
+.today-doc-icon.locked {
+  color: var(--bad-fg);
+}
+.today-doc-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.today-doc-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.today-doc-sub {
+  font-size: 12px;
+  line-height: 1.35;
+}
+.today-docs-all {
+  align-self: flex-start;
+  padding-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fold-body,
+  .fold-inner,
+  .fold-chev {
+    transition: none !important;
+  }
+  .fold.open .today-doc {
+    animation: none !important;
   }
 }

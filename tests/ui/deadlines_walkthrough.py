@@ -35,7 +35,12 @@ with sync_playwright() as pw:
     p.reload(); p.get_by_text("Termin minął").wait_for(); p.wait_for_timeout(400); p.screenshot(path=f"{OUT}/d03-start-locked.png", full_page=True)
     p.goto(BASE+"/grafik"); p.get_by_text("Grafik jest zablokowany").wait_for(); p.wait_for_timeout(400); p.screenshot(path=f"{OUT}/d04-grafik-locked.png", full_page=True)
     p.goto(BASE+"/grafik/niedostepnosc"); p.get_by_text("Grafik jest zablokowany").wait_for()
-    o.goto(BASE+"/panel/dzis"); o.get_by_text("Dokumenty obowiązkowe").wait_for(); o.wait_for_timeout(500); o.screenshot(path=f"{OUT}/d05-dzis.png", full_page=True)
+    o.goto(BASE+"/panel/dzis"); o.get_by_text("Dokumenty obowiązkowe").wait_for()
+    o.get_by_role("button",name=re.compile("Dokumenty obowiązkowe")).click(); o.locator(".today-doc").first.wait_for(); o.wait_for_timeout(800); o.screenshot(path=f"{OUT}/d05-dzis.png", full_page=True)
+    ph=b.new_context(viewport={"width":390,"height":844},locale="pl-PL",device_scale_factor=2,is_mobile=True,has_touch=True).new_page(); watch(ph)
+    ph.goto(BASE+"/"); ph.get_by_label("Login").fill("egor.wlasciciel"); ph.get_by_label("PIN lub hasło").fill("NoweHasloEgora2026"); ph.get_by_role("button",name="Zaloguj się").click(); ph.wait_for_timeout(1200)
+    ph.goto(BASE+"/panel/dzis"); ph.locator(".fold-head").wait_for(); ph.locator(".fold-head").scroll_into_view_if_needed(); ph.wait_for_timeout(300); ph.locator(".fold").screenshot(path=f"{OUT}/d05b-folded.png")
+    ph.locator(".fold-head").click(); ph.wait_for_timeout(900); ph.locator(".fold").screenshot(path=f"{OUT}/d05c-open.png")
     o.goto(BASE+f"/panel/pracownicy/{e['id']}"); o.locator(".emp-missing").wait_for(); o.wait_for_timeout(500); o.locator(".emp.open").screenshot(path=f"{OUT}/d06-card.png")
     # read the overdue one → unlocked
     p.goto(BASE+"/grafik"); p.get_by_role("link",name="Czytaj dokumenty").click(); p.get_by_text("treść").first.wait_for()

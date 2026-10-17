@@ -141,6 +141,16 @@
 .page-enter > :nth-child(n + 5) {
   animation-delay: 200ms;
 }
+/* after an iPhone swipe back the page must simply be there — no second entrance */
+html[data-nav='swipe'] .a-main > *,
+html[data-nav='swipe'] .a-reader > *,
+html[data-nav='swipe'] .page-enter > *,
+html[data-nav='swipe'] .page > *,
+html[data-nav='swipe'] .a-list > .a-row,
+html[data-nav='swipe'] .a-menu-grid > *,
+html[data-nav='swipe'] .a-modules > .a-module {
+  animation: none !important;
+}
 .a-hero img,
 .a-dish img,
 .menu-row img {

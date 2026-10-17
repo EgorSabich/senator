@@ -39,7 +39,10 @@ function notify(direction: 'forward' | 'back') {
   if (doc.startViewTransition && !reducedMotion()) {
     document.documentElement.dataset.nav = direction;
     doc.startViewTransition(() => flushSync(run));
-  } else run();
+  } else {
+    document.documentElement.dataset.nav = direction;
+    run();
+  }
 }
 
 /** keepScroll: the page stays where it is and changes without a page transition (cards opening in a list). */
@@ -64,7 +67,17 @@ if (typeof window !== 'undefined') {
   window.addEventListener('popstate', (e) => {
     scrolls.set(entryKey, window.scrollY);
     entryKey = (e.state as { k?: string } | null)?.k ?? newKey();
-    pendingRestore = scrolls.get(entryKey) ?? 0;
+    const y = scrolls.get(entryKey) ?? 0;
+    // iPhone swipe back: Safari has already slid the old page in from its snapshot. Our own transition on top
+    // of that made the page flash and fade in a second time — instead, show the page at once, in place.
+    if ((e as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition) {
+      pendingRestore = y;
+      document.documentElement.dataset.nav = 'swipe';
+      flushSync(() => listeners.forEach((l) => l()));
+      window.scrollTo(0, y);
+      return;
+    }
+    pendingRestore = y;
     notify('back');
   });
 }

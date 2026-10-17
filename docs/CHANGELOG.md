@@ -10,6 +10,14 @@
 
 
 
+## 0.9.9 — 2026-10-17 (fixes after the owner's check)
+
+- Employee card: its data is fetched when the finger touches the row and kept for a minute; the content comes in step by step while the card opens (no sudden pop-in), with room reserved while data is on its way.
+- Dziś → „Dokumenty obowiązkowe” folds (closed by default, remembered): the header shows „N zablok.” / „N w terminie”; opening animates; rows have thin line icons (clock / lock) instead of emoji, full text and correct Polish plurals („29 dokumentów”).
+- iPhone swipe back: when Safari has already animated the swipe, the page is shown at once without our own transition or entrance animation. Panel lists (Dziś, Pracownicy) open from the last answer at once and refresh in the background; the cache is cleared on logout from the panel too.
+- Panel on phones: the header sits lower, out of the strip iOS 26 blurs under the status bar.
+- „Kopiuj dane logowania”: the copied message says what the app is for and how to start (log in, add to the home screen, switch on notifications in Konto); the note for the manager („Widoczne tylko teraz…”) is no longer copied.
+
 ## 0.9.8 — 2026-10-17 (iteration 3, step 4: Rekrutacja)
 
 - Panel → „Rekrutacja” (mockups 7–9). Table: stage chips with counts („Aktywni” = Nowy, Rozmowa, Dzień próbny, Przyjęty), division chips, search by name or phone, sort by name / nearest date / added, stage changed straight from the row; on a phone each row is a compact card. RODO warning for candidates deleted within 30 days.
