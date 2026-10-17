@@ -10,7 +10,6 @@ interface ContentView {
   item: {
     id: string;
     kind: string;
-    tabTitle?: string | null;
     title: string;
     section: string | null;
     requiresAck: boolean;
@@ -87,10 +86,10 @@ export function Reader({ id }: { id: string }) {
 
   return (
     <>
-      <TopBar title={it.module?.title ?? it.section ?? ''} meta={it.tabTitle ?? t.kinds[it.kind] ?? ''} />
+      <TopBar title={it.module?.title ?? it.section ?? ''} meta={t.kinds[it.kind] ?? ''} />
       <main className="a-reader">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span className="a-label">{it.tabTitle ?? t.kinds[it.kind]}</span>
+          <span className="a-label">{t.kinds[it.kind]}</span>
           <h1 className="a-title" style={{ fontSize: 34 }}>
             {it.title}
           </h1>

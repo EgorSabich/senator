@@ -2,8 +2,7 @@
    Shell: cache-first for hashed assets, network-first for pages.
    Data: network-first for staff API GETs and /media, kept in a cache cleared on logout/login.
    Never cached: auth (except /api/auth/me), admin API, non-GET, error answers. */
-const BUILD = '__SW_BUILD__'; // replaced at build time: a new file on every deploy
-const SHELL = `sa-shell-${BUILD}`; // v4: drops files saved by mistake as a page (blank screen after a deploy)
+const SHELL = 'sa-shell-v3';
 const DATA = 'sa-data-v1';
 
 self.addEventListener('install', (event) => {
@@ -16,23 +15,11 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  let updated = false; // an older version was here before (not the very first visit)
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => {
-        const old = keys.filter((k) => k !== SHELL && k !== DATA);
-        updated = old.some((k) => k.startsWith('sa-shell-'));
-        return Promise.all(old.map((k) => caches.delete(k)));
-      })
-      .then(() => self.clients.claim())
-      // Screens opened with an older version reload themselves, so nobody keeps old code after a deploy
-      // (a home-screen app on iPhone can stay open for days). No reinstall needed.
-      .then(() => self.clients.matchAll({ type: 'window' }))
-      .then((wins) => {
-        // not awaited: the reload goes through this worker, which must finish activating first
-        if (updated) for (const w of wins) if (w.navigate) w.navigate(w.url).catch(() => undefined);
-      }),
+      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL && k !== DATA).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim()),
   );
 });
 
@@ -51,29 +38,11 @@ async function networkFirst(request, cacheName, fallbackKey) {
   }
 }
 
-/** App page: from the server, past the browser's HTTP cache; the saved copy only when offline. */
-async function page(req) {
-  try {
-    const res = await fetch(req.url, { cache: 'no-store', credentials: 'same-origin' });
-    if (res.ok) {
-      const copy = res.clone();
-      caches.open(SHELL).then((c) => c.put('/', copy));
-    }
-    return res;
-  } catch (err) {
-    const hit = await caches.match('/', { cacheName: SHELL });
-    if (hit) return hit;
-    throw err;
-  }
-}
-
 async function cacheFirst(request, cacheName) {
   const hit = await caches.match(request, { cacheName });
   if (hit) return hit;
   const res = await fetch(request);
-  // a script that no longer exists comes back as the app page (SPA fallback): never keep that
-  const isPage = (res.headers.get('content-type') || '').includes('text/html');
-  if (res.ok && !isPage) {
+  if (res.ok) {
     const copy = res.clone();
     caches.open(cacheName).then((c) => c.put(request, copy));
   }
@@ -104,7 +73,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (req.mode === 'navigate') {
-    // always the newest page from the server (never the browser's HTTP cache); the saved copy only without internet
-    event.respondWith(page(req));
+    event.respondWith(networkFirst(req, SHELL, '/'));
   }
 });

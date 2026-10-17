@@ -12,7 +12,6 @@ import { ErrorBox, LogoLoader } from '../ui';
 import { Btn, Modal, storageGet, storageSet } from './common';
 import { usePanel } from './Panel';
 import { TimeField, VALID_TIME } from './TimeTracking';
-import { deliver, schedulePdf, schedulePng, type ExportInput } from './scheduleExport';
 
 const t = pl.admin.schedule;
 const DIV_KEY = 'sa.panel.scheduleDivisions';
@@ -101,8 +100,7 @@ const hours = (min: number) => `${Math.floor(min / 60)}:${String(min % 60).padSt
 const compact = (m: number) => (m % 60 ? formatHm(m) : String(Math.floor((m % 1440) / 60)));
 
 export function Schedule() {
-  const { locationId, can, me } = usePanel();
-  const [exporting, setExporting] = useState(false);
+  const { locationId, can } = usePanel();
   const today = businessDate(Date.now());
   const [week, setWeek] = useState(() => weekStart(addDays(today, 7)));
   const [mode, setMode] = useState<'week' | 'month'>(() => (storageGet(MODE_KEY) === 'month' ? 'month' : 'week'));
@@ -188,9 +186,6 @@ export function Schedule() {
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <h1 className="page-title">{t.title}</h1>
         <div className="btn-row">
-          <Btn onClick={() => setExporting(true)} disabled={!data || !present.length}>
-            {t.export.button}
-          </Btn>
           {mode === 'week' && (
             <Btn onClick={() => void copyWeek()} disabled={busy || !data}>
               {t.copyWeek}
@@ -394,13 +389,6 @@ export function Schedule() {
         {t.help}
       </p>
       {data && <Templates templates={data.templates.filter((x) => shown.includes(x.division))} onChanged={load} onError={setError} />}
-      {exporting && data && (
-        <ExportDialog
-          onClose={() => setExporting(false)}
-          input={() => exportInput(data, shown, mode, me.locations.find((l) => l.id === locationId)?.name ?? 'Senator', mode === 'month' ? monthName(month) : t.weekLabel(longDay.format(new Date(`${week}T12:00:00Z`)), longDay.format(new Date(`${addDays(week, 6)}T12:00:00Z`))))}
-          fileBase={`grafik-${mode === 'month' ? month : week}`}
-        />
-      )}
       {cell && data && (
         <ShiftDialog
           locationId={locationId}
@@ -415,95 +403,6 @@ export function Schedule() {
         />
       )}
     </div>
-  );
-}
-
-/** What goes on paper: the divisions on screen, every non-removed shift, days off in grey. */
-function exportInput(data: WeekView, shown: string[], mode: 'week' | 'month', location: string, period: string): ExportInput {
-  const x = t.export;
-  const groups = shown.map((g) => ({
-    name: pl.admin.divisions[g] ?? g,
-    rows: data.people
-      .filter((p) => p.divisions.includes(g))
-      .map((p) => {
-        const mine = data.shifts.filter((s) => s.userId === p.id && s.division === g && !s.deleted);
-        const min = mine.reduce((a, s) => a + (s.endMin - s.startMin), 0);
-        return {
-          name: `${p.firstName} ${p.lastName}`,
-          hours: min ? hours(min) : '—',
-          cells: data.days.map((d) => {
-            const own = mine.filter((s) => s.date === d).sort((a, b) => a.startMin - b.startMin);
-            if (own.length) return { lines: own.map((s) => (mode === 'month' ? `${compact(s.startMin)}–${compact(s.endMin)}` : range(s))) };
-            const off = data.unavailability.find((u) => u.userId === p.id && u.date === d);
-            if (off) return { lines: [mode === 'month' ? (isWhole(off) ? '✕' : '½') : isWhole(off) ? x.off : offPart(off)], muted: true };
-            return { lines: [] };
-          }),
-        };
-      }),
-  }));
-  const stamp = new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Warsaw' }).format(new Date());
-  return {
-    title: `${t.title} · ${location}`,
-    subtitle: period,
-    note: data.unpublished ? x.draft(data.unpublished) : undefined,
-    footer: x.footer(stamp),
-    days: data.days.map((d) => {
-      const date = new Date(`${d}T12:00:00Z`);
-      return mode === 'month'
-        ? { label: String(date.getUTCDate()), sub: ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb'][date.getUTCDay()], weekend: isWeekend(d) }
-        : {
-            label: new Intl.DateTimeFormat('pl-PL', { weekday: 'long', timeZone: 'UTC' }).format(date).replace(/^./, (c) => c.toUpperCase()),
-            sub: new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(date),
-            weekend: isWeekend(d),
-          };
-    }),
-    hoursLabel: t.hoursCol,
-    personLabel: t.person,
-    groups,
-    compact: mode === 'month',
-  };
-}
-
-function ExportDialog({ onClose, input, fileBase }: { onClose: () => void; input: () => ExportInput; fileBase: string }) {
-  const x = t.export;
-  const [busy, setBusy] = useState<'png' | 'pdf' | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  async function run(kind: 'png' | 'pdf') {
-    setBusy(kind);
-    setError(null);
-    try {
-      await new Promise((r) => setTimeout(r, 30)); // let the button show "Przygotowuję…"
-      const data = input();
-      const blob = kind === 'png' ? await schedulePng(data) : schedulePdf(data);
-      await deliver(blob, `${fileBase}.${kind}`);
-      onClose();
-    } catch {
-      setError(x.failed);
-    } finally {
-      setBusy(null);
-    }
-  }
-  return (
-    <Modal title={x.title} onClose={onClose}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-          {x.intro}
-        </p>
-        <button type="button" className="row-btn" disabled={busy !== null} onClick={() => void run('png')}>
-          <strong>{busy === 'png' ? x.working : x.png}</strong>
-          <span className="muted" style={{ fontSize: 12 }}>
-            {x.pngHint}
-          </span>
-        </button>
-        <button type="button" className="row-btn" disabled={busy !== null} onClick={() => void run('pdf')}>
-          <strong>{busy === 'pdf' ? x.working : x.pdf}</strong>
-          <span className="muted" style={{ fontSize: 12 }}>
-            {x.pdfHint}
-          </span>
-        </button>
-        <ErrorBox message={error} />
-      </div>
-    </Modal>
   );
 }
 

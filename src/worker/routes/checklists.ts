@@ -14,7 +14,6 @@ import { auditStatement } from '../lib/audit';
 import { ApiError, badRequest, newId, notFound, readJson } from '../lib/http';
 import { allowedDivisions, loadAccess, requireLocation, requirePermission, scopedUserIds, type Access } from '../auth/access';
 import { isVisibleFor, userPositions, visibleContent } from '../lib/learning';
-import { CHECKLIST_PHOTO_MAX_BYTES, decodeJpeg } from '../jobs/punchPhotos';
 
 export const checklistRoutes = new Hono<AppEnv>();
 export const checklistAdminRoutes = new Hono<AppEnv>();
@@ -27,24 +26,12 @@ interface ChecklistRow {
   currentVersionId: string | null;
   positions: string | null;
   mode: 'individual' | 'shared';
-  photoKeysJson: string | null;
-}
-
-/** Item keys that need a photo — individual lists only. */
-function photoKeys(cl: ChecklistRow): Set<string> {
-  if (cl.mode !== 'individual' || !cl.photoKeysJson) return new Set();
-  try {
-    const v = JSON.parse(cl.photoKeysJson) as unknown;
-    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
-  } catch {
-    return new Set();
-  }
 }
 
 async function loadChecklist(db: D1Database, id: string): Promise<ChecklistRow & { body: RtNode | null }> {
   const row = await db
     .prepare(
-      `SELECT ci.id, ci.location_id AS locationId, ci.title, ci.status, ci.current_version_id AS currentVersionId, ci.checklist_mode AS mode, ci.checklist_photo_keys AS photoKeysJson,
+      `SELECT ci.id, ci.location_id AS locationId, ci.title, ci.status, ci.current_version_id AS currentVersionId, ci.checklist_mode AS mode,
               (SELECT group_concat(position) FROM content_item_positions p WHERE p.content_item_id = ci.id) AS positions,
               v.body_json AS bodyJson
        FROM content_items ci LEFT JOIN content_versions v ON v.id = ci.current_version_id
@@ -69,8 +56,6 @@ interface MarkRow {
   userId: string;
   markedAt: number;
   name: string;
-  markId: string;
-  hasPhoto: number;
 }
 
 /** Employees who worked that day at the location and whose position the list is for (individual lists). */
@@ -97,7 +82,7 @@ async function dayView(db: D1Database, cl: ChecklistRow & { body: RtNode | null 
   const [marksRes, day] = await db.batch([
     db
       .prepare(
-        `SELECT m.item_key AS itemKey, m.item_text AS itemText, m.section, m.user_id AS userId, m.marked_at AS markedAt, m.id AS markId, (m.photo_key IS NOT NULL) AS hasPhoto,
+        `SELECT m.item_key AS itemKey, m.item_text AS itemText, m.section, m.user_id AS userId, m.marked_at AS markedAt,
                 u.first_name || ' ' || u.last_name AS name
          FROM checklist_marks m JOIN users u ON u.id = m.user_id
          WHERE m.content_item_id = ? AND m.business_date = ? AND m.location_id = ? ORDER BY m.marked_at`,
@@ -115,7 +100,6 @@ async function dayView(db: D1Database, cl: ChecklistRow & { body: RtNode | null 
   const marks = marksRes!.results as MarkRow[];
 
   if (cl.mode === 'individual') {
-    const needPhoto = photoKeys(cl);
     const known = new Set(items.map((i) => i.key));
     const mine = new Map(marks.filter((m) => m.userId === viewerId).map((m) => [m.itemKey, m]));
     const byItem = new Map<string, MarkRow[]>();
@@ -136,9 +120,8 @@ async function dayView(db: D1Database, cl: ChecklistRow & { body: RtNode | null 
         key: it.key,
         section: it.section,
         text: it.text,
-        photo: needPhoto.has(it.key),
-        mark: own ? { userId: own.userId, name: own.name, at: own.markedAt, photo: Boolean(own.hasPhoto) } : null,
-        ...(viewerId === null ? { count: all.length, by: all.map((m) => ({ name: m.name, at: m.markedAt, photoId: m.hasPhoto ? m.markId : null })) } : {}),
+        mark: own ? { userId: own.userId, name: own.name, at: own.markedAt } : null,
+        ...(viewerId === null ? { count: all.length, by: all.map((m) => ({ name: m.name, at: m.markedAt })) } : {}),
       };
     });
     const list = [...people.values()].sort((x, y) => y.done - x.done || x.name.localeCompare(y.name, 'pl'));
@@ -237,18 +220,10 @@ checklistRoutes.post('/checklists/:id/marks', async (c) => {
   await requireShift(c, locId);
   const date = businessDate(Date.now(), day);
   await requireOpenDay(db, cl.id, date);
-  const body = await readJson<{ key?: unknown; photo?: unknown }>(c.req.raw);
+  const body = await readJson<{ key?: unknown }>(c.req.raw);
   const item = checklistItems(cl.body).find((i) => i.key === body.key);
   if (!item) throw badRequest('item_unknown');
   const individual = cl.mode === 'individual';
-  // An item that needs a photo is ticked only together with one.
-  let photo: Uint8Array | null = null;
-  if (photoKeys(cl).has(item.key)) {
-    photo = decodeJpeg(body.photo, CHECKLIST_PHOTO_MAX_BYTES);
-    if (!photo) throw badRequest('photo_required');
-  }
-  const markId = newId('cm');
-  const photoKey = photo ? `checklist-photos/${locId}/${date}/${markId}.jpg` : null;
   const taken = individual
     ? null
     : await db
@@ -258,19 +233,11 @@ checklistRoutes.post('/checklists/:id/marks', async (c) => {
   if (taken) throw new ApiError(409, 'item_taken', { name: taken.name });
   const res = await db
     .prepare(
-      `INSERT INTO checklist_marks (id, location_id, content_item_id, business_date, item_key, item_text, section, user_id, marked_at, owner_key, photo_key)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (content_item_id, business_date, item_key, owner_key) DO NOTHING`,
+      `INSERT INTO checklist_marks (id, location_id, content_item_id, business_date, item_key, item_text, section, user_id, marked_at, owner_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (content_item_id, business_date, item_key, owner_key) DO NOTHING`,
     )
-    .bind(markId, locId, cl.id, date, item.key, item.text, item.section, c.var.user.id, Date.now(), individual ? c.var.user.id : '', photoKey)
+    .bind(newId('cm'), locId, cl.id, date, item.key, item.text, item.section, c.var.user.id, Date.now(), individual ? c.var.user.id : '')
     .run();
-  if (photo && photoKey && res.meta.changes) {
-    try {
-      await c.env.PHOTOS.put(photoKey, photo, { httpMetadata: { contentType: 'image/jpeg' } });
-    } catch (e) {
-      await db.prepare(`DELETE FROM checklist_marks WHERE id = ?`).bind(markId).run();
-      throw e;
-    }
-  }
   if (!individual && !res.meta.changes) {
     // someone was faster by a split second
     const who = await db
@@ -288,13 +255,11 @@ checklistRoutes.delete('/checklists/:id/marks/:key', async (c) => {
   const { cl, day } = await staffChecklist(c, c.req.param('id'));
   const date = businessDate(Date.now(), day);
   await requireOpenDay(db, cl.id, date);
-  const mark = await db
-    .prepare(`SELECT id, photo_key AS photoKey FROM checklist_marks WHERE content_item_id = ? AND business_date = ? AND item_key = ? AND user_id = ?`)
+  const res = await db
+    .prepare(`DELETE FROM checklist_marks WHERE content_item_id = ? AND business_date = ? AND item_key = ? AND user_id = ?`)
     .bind(cl.id, date, c.req.param('key'), c.var.user.id)
-    .first<{ id: string; photoKey: string | null }>();
-  if (!mark) throw notFound();
-  await db.prepare(`DELETE FROM checklist_marks WHERE id = ?`).bind(mark.id).run();
-  if (mark.photoKey) await c.env.PHOTOS.delete(mark.photoKey);
+    .run();
+  if (!res.meta.changes) throw notFound();
   return c.json({ ok: true });
 });
 
@@ -424,22 +389,6 @@ checklistAdminRoutes.get('/locations/:locId/checklists/stats', async (c) => {
     closed: closed!.results,
     people: (perPerson!.results as { userId: string }[]).filter((p) => !people || people.has(p.userId)),
   });
-});
-
-/** The photo a person took when ticking an item — for leaders who see that person's checklists. */
-checklistAdminRoutes.get('/checklists/marks/:markId/photo', async (c) => {
-  const db = c.env.DB;
-  const m = await db
-    .prepare(`SELECT photo_key AS photoKey, location_id AS locationId, user_id AS userId FROM checklist_marks WHERE id = ?`)
-    .bind(c.req.param('markId'))
-    .first<{ photoKey: string | null; locationId: string; userId: string }>();
-  if (!m || !m.photoKey) throw notFound();
-  const access = await adminGuard(c, m.locationId);
-  const people = await scopedUserIds(db, access, m.locationId);
-  if (people && !people.has(m.userId)) throw notFound();
-  const obj = await c.env.PHOTOS.get(m.photoKey);
-  if (!obj) throw notFound();
-  return new Response(obj.body, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=3600' } });
 });
 
 /** A manager reopens a closed day (e.g. closed by mistake). */

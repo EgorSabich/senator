@@ -77,12 +77,9 @@ with sync_playwright() as pw:
     o.locator(".time-grid td.today button.cell").first.click(); o.get_by_role("dialog").wait_for(); o.wait_for_timeout(500); o.screenshot(path=f"{OUT}/14-panel-day.png")
     o.get_by_role("dialog").get_by_label("Wyjście").first.fill("0130"); o.get_by_role("dialog").get_by_role("button", name="Zapisz").first.click(); o.wait_for_timeout(900)
     o.keyboard.press("Escape"); o.wait_for_timeout(300)
-    o.locator("tr", has_text="Adam W.").locator("td.today button.cell").first.click(); o.get_by_role("dialog").wait_for(); o.locator(".pcard-photo img").first.wait_for(); o.wait_for_timeout(600)
-    assert o.evaluate("[...document.querySelectorAll('.pcard-photo img')].every(i => i.naturalWidth > 0)"), "punch photo not loaded"
-    o.screenshot(path=f"{OUT}/14a-punch-cards.png")
-    o.locator(".pcard-photo").first.click(); o.locator(".lightbox img").wait_for(); o.wait_for_timeout(450); o.screenshot(path=f"{OUT}/14b-panel-photo.png")
-    o.keyboard.press("Escape"); o.wait_for_timeout(400)
-    assert o.locator(".lightbox").count()==0 and o.get_by_role("dialog").count()>=1, "Esc closes the photo first, the dialog stays"
+    o.locator("tr", has_text="Adam W.").locator("td.today button.cell").first.click(); o.get_by_role("dialog").wait_for(); o.locator(".punch-thumb img").first.wait_for(); o.wait_for_timeout(600)
+    assert o.evaluate("[...document.querySelectorAll('.punch-thumb img')].every(i => i.naturalWidth > 0)"), "punch photo not loaded"
+    o.locator(".punch-thumb").first.click(); o.wait_for_timeout(400); o.screenshot(path=f"{OUT}/14b-panel-photo.png")
     o.keyboard.press("Escape"); o.wait_for_timeout(300)
     # manual shift: typing 4 digits moves on to "Wyjście"
     o.locator(".time-grid td:not(.today) button.cell").first.click(); o.get_by_role("dialog").wait_for()

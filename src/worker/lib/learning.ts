@@ -23,12 +23,7 @@ export interface VisibleItem {
   sortOrder: number;
   updatedAt: number;
   positions: string | null;
-  /** service_book pages: their Wiedza tab and who that tab is for */
-  tabId: string | null;
-  tabPositions: string | null;
 }
-
-export const DEFAULT_TAB = 'kt_service_book';
 
 export async function userPositions(db: D1Database, user: SessionUser, locationId: string): Promise<string[] | null> {
   if (user.role !== 'employee') return null; // managers and owner see everything
@@ -48,17 +43,14 @@ export async function visibleContent(db: D1Database, locationId: string, positio
       `SELECT ci.id, ci.location_id AS locationId, ci.kind, ci.title, ci.section, ci.requires_ack AS requiresAck,
               ci.external_url AS externalUrl, ci.attachment_key AS attachmentKey, ci.attachment_name AS attachmentName,
               ci.current_version_id AS currentVersionId, ci.sort_order AS sortOrder, ci.updated_at AS updatedAt,
-              (SELECT group_concat(position) FROM content_item_positions p WHERE p.content_item_id = ci.id) AS positions,
-              kt.id AS tabId, kt.positions AS tabPositions
+              (SELECT group_concat(position) FROM content_item_positions p WHERE p.content_item_id = ci.id) AS positions
        FROM content_items ci
-       LEFT JOIN knowledge_tabs kt ON ci.kind = 'service_book' AND kt.id = COALESCE(ci.tab_id, '${DEFAULT_TAB}')
        WHERE (ci.location_id = ? OR ci.location_id IS NULL) AND ci.status = 'published' AND ci.current_version_id IS NOT NULL ${kindSql}
        ORDER BY ci.kind, ci.section, ci.sort_order, ci.title`,
     )
     .bind(locationId, ...(kinds ?? []))
     .all<VisibleItem>();
-  // a page of a tab is seen only by people the tab is for (Service Book → waiters)
-  return results.filter((r) => isVisibleFor(r.positions, positions) && isVisibleFor(r.tabPositions, positions));
+  return results.filter((r) => isVisibleFor(r.positions, positions));
 }
 
 export function isVisibleFor(itemPositions: string | null, positions: string[] | null): boolean {

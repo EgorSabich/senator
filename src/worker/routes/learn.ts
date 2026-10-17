@@ -13,7 +13,7 @@ import { locationView } from './admin';
 import { locationRules } from '../lib/location';
 import { businessDate } from '../../shared/time';
 import { loadAccess, requireLocation } from '../auth/access';
-import { DOCUMENT_KINDS, MANDATORY_KINDS, DEFAULT_TAB, isVisibleFor, programFor, progressFor, userPositions, visibleContent, type VisibleItem } from '../lib/learning';
+import { DOCUMENT_KINDS, MANDATORY_KINDS, isVisibleFor, programFor, progressFor, userPositions, visibleContent, type VisibleItem } from '../lib/learning';
 
 export const learnRoutes = new Hono<AppEnv>();
 // Session is enforced in index.ts.
@@ -100,20 +100,17 @@ async function loadVisible(c: { env: AppEnv['Bindings']; var: AppEnv['Variables'
       `SELECT ci.id, ci.location_id AS locationId, ci.kind, ci.title, ci.section, ci.requires_ack AS requiresAck, ci.external_url AS externalUrl,
               ci.attachment_key AS attachmentKey, ci.attachment_name AS attachmentName, ci.current_version_id AS currentVersionId,
               ci.sort_order AS sortOrder, ci.updated_at AS updatedAt, ci.status,
-              (SELECT group_concat(position) FROM content_item_positions p WHERE p.content_item_id = ci.id) AS positions,
-              kt.id AS tabId, kt.positions AS tabPositions, kt.title AS tabTitle
-       FROM content_items ci
-       LEFT JOIN knowledge_tabs kt ON ci.kind = 'service_book' AND kt.id = COALESCE(ci.tab_id, '${DEFAULT_TAB}')
-       WHERE ci.id = ?`,
+              (SELECT group_concat(position) FROM content_item_positions p WHERE p.content_item_id = ci.id) AS positions
+       FROM content_items ci WHERE ci.id = ?`,
     )
     .bind(id)
-    .first<VisibleItem & { status: string; tabTitle: string | null }>();
+    .first<VisibleItem & { status: string }>();
   if (!item || item.status !== 'published' || !item.currentVersionId) throw notFound();
   // Location of the request: the item's own, or for shared content any location the person belongs to.
   const locId = item.locationId ?? [...access.locations.keys()][0];
   if (!locId || !access.locations.has(locId)) throw notFound();
   const positions = await userPositions(db, c.var.user, locId);
-  if (!isVisibleFor(item.positions, positions) || !isVisibleFor(item.tabPositions, positions)) throw notFound();
+  if (!isVisibleFor(item.positions, positions)) throw notFound();
   return { item, locId };
 }
 
@@ -146,7 +143,6 @@ learnRoutes.get('/content/:id', async (c) => {
     item: {
       id: item.id,
       kind: item.kind,
-      tabTitle: item.tabTitle ?? null,
       title: version.title,
       section: item.section,
       requiresAck: Boolean(item.requiresAck) && !item.externalUrl,
@@ -248,16 +244,7 @@ learnRoutes.get('/locations/:locId/service-book', async (c) => {
   const positions = await userPositions(db, c.var.user, locId);
   const items = await visibleContent(db, locId, positions, ['service_book']);
   const progress = await progressFor(db, c.var.user.id, items.map((d) => d.id));
-  // Wiedza tabs that have at least one page this person sees, in the leaders' order.
-  const { results: tabs } = await db
-    .prepare(`SELECT id, title FROM knowledge_tabs WHERE location_id = ? OR location_id IS NULL ORDER BY sort_order, title`)
-    .bind(locId)
-    .all<{ id: string; title: string }>();
-  const used = new Set(items.map((d) => d.tabId));
-  return c.json({
-    tabs: tabs.filter((t) => used.has(t.id)),
-    items: items.map((d) => ({ id: d.id, tabId: d.tabId, title: d.title, section: d.section, status: progress.get(d.id)!.status, updated: progress.get(d.id)!.updated })),
-  });
+  return c.json({ items: items.map((d) => ({ id: d.id, title: d.title, section: d.section, status: progress.get(d.id)!.status, updated: progress.get(d.id)!.updated })) });
 });
 
 /* ───────── Search ───────── */

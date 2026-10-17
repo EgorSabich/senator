@@ -42,7 +42,6 @@ export function purgeUserStatements(db: D1Database, userId: string, login: strin
     s(`UPDATE schedule_shifts SET created_by = NULL WHERE created_by = ?`, userId),
     s(`UPDATE unavailability SET set_by = NULL WHERE set_by = ?`, userId),
     s(`UPDATE checklist_days SET closed_by = NULL WHERE closed_by = ?`, userId),
-    s(`UPDATE knowledge_tabs SET created_by = NULL WHERE created_by = ?`, userId),
     // audit log: keep what happened, drop who it was
     s(`UPDATE audit_log SET actor_id = NULL WHERE actor_id = ?`, userId),
     s(`UPDATE audit_log SET before_json = NULL, after_json = NULL WHERE entity_type = 'user' AND entity_id = ?`, userId),

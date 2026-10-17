@@ -4,6 +4,12 @@
 
 
 
+
+## Rollback to 0.9.1 — 2026-10-17
+
+- On the owner's request the app code is back to 0.9.1 (commit c1d2959); 0.10.0–0.10.2 are reverted.
+- Kept: migrations 0012 (checklist photos) and 0013 (Wiedza tabs) and their schema lines — they are already applied in production; 0.9.1 code does not use those columns and table, so nothing changes for staff. Data created in 0.10.x stays in the database unused.
+
 ## 0.10.2 — 2026-10-17
 
 - Installed apps move to a new version by themselves, no reinstall: every build stamps `sw.js` with its own id, so phones see a new service worker; when it takes over from an older one it reloads the open screens (not awaited inside `activate` — that would deadlock).

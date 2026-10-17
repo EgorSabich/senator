@@ -384,10 +384,7 @@ adminRoutes.delete('/users/:id', async (c) => {
   if (target.status !== 'inactive') throw new ApiError(409, 'delete_needs_inactive');
   const body = await readJson<{ confirm?: unknown }>(c.req.raw);
   if (!confirmMatches(body.confirm, target.login)) throw badRequest('delete_confirm_mismatch');
-  const photos = await db
-    .prepare(`SELECT photo_key AS k FROM time_punches WHERE user_id = ?1 AND photo_key IS NOT NULL UNION ALL SELECT photo_key FROM checklist_marks WHERE user_id = ?1 AND photo_key IS NOT NULL`)
-    .bind(target.id)
-    .all<{ k: string }>();
+  const photos = await db.prepare(`SELECT photo_key AS k FROM time_punches WHERE user_id = ? AND photo_key IS NOT NULL`).bind(target.id).all<{ k: string }>();
   await db.batch([
     ...purgeUserStatements(db, target.id, target.login),
     auditStatement(db, { actorId: c.var.user.id, locationId: target.sharedLocationId, action: 'user.delete', entityType: 'user', entityId: target.id }),

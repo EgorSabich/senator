@@ -21,7 +21,7 @@ interface DayView {
   mode: 'individual' | 'shared';
   me: string;
   onShift: { since: number } | null;
-  items: { key: string; section: string | null; text: string; photo?: boolean; mark: { userId: string; name: string; at: number; photo?: boolean } | null }[];
+  items: { key: string; section: string | null; text: string; mark: { userId: string; name: string; at: number } | null }[];
   done: number;
   total: number;
   closed: { closedAt: number; closedByName: string | null } | null;
@@ -65,34 +65,10 @@ export function ChecklistDay({ id }: { id: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
-  const camera = useRef<HTMLInputElement>(null);
-  const [photoFor, setPhotoFor] = useState<DayView['items'][number] | null>(null);
-
-  async function onPhoto(file: File | undefined) {
-    const item = photoFor;
-    setPhotoFor(null);
-    if (!file || !item) return;
-    setBusy(item.key);
-    try {
-      const photo = await smallJpeg(file);
-      setBusy(null);
-      await toggle(item, photo);
-    } catch {
-      setBusy(null);
-      setProblem(t.photoFailed);
-    }
-  }
-
-  async function toggle(item: DayView['items'][number], photo?: string) {
+  async function toggle(item: DayView['items'][number]) {
     if (!data || busy) return;
     const mine = item.mark?.userId === data.me;
     if (item.mark && !mine) return;
-    // A task that needs a photo opens the camera first.
-    if (!item.mark && item.photo && !photo) {
-      setPhotoFor(item);
-      camera.current?.click();
-      return;
-    }
     setBusy(item.key);
     setProblem(null);
     // optimistic
@@ -103,7 +79,7 @@ export function ChecklistDay({ id }: { id: string }) {
     });
     try {
       if (mine) await api(`/api/checklists/${id}/marks/${item.key}`, { method: 'DELETE' });
-      else await api(`/api/checklists/${id}/marks`, { method: 'POST', body: { key: item.key, photo } });
+      else await api(`/api/checklists/${id}/marks`, { method: 'POST', body: { key: item.key } });
       try {
         navigator.vibrate?.(15);
       } catch {
@@ -204,17 +180,6 @@ export function ChecklistDay({ id }: { id: string }) {
               <p className="a-sub">{data.mode === 'individual' ? t.introIndividual : t.intro}</p>
             )}
             <Problem message={problem} />
-            <input
-              ref={camera}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              hidden
-              onChange={(e) => {
-                void onPhoto(e.target.files?.[0]);
-                e.target.value = '';
-              }}
-            />
             {foldable && sections.length > 1 && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: -8 }}>
                 <button type="button" className="a-link-btn" onClick={() => setFolded(allFolded ? new Set() : new Set(sections.map((_, i) => i)))}>
@@ -242,20 +207,8 @@ export function ChecklistDay({ id }: { id: string }) {
                         </span>
                         <span className="grow">
                           <span className="t">{it.text}</span>
-                          {it.mark ? (
-                            <span className="s">
-                              {t.by(mine ? t.you : it.mark.name, formatClock(it.mark.at))}
-                              {it.mark.photo ? ` · ${t.withPhoto}` : ''}
-                            </span>
-                          ) : (
-                            it.photo && <span className="s">{t.needsPhoto}</span>
-                          )}
+                          {it.mark && <span className="s">{t.by(mine ? t.you : it.mark.name, formatClock(it.mark.at))}</span>}
                         </span>
-                        {it.photo && !it.mark && (
-                          <span className="a-task-cam" aria-hidden="true">
-                            <Icon name="camera" size={20} />
-                          </span>
-                        )}
                       </button>
                     );
                   })}
@@ -286,25 +239,4 @@ export function ChecklistDay({ id }: { id: string }) {
       </main>
     </>
   );
-}
-
-/** Shrinks a camera photo to a small JPEG (long side 1024 px, under ~200 KB) as a data URL. */
-async function smallJpeg(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  let side = 1024;
-  for (;;) {
-    const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    for (const q of [0.7, 0.55, 0.4]) {
-      const url = canvas.toDataURL('image/jpeg', q);
-      if (url.length < 280_000) {
-        bitmap.close();
-        return url;
-      }
-    }
-    side = Math.round(side * 0.75);
-  }
 }
