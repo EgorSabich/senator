@@ -164,6 +164,20 @@ async function dayView(db: D1Database, cl: ChecklistRow & { body: RtNode | null 
   return { mode: cl.mode, items: view, done, total, itemCount: items.length, personalCount: personal.length, people: list, closed };
 }
 
+/** Has this person ticked everything of the list that is theirs to tick today (own items + the shift's shared ones)? */
+export async function checklistDoneFor(db: D1Database, listId: string, userId: string, date: string, locationId: string): Promise<{ done: boolean; title: string } | null> {
+  let cl: ChecklistRow & { body: RtNode | null };
+  try {
+    cl = await loadChecklist(db, listId);
+  } catch {
+    return null;
+  }
+  if (cl.status !== 'published' || !cl.body) return null;
+  const v = await dayView(db, cl, date, locationId, userId);
+  if (!v.total) return null; // nothing to tick — nothing to remind about
+  return { done: v.done >= v.total, title: cl.title };
+}
+
 async function openShift(db: D1Database, userId: string, locationId: string, now: number) {
   const { staleHours } = await locationRules(db, locationId);
   return db

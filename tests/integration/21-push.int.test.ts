@@ -72,7 +72,7 @@ async function arrived(path: string, title: string, min = 1) {
   return got.filter((g) => g.path === path && g.msg?.title === title);
 }
 // async on purpose: the fake push service lives in this process and must keep answering
-const cron = () => fetch(`${BASE}/cdn-cgi/handler/scheduled?cron=0+*+*+*+*`).then((r) => r.text());
+const cron = () => fetch(`${BASE}/cdn-cgi/handler/scheduled?cron=*/5+*+*+*+*`).then((r) => r.text());
 const settle = () => new Promise((r) => setTimeout(r, 1500));
 
 const warsaw = (ms: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw' }).format(new Date(ms));

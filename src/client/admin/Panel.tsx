@@ -4,6 +4,7 @@ import { clearPersonalCache } from '../pwa';
 import { TimeTracking } from './TimeTracking';
 import { Schedule } from './Schedule';
 import { Recruitment } from './Recruitment';
+import { Notifications } from './Notifications';
 import { Today } from './Today';
 import { ChecklistStats } from './ChecklistStats';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
@@ -65,6 +66,7 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
     { path: '/panel/czas', label: pl.admin.nav.time, icon: 'clock', show: ctx.can('time.manage'), main: true },
     { path: '/panel/grafik', label: pl.admin.nav.schedule, icon: 'calendar', show: ctx.can('schedule.manage'), main: true },
     { path: '/panel/rekrutacja', label: pl.admin.nav.recruitment, icon: 'recruit', show: ctx.can('recruitment.manage') },
+    { path: '/panel/powiadomienia', label: pl.admin.nav.notifications, icon: 'bell', show: ctx.can('notifications.manage') },
     { path: '/panel/menu', label: pl.admin.nav.menu, icon: 'menu', show: ctx.can('menu.edit') },
     { path: '/panel/materialy', label: pl.admin.nav.content, icon: 'book', show: ctx.can('content.edit') },
     { path: '/panel/programy', label: pl.admin.nav.programs, icon: 'learn', show: ctx.can('content.edit') },
@@ -95,6 +97,7 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
   else if (path.startsWith('/panel/menedzerowie') && ctx.can('managers.manage')) page = <Managers />;
   else if (path.startsWith('/panel/lokale') && ctx.can('locations.manage')) page = <Locations />;
   else if (path.startsWith('/panel/rekrutacja') && ctx.can('recruitment.manage')) page = <Recruitment path={path} />;
+  else if (path.startsWith('/panel/powiadomienia') && ctx.can('notifications.manage')) page = <Notifications />;
   else if (path.startsWith('/panel/dziennik') && ctx.can('audit.view')) page = <Audit />;
   else if (nav[0]) page = <Redirect to={nav[0].path} />;
 

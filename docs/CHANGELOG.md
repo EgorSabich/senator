@@ -10,6 +10,13 @@
 
 
 
+## 0.9.14 — 2026-10-17 (Panel → Powiadomienia)
+
+- New panel section „Powiadomienia” (bell, under „Więcej” on phones), permission `notifications.manage`: division leaders set their own divisions, the owner and zarządzający all of them. Leaders who plan the schedule get it automatically (migration 0019). Employees cannot switch kinds off.
+- Automatic notifications per division (on/off, time or minutes): „Jutro zmiana” (default 18:00), push right after clock-in and clock-out on the terminal (clock-out with the time worked; none for offline punches older than 10 min), opening checklist reminder once after clock-in (default 30 min), closing checklist reminder once before the planned shift end (default 30 min), days-off deadline (default 18:00 the day before). Which checklists: chosen by name („otwarcie” / „zamknięcie”) until the leader picks them; a list already ticked off gets no reminder. No quiet hours; nothing goes to leaders.
+- Own notifications: title, text, divisions, „tylko osoby na zmianie” or „cały dział”; once (date and time) or repeated on chosen days — at a time, before shift start, after clock-in, before shift end; what opens on tap; „Wyślij próbne do mnie”. Each goes to a person once per day / shift / clock-in.
+- The reminder job now runs every 5 minutes (`*/5 * * * *`, replaces the hourly one). Integration test 26, `notifications_walkthrough.py`.
+
 ## 0.9.13 — 2026-10-17 (live, stage 1; notifications required on Start)
 
 - Start: until notifications are on, a card at the top asks to switch them on („To obowiązkowe…”), with the right step for the phone: „Włącz powiadomienia”, on an iPhone without the home-screen app „Jak dodać aplikację”, when blocked — where to unblock. Checks again when the person comes back from the phone's settings.

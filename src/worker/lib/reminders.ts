@@ -2,7 +2,7 @@
  * What the notifications say and when reminders go out (owner, 2026-10-17):
  * - schedule published: only people whose shifts changed, never people whose Grafik is locked;
  * - a new or significantly changed mandatory document: people who now have to read it;
- * - 18:00 (Warsaw): tomorrow's shift; and, the day before the days-off deadline, people with nothing marked for that week.
+ * Tomorrow's shift, days-off deadline, checklists and own notifications: lib/notifyRules.ts (settings per division).
  */
 import type { Env } from '../env';
 import { addDays, warsawDate } from '../../shared/time';
@@ -21,7 +21,6 @@ const DIVISIONS: Record<string, string> = {
   call_center: 'Call center',
 };
 const DOW = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb'];
-const DOW_LONG = ['Niedziela', 'Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota'];
 const MONTHS = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
 const MONTHS_LONG = ['styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec', 'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'];
 
@@ -127,71 +126,4 @@ async function employeesAt(db: D1Database, locId: string) {
     byId.set(r.id, p);
   }
   return [...byId.values()];
-}
-
-const warsawHour = (ms: number) => Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Europe/Warsaw' }).format(new Date(ms)));
-
-/** Hourly job. Does something only in the 18:00 (Warsaw) run, or always when `force` (tests). */
-export async function runReminders(env: Env, nowMs: number, force = false) {
-  if (!force && warsawHour(nowMs) !== 18) return { skipped: true };
-  const db = env.DB;
-  const today = warsawDate(nowMs);
-  const tomorrow = addDays(today, 1);
-  const out = { shift: 0, unavailability: 0 };
-  const { results: locs } = await db
-    .prepare(`SELECT id, unavail_deadline_dow AS dow, unavail_deadline_hour AS hour FROM locations`)
-    .all<{ id: string; dow: number; hour: number }>();
-  for (const loc of locs) {
-    // tomorrow's shift
-    const { results: shifts } = await db
-      .prepare(
-        `SELECT user_id AS u, division, pub_start_min AS s, pub_end_min AS e FROM schedule_shifts
-         WHERE location_id = ? AND date = ? AND published = 1 AND is_deleted = 0 ORDER BY pub_start_min`,
-      )
-      .bind(loc.id, tomorrow)
-      .all<{ u: string; division: string; s: number; e: number }>();
-    if (shifts.length) {
-      const locked = await lockedUserIds(db, loc.id, shifts.map((s) => s.u), nowMs);
-      const ids = [...new Set(shifts.map((s) => s.u))].filter((u) => !locked.has(u));
-      const r = await notify(
-        env,
-        ids,
-        (u) => {
-          const mine = shifts.filter((s) => s.u === u);
-          const parts = mine.map((s) => `${formatHm(s.s)}–${formatHm(s.e)} · ${DIVISIONS[s.division] ?? s.division}`).join(', ');
-          return { title: 'Jutro zmiana', body: `${DOW_LONG[dow(tomorrow)]} ${parts}`, url: '/grafik', tag: `shift-${tomorrow}` };
-        },
-        { kind: 'shift', ref: `${loc.id}:${tomorrow}` },
-      );
-      out.shift += r.people;
-    }
-    // the days-off deadline falls tomorrow: remind people with nothing marked that week
-    for (const k of [1, 2]) {
-      const monday = addDays(weekStart(today), 7 * k);
-      const deadline = unavailabilityDeadline(monday, loc.dow ?? 0, loc.hour ?? 23);
-      if (deadline <= nowMs || warsawDate(deadline) !== tomorrow) continue;
-      const days = weekDays(monday);
-      const people = await employeesAt(db, loc.id);
-      const { results: marked } = await db
-        .prepare(`SELECT DISTINCT user_id AS u FROM unavailability WHERE location_id = ? AND date BETWEEN ? AND ?`)
-        .bind(loc.id, days[0], days[6])
-        .all<{ u: string }>();
-      const has = new Set(marked.map((m) => m.u));
-      const locked = await lockedUserIds(db, loc.id, people.map((p) => p.id), nowMs);
-      const ids = people.map((p) => p.id).filter((u) => !has.has(u) && !locked.has(u));
-      const r = await notify(
-        env,
-        ids,
-        () => ({
-          title: 'Niedostępność',
-          body: `Jutro do ${String(loc.hour ?? 23).padStart(2, '0')}:59 mija termin na zaznaczenie dni na tydzień ${rangeLabel(days[0]!, days[6]!)}.`,
-          url: '/grafik',
-          tag: `unav-${monday}`,
-        }),
-        { kind: 'unav', ref: `${loc.id}:${monday}` },
-      );
-      out.unavailability += r.people;
-    }
-  }
-  return out;
 }

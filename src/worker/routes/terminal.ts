@@ -14,6 +14,7 @@ import { pinLookup, verifySecret } from '../auth/crypto';
 import { assignPinLookup, burnPinStatement } from '../lib/pin';
 import { clearSessionCookie } from '../auth/session';
 import { decodePunchPhoto } from '../jobs/punchPhotos';
+import { clockPush } from '../lib/notifyRules';
 
 export const terminalRoutes = new Hono<AppEnv>();
 // Session is enforced in index.ts.
@@ -168,9 +169,9 @@ terminalRoutes.post('/punch', async (c) => {
   }
 
   const open = await db
-    .prepare(`SELECT id, clock_in_at AS clockInAt FROM time_entries WHERE user_id = ? AND clock_out_at IS NULL ORDER BY clock_in_at DESC LIMIT 1`)
+    .prepare(`SELECT id, clock_in_at AS clockInAt, business_date AS businessDate, position FROM time_entries WHERE user_id = ? AND clock_out_at IS NULL ORDER BY clock_in_at DESC LIMIT 1`)
     .bind(person.id)
-    .first<{ id: string; clockInAt: number }>();
+    .first<{ id: string; clockInAt: number; businessDate: string; position: string | null }>();
   const source = offline ? 'offline' : 'terminal';
   const rules = await locationRules(db, t.locationId);
 
@@ -189,7 +190,9 @@ terminalRoutes.post('/punch', async (c) => {
       db.prepare(`UPDATE time_entries SET clock_out_at = ?, out_source = ?, out_terminal_id = ? WHERE id = ?`).bind(at, source, t.id, open.id),
       recordStatement(db, t.id, clientId, person.id, at, offline, 'out', open.id, photoKey),
     ]);
-    return c.json({ outcome: 'out' as Outcome, at, firstName: person.firstName, since: open.clockInAt, minutes: Math.round((at - open.clockInAt) / 60000) });
+    const minutes = Math.round((at - open.clockInAt) / 60000);
+    if (now - at < PUSH_MAX_AGE) later(c, clockPush(c.env, t.locationId, person.id, open, { at, minutes }));
+    return c.json({ outcome: 'out' as Outcome, at, firstName: person.firstName, since: open.clockInAt, minutes });
   }
 
   // New shift. A stale open one (no exit) stays open and is flagged for the manager.
@@ -203,8 +206,20 @@ terminalRoutes.post('/punch', async (c) => {
       .bind(id, t.locationId, person.id, businessDate(at, rules.dayStartHour), at, source, t.id, now),
     recordStatement(db, t.id, clientId, person.id, at, offline, 'in', id, photoKey),
   ]);
+  if (now - at < PUSH_MAX_AGE) later(c, clockPush(c.env, t.locationId, person.id, { id, businessDate: businessDate(at, rules.dayStartHour), clockInAt: at }, null));
   return c.json({ outcome: 'in' as Outcome, at, firstName: person.firstName, missingExit: Boolean(open) });
 });
+
+/** Push „Wejście / Wyjście” to the person (2026-10-17). An offline punch sent much later gets none. */
+const PUSH_MAX_AGE = 10 * 60_000;
+function later(c: { executionCtx: { waitUntil(p: Promise<unknown>): void } }, p: Promise<unknown>) {
+  const safe = p.catch((e) => console.warn('clock push', String(e)));
+  try {
+    c.executionCtx.waitUntil(safe);
+  } catch {
+    /* no execution context (tests) — the promise runs anyway */
+  }
+}
 
 function recordStatement(
   db: D1Database,

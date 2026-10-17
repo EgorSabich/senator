@@ -26,7 +26,7 @@
     { "binding": "BACKUPS", "bucket_name": "senator-academy-backups" }
   ],
   // 01:30 UTC = 02:30 / 03:30 czasu warszawskiego (zależnie od zmiany czasu); co godzinę: przypomnienia push (działają o 18:00)
-  "triggers": { "crons": ["30 1 * * *", "0 * * * *"] },
+  "triggers": { "crons": ["30 1 * * *", "*/5 * * * *"] },
   "env": {
     "staging": {
       "name": "senator-academy-staging",
@@ -43,7 +43,7 @@
         { "binding": "PHOTOS", "bucket_name": "senator-academy-photos-staging" },
         { "binding": "BACKUPS", "bucket_name": "senator-academy-backups-staging" }
       ],
-      "triggers": { "crons": ["30 1 * * *", "0 * * * *"] }
+      "triggers": { "crons": ["30 1 * * *", "*/5 * * * *"] }
     }
   }
 }

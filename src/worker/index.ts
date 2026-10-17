@@ -1,6 +1,6 @@
 import { pushRoutes } from './routes/push';
 import { liveRoutes } from './routes/live';
-import { runReminders } from './lib/reminders';
+import { runNotifications } from './lib/notifyRules';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { AppEnv, Env } from './env';
@@ -19,6 +19,7 @@ import { checklistAdminRoutes, checklistRoutes } from './routes/checklists';
 import { scheduleAdminRoutes, scheduleRoutes } from './routes/schedule';
 import { todayAdminRoutes } from './routes/today';
 import { calendarFeedRoutes, recruitmentAdminRoutes } from './routes/recruitment';
+import { notificationAdminRoutes } from './routes/notifications';
 import { expireCandidates } from './jobs/candidates';
 import { requireSameOrigin, requireSession } from './auth/session';
 import { runNightlyBackup } from './jobs/backup';
@@ -61,6 +62,7 @@ admin.route('/', checklistAdminRoutes);
 admin.route('/', scheduleAdminRoutes);
 admin.route('/', todayAdminRoutes);
 admin.route('/', recruitmentAdminRoutes);
+admin.route('/', notificationAdminRoutes);
 app.route('/api/admin', admin);
 
 // Staff (waiter) views; every path here needs a session.
@@ -98,19 +100,19 @@ app.onError((err, c) => {
   return c.json({ error: 'internal_error' }, 500);
 });
 
-const HOURLY = '0 * * * *';
+const EVERY5 = '*/5 * * * *';
 
 export default {
   fetch: app.fetch,
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     const now = new Date(controller.scheduledTime);
-    if (controller.cron === HOURLY) {
-      // reminders (tomorrow's shift, days-off deadline) — only the 18:00 Warsaw run does anything
+    if (controller.cron === EVERY5) {
+      // notifications by the settings per division (Panel → Powiadomienia); local tests: everything due at once
       ctx.waitUntil(
-        runReminders(env, controller.scheduledTime, env.APP_ENV === 'development') // local tests: any hour
-          .then((r) => console.log(JSON.stringify({ job: 'reminders', ...r })))
-          .catch((e) => console.warn('reminders', String(e))),
+        runNotifications(env, controller.scheduledTime, env.APP_ENV === 'development')
+          .then((r) => console.log(JSON.stringify({ job: 'notifications', ...r })))
+          .catch((e) => console.warn('notifications', String(e))),
       );
       return;
     }

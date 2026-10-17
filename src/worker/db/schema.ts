@@ -791,3 +791,54 @@ export const calendarFeeds = sqliteTable(
   },
   (t) => [uniqueIndex('calendar_feeds_token_uq').on(t.tokenHash), uniqueIndex('calendar_feeds_user_uq').on(t.userId)],
 );
+
+/**
+ * Notification settings per division (owner, 2026-10-17). A missing row = the default (lib/notifyRules.ts).
+ * kind: tomorrow_shift | clock_in | clock_out | checklist_open | checklist_close | unavailability
+ */
+export const notificationRules = sqliteTable(
+  'notification_rules',
+  {
+    locationId: text('location_id').notNull().references(() => locations.id),
+    division: text('division').notNull(),
+    kind: text('kind').notNull(),
+    enabled: integer('enabled').notNull().default(1),
+    /** time of day in minutes from 00:00 (time-based kinds) */
+    timeMin: integer('time_min'),
+    /** offset in minutes (after clock-in / before shift end) */
+    minutes: integer('minutes'),
+    /** checklists to remind about (JSON array of content ids) */
+    listIds: text('list_ids'),
+    updatedBy: text('updated_by').references(() => users.id),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.locationId, t.division, t.kind] })],
+);
+
+/** Own notifications written by leaders: once, weekly, or tied to shifts and clock-ins. */
+export const customNotifications = sqliteTable(
+  'custom_notifications',
+  {
+    id: id(),
+    locationId: text('location_id').notNull().references(() => locations.id),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    /** comma-separated divisions */
+    divisions: text('divisions').notNull(),
+    /** on_shift | division */
+    audience: text('audience').notNull().default('on_shift'),
+    /** once | weekly | shift_start | after_clock_in | shift_end */
+    trigger: text('trigger').notNull(),
+    atMs: integer('at_ms'),
+    /** days of week bitmask, Monday = 1 … Sunday = 64; 0 = every day */
+    days: integer('days').notNull().default(0),
+    timeMin: integer('time_min'),
+    minutes: integer('minutes'),
+    url: text('url'),
+    enabled: integer('enabled').notNull().default(1),
+    createdBy: text('created_by').references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('custom_notifications_loc_idx').on(t.locationId)],
+);
