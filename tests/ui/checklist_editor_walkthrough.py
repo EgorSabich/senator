@@ -4,6 +4,15 @@ import os, re, time, json, tempfile
 from playwright.sync_api import sync_playwright
 from PIL import Image
 BASE=os.environ.get("ACADEMY_URL","http://localhost:8797"); H={"Origin":BASE}; OUT=os.environ.get("SHOTS_DIR","/tmp/academy-shots"); os.makedirs(OUT,exist_ok=True); errors=[]
+
+def unfold(pg):
+    """Checklists start folded (2026-10-17): open every section before ticking."""
+    pg.locator('button.fold-head[aria-expanded="false"]').first.wait_for(timeout=10000)
+    pg.wait_for_timeout(300)
+    for _ in range(12):
+        closed=pg.locator('button.fold-head[aria-expanded="false"]')
+        if not closed.count(): break
+        closed.first.click(); pg.wait_for_timeout(650)
 IGN=("ERR_TUNNEL_CONNECTION_FAILED","status of 401")
 def watch(p):
     p.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
@@ -61,14 +70,14 @@ with sync_playwright() as pw:
     tc=b.new_context(); tp=tc.new_page(); tp.goto(BASE+"/")
     tp.request.post(BASE+"/api/auth/login",data={"login":tt["login"],"secret":tt["tempSecret"]},headers=H)
     tp.request.post(BASE+"/api/terminal/punch",data={"pin":"481937","clientId":f"ui{int(time.time())}"},headers=H)
-    p.goto(BASE+f"/listy/{cid}"); p.get_by_text("Odhacz ze zdjęciem").wait_for()
+    p.goto(BASE+f"/listy/{cid}"); unfold(p); p.get_by_text("Odhacz ze zdjęciem").wait_for()
     with p.expect_file_chooser() as fc:
         p.get_by_role("button",name=re.compile("Ustaw stoły")).click()
     fc.value.set_files(PHOTO); p.get_by_text("ze zdjęciem",exact=False).first.wait_for(); p.wait_for_timeout(600); p.screenshot(path=f"{OUT}/e04-phone.png", full_page=True)
     # control with division filter (publish the imported bar list first)
     for it in r.get(BASE+f"/api/admin/locations/{loc}/content?kind=checklist").json()["items"]:
         if it["status"]=="draft": r.post(BASE+f"/api/admin/content/{it['id']}/publish",data={},headers=H)
-    o.goto(BASE+"/panel/listy"); o.locator(".cl-fold").first.wait_for(); o.get_by_role("button",name="Kelnerzy").click(); o.wait_for_timeout(500)
+    o.goto(BASE+"/panel/listy"); o.locator(".cl-fold").first.wait_for(); o.get_by_role("button",name="Kelnerzy").click(); unfold(o)
     assert o.get_by_text("Zamknięcie baru").count()==0
     o.wait_for_timeout(600); o.screenshot(path=f"{OUT}/e05-control-waiters.png", full_page=True)
     o.locator(".cl-photo-btn").first.click(); o.locator(".lightbox img").wait_for(); o.wait_for_timeout(500)

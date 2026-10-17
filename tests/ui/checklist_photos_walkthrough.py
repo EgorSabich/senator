@@ -4,6 +4,15 @@ import io, os, re, time, json
 from playwright.sync_api import sync_playwright
 from PIL import Image
 BASE=os.environ.get("ACADEMY_URL","http://localhost:8797"); H={"Origin":BASE}; OUT=os.environ.get("SHOTS_DIR","/tmp/academy-shots"); os.makedirs(OUT,exist_ok=True); errors=[]
+
+def unfold(pg):
+    """Checklists start folded (2026-10-17): open every section before ticking."""
+    pg.locator('button.fold-head[aria-expanded="false"]').first.wait_for(timeout=10000)
+    pg.wait_for_timeout(300)
+    for _ in range(12):
+        closed=pg.locator('button.fold-head[aria-expanded="false"]')
+        if not closed.count(): break
+        closed.first.click(); pg.wait_for_timeout(650)
 IGN=("ERR_TUNNEL_CONNECTION_FAILED","status of 401")
 def watch(p):
     p.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
@@ -50,7 +59,7 @@ with sync_playwright() as pw:
     tc=b.new_context(); tp=tc.new_page(); tp.goto(BASE+"/")
     tp.request.post(BASE+"/api/auth/login",data={"login":tt["login"],"secret":tt["tempSecret"]},headers=H)
     tp.request.post(BASE+"/api/terminal/punch",data={"pin":"481937","clientId":f"ui{int(time.time())}"},headers=H)
-    z=phones["Zofia"]; z.goto(BASE+f"/listy/{cl}"); z.get_by_text("Odhacz ze zdjęciem").wait_for(); z.wait_for_timeout(400); z.screenshot(path=f"{OUT}/i05-phone-photo-item.png")
+    z=phones["Zofia"]; z.goto(BASE+f"/listy/{cl}"); unfold(z); z.get_by_text("Odhacz ze zdjęciem").wait_for(); z.wait_for_timeout(400); z.screenshot(path=f"{OUT}/i05-phone-photo-item.png")
     with z.expect_file_chooser() as fc:
         z.get_by_role("button",name=re.compile("Ustaw stoły")).click()
     fc.value.set_files(PHOTO); z.get_by_text("ze zdjęciem",exact=False).first.wait_for(); z.wait_for_timeout(600)

@@ -96,10 +96,14 @@ notificationAdminRoutes.put('/locations/:locId/notifications/rules', async (c) =
   let minutes = cur.minutes;
   let listIds = cur.listIds;
   if (body.timeMin !== undefined) {
-    if (kind !== 'tomorrow_shift' && kind !== 'unavailability') throw badRequest();
-    const v = intIn(body.timeMin, 0, 1435);
-    if (v === null || v % 5) throw badRequest('invalid_time');
-    timeMin = v;
+    const isList = kind === 'checklist_open' || kind === 'checklist_close';
+    if (kind !== 'tomorrow_shift' && kind !== 'unavailability' && !isList) throw badRequest();
+    if (body.timeMin === null && isList) timeMin = null; // back to „minutes after clock-in / before the end”
+    else {
+      const v = intIn(body.timeMin, 0, 1435);
+      if (v === null || v % 5) throw badRequest('invalid_time');
+      timeMin = v;
+    }
   }
   if (body.minutes !== undefined) {
     if (kind !== 'checklist_open' && kind !== 'checklist_close') throw badRequest();

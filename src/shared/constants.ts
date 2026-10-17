@@ -72,17 +72,28 @@ export const POSITIONS = [
   'bartender',
   'bartender_assistant',
   'kitchen',
+  // cooks by station (owner, 2026-10-17) — all in the Kuchnia division
+  'kitchen_hot',
+  'kitchen_cold',
+  'kitchen_sushi',
+  'kitchen_prep',
+  'kitchen_pastry',
   'hookah_master',
   'hookah_assistant',
   'call_center',
 ] as const;
 export type Position = (typeof POSITIONS)[number];
 
-/** Assistants belong to the division of the person they help (owner, 2026-10-17); every other position is its own division. */
+/** Assistants belong to the division of the person they help, cook specialisations to Kuchnia (owner, 2026-10-17); every other position is its own division. */
 export const DIVISION_OF: Record<string, string> = {
   waiter_assistant: 'waiter',
   bartender_assistant: 'bartender',
   hookah_assistant: 'hookah_master',
+  kitchen_hot: 'kitchen',
+  kitchen_cold: 'kitchen',
+  kitchen_sushi: 'kitchen',
+  kitchen_prep: 'kitchen',
+  kitchen_pastry: 'kitchen',
 };
 export const divisionOf = (position: string): string => DIVISION_OF[position] ?? position;
 /** Positions inside the given divisions (a division plus its assistants). */

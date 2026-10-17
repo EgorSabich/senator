@@ -3,6 +3,15 @@ mode switch in the editor. Needs a fresh server (scripts/ui-server.sh). Prints N
 import os, re, time, json, tempfile
 from playwright.sync_api import sync_playwright
 BASE=os.environ.get("ACADEMY_URL","http://localhost:8797"); H={"Origin":BASE}; OUT=os.environ.get("SHOTS_DIR","/tmp/academy-shots"); os.makedirs(OUT,exist_ok=True); errors=[]
+
+def unfold(pg):
+    """Checklists start folded (2026-10-17): open every section before ticking."""
+    pg.locator('button.fold-head[aria-expanded="false"]').first.wait_for(timeout=10000)
+    pg.wait_for_timeout(300)
+    for _ in range(12):
+        closed=pg.locator('button.fold-head[aria-expanded="false"]')
+        if not closed.count(): break
+        closed.first.click(); pg.wait_for_timeout(650)
 IGN=("ERR_TUNNEL_CONNECTION_FAILED","status of 401")
 def watch(p):
     p.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
@@ -49,16 +58,16 @@ with sync_playwright() as pw:
     for p in (z,a):
         p.reload(); p.locator('a[href^="/listy/"]').first.wait_for()
     z.screenshot(path=f"{OUT}/c04-start.png", full_page=True)
-    z.locator('a[href^="/listy/"]').first.click(); z.get_by_text("To Twoja lista na dziś").wait_for()
+    z.locator('a[href^="/listy/"]').first.click(); z.get_by_text("To Twoja lista na dziś").wait_for(); unfold(z)
     for name in ["Sprawdź czystość stołów","Ustaw krzesła równo","Uzupełnij serwetki","Sprawdź papier w drukarce"]:
         z.get_by_role("button",name=re.compile(name)).click(); z.wait_for_timeout(350)
     z.get_by_text("Wszystko zrobione").wait_for(); z.screenshot(path=f"{OUT}/c05-zofia-done.png", full_page=True)
     assert z.get_by_role("button",name="Zamknij listę na dziś").count()==0
-    a.locator('a[href^="/listy/"]').first.click(); a.get_by_text("To Twoja lista na dziś").wait_for()
+    a.locator('a[href^="/listy/"]').first.click(); a.get_by_text("To Twoja lista na dziś").wait_for(); unfold(a)
     assert a.locator(".a-task.done").count()==0, "Adam sees Zofia's marks"
     a.get_by_role("button",name=re.compile("Uzupełnij serwetki")).click(); a.wait_for_timeout(400); a.screenshot(path=f"{OUT}/c06-adam.png", full_page=True)
     # panel day view
-    o.goto(BASE+"/panel/listy"); o.get_by_text("Postęp osób na zmianie").first.wait_for(); o.wait_for_timeout(500)
+    o.goto(BASE+"/panel/listy"); o.get_by_text("Postęp osób na zmianie").first.wait_for(); unfold(o)
     assert o.get_by_text("4 z 4").count()>=1 and o.get_by_text("1 z 4").count()>=1 and o.get_by_text("0 z 4").count()>=1
     o.screenshot(path=f"{OUT}/c07-panel-day.png", full_page=True)
     o.get_by_role("tab",name="Statystyka").click(); o.wait_for_timeout(900); o.screenshot(path=f"{OUT}/c08-panel-stats.png", full_page=True)

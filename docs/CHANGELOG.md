@@ -10,6 +10,16 @@
 
 
 
+## 0.9.20 — 2026-10-17 (statistics tidy-up, cook stations, checklist reminders at a time)
+
+- Statystyki: division, period (on phones) and section (on phones) are dropdowns; charts and tables are folding blocks (closed by default, the choice is remembered) — the KPIs stay on top. Phone layout: period + CSV on one line, KPIs two per row.
+- Cook specialisations as positions in Kuchnia: Kucharz – kuchnia gorąca / zimna / sushi / przygotowalnia / cukiernia (planned, paid, trained like any position; the head chef manages them). „Kuchnia” as a position is now „Kucharz”. A leader's new material and Grafik list only real divisions.
+- All checklists start folded (staff checklist and panel Listy).
+- Powiadomienia: the opening / closing checklist reminder can go out „o godzinie…” to everyone on shift then (or, as before, minutes after clock-in / before the end). Division chips name what they include (Kelnerzy + Runner, Barmani + Barback, Kuchnia + 5 specjalizacji, Mistrzowie shishy + Pomocnik).
+- Czas pracy: ‹ Dziś › on one line (words hidden on phones).
+- iPhone keyboard: the keyboard counts as open only while a field is being typed in; in the installed app the bottom bars are moved to the real screen bottom if iOS leaves the page shorter. Diagnostics line with `?diag=1` (off with `?diag=0`).
+- Integration test 31; walkthroughs open the folded checklist sections.
+
 ## 0.9.19 — 2026-10-17 (Statystyki: czas pracy i koszt, listy kontrolne, szkolenia)
 
 - Czas pracy i koszt (mockup 14): hours worked vs planned, cost of work (vs the period before), average rate weighted by hours, hours above the plan (days longer than in Grafik), people without a rate; week by week, divisions with their share, a table per person. Amounts only with access to rates — others see hours.

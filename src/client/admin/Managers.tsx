@@ -4,7 +4,7 @@ import { DIVISION_SCOPE_PREFIX, divisionOf, MANAGER_ROLES, PERMISSIONS, POSITION
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { ErrorBox } from '../ui';
-import { Btn, DeleteForeverModal, formatDateTime, Modal, SecretCardModal, type SecretInfo } from './common';
+import { Btn, DeleteForeverModal, DivisionExtras, formatDateTime, Modal, SecretCardModal, type SecretInfo } from './common';
 import { DateField } from '../DateField';
 import { RateInput } from './Employees';
 import { usePanel } from './Panel';
@@ -217,11 +217,7 @@ function ManagerCard(props: {
                     >
                       {pl.admin.divisions[d] ?? d}
                       {/* the division includes its assistants (Runner, Barback, pomocnik) — say so on the chip */}
-                      {POSITIONS.filter((p) => p !== d && divisionOf(p) === d).map((p) => (
-                        <span key={p} className="chip-extra">
-                          + {pl.admin.positions[p] ?? p}
-                        </span>
-                      ))}
+                      <DivisionExtras division={d} />
                     </button>
                   );
                 })}

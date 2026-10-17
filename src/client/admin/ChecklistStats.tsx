@@ -125,7 +125,7 @@ function Control({ division, setDivision }: { division: string; setDivision: (d:
   const [day, setDay] = useState<DayChecklist[] | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Sections: unfinished ones open, finished ones folded — until the leader toggles them.
+  // Sections start folded (owner, 2026-10-17) — the leader opens what he needs.
   const [foldState, setFoldState] = useState<Record<string, boolean>>({});
   const [photo, setPhoto] = useState<{ id: string; title: string } | null>(null);
 
@@ -230,7 +230,7 @@ function Control({ division, setDivision }: { division: string; setDivision: (d:
                   const isDone = (it: DayItem) => (it.shared ? (it.count ?? 0) > 0 : crowd > 0 && (it.count ?? 0) >= crowd);
                   const done = sec.items.filter(isDone).length;
                   const all = done === sec.items.length;
-                  const open = foldState[key] ?? !all;
+                  const open = foldState[key] ?? false;
                   return (
                     <Fold
                       key={key}

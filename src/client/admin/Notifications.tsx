@@ -11,7 +11,7 @@ import { DateField } from '../DateField';
 import { errorText, pl } from '../i18n/pl';
 import { useLiveRefresh } from '../live';
 import { ErrorBox, LogoLoader } from '../ui';
-import { Btn, Modal, storageGet, storageSet } from './common';
+import { Btn, DivisionExtras, Modal, storageGet, storageSet } from './common';
 import { usePanel } from './Panel';
 
 const t = pl.admin.notifications;
@@ -134,6 +134,8 @@ export function Notifications() {
         {data.divisions.map((d) => (
           <button key={d} type="button" className="chip" aria-pressed={d === div} onClick={() => pick(d)}>
             {DIV[d] ?? d}
+            {/* assistants get their division's notifications — shown on the chip (owner, 2026-10-17) */}
+            <DivisionExtras division={d} />
           </button>
         ))}
         <span className="muted ntf-note">{t.scopeNote}</span>
@@ -168,15 +170,34 @@ export function Notifications() {
                   )}
                   {(k === 'clock_in' || k === 'clock_out') && <span className="ntf-static">{t.immediately}</span>}
                   {(k === 'checklist_open' || k === 'checklist_close') && (
-                    <label className="ntf-sel">
-                      <select aria-label={`${info.title}: minuty`} value={r.minutes ?? 30} disabled={!r.enabled} onChange={(ev) => void saveRule(k, { minutes: Number(ev.target.value) })}>
-                        {MINUTES.map((m) => (
-                          <option key={m} value={m}>
-                            {k === 'checklist_open' ? t.afterIn(m) : t.beforeEnd(m)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <span className="ntf-when-two">
+                      <label className="ntf-sel">
+                        <select
+                          aria-label={`${info.title}: kiedy`}
+                          value={r.timeMin !== null ? 'time' : String(r.minutes ?? 30)}
+                          disabled={!r.enabled}
+                          onChange={(ev) => void saveRule(k, ev.target.value === 'time' ? { timeMin: k === 'checklist_open' ? 17 * 60 : 23 * 60 } : { minutes: Number(ev.target.value), timeMin: null })}
+                        >
+                          {MINUTES.map((m) => (
+                            <option key={m} value={m}>
+                              {k === 'checklist_open' ? t.afterIn(m) : t.beforeEnd(m)}
+                            </option>
+                          ))}
+                          <option value="time">{t.atTime}</option>
+                        </select>
+                      </label>
+                      {r.timeMin !== null && (
+                        <label className="ntf-sel">
+                          <select aria-label={`${info.title}: godzina`} value={r.timeMin} disabled={!r.enabled} onChange={(ev) => void saveRule(k, { timeMin: Number(ev.target.value) })}>
+                            {TIMES.map((m) => (
+                              <option key={m} value={m}>
+                                {hm(m)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                    </span>
                   )}
                 </div>
                 <span className="ntf-example muted">{info.example}</span>

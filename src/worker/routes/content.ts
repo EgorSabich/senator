@@ -4,6 +4,7 @@
  * Shared content (location_id NULL) is edited only by the owner.
  */
 import { Hono } from 'hono';
+import { divisionOf } from '../../shared/constants';
 import { notifyDocument } from '../lib/reminders';
 import { CHANGE_LEVELS, CONTENT_KINDS, POSITIONS, type ChangeLevel } from '../../shared/constants';
 import { docToText, emptyDoc, sanitizeDoc } from '../../shared/richtext';
@@ -269,7 +270,7 @@ contentAdminRoutes.get('/locations/:locId/content', async (c) => {
     .filter((r) => r.verdict !== 'none')
     .map(({ verdict: _v, ...r }) => r);
   const scope = allowedDivisions(access, locId);
-  return c.json({ items, divisions: scope ? [...scope] : null });
+  return c.json({ items, divisions: scope ? [...scope].filter((p) => divisionOf(p) === p) : null });
 });
 
 contentAdminRoutes.post('/locations/:locId/content', async (c) => {
@@ -300,7 +301,7 @@ contentAdminRoutes.post('/locations/:locId/content', async (c) => {
       .bind(id, locationId, kind, title, await uniqueSlug(db, locationId, title), section, isDocument ? 1 : 0, title, JSON.stringify(emptyDoc()), now, c.var.user.id, now, now, tab && tab.id !== DEFAULT_TAB ? tab.id : null),
     auditStatement(db, { actorId: c.var.user.id, locationId, action: 'content.create', entityType: 'content', entityId: id, after: { kind, title, shared } }),
     // D44: a chef's new material is for the kitchen from the start
-    ...[...(locationId ? (allowedDivisions(access, locationId) ?? []) : [])].map((p) =>
+    ...[...(locationId ? (allowedDivisions(access, locationId) ?? []) : [])].filter((p) => divisionOf(p) === p).map((p) =>
       db.prepare(`INSERT INTO content_item_positions (content_item_id, position) VALUES (?, ?)`).bind(id, p),
     ),
   ]);
@@ -722,7 +723,8 @@ contentAdminRoutes.post('/locations/:locId/content/import', async (c) => {
     }
     const scope = allowedDivisions(access, locId);
     let positions = raw.positions === undefined ? [] : parsePositions(raw.positions);
-    if (scope && !positions.length) positions = [...scope];
+    // the leader's divisions (assistants and cook stations see division materials anyway)
+    if (scope && !positions.length) positions = [...scope].filter((p) => divisionOf(p) === p);
     requirePositionsInScope(access, locId, positions);
     const section = str(raw.section, 120);
     const sortOrder = Number.isInteger(raw.sortOrder) ? Number(raw.sortOrder) : 0;

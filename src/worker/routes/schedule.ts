@@ -147,8 +147,8 @@ scheduleAdminRoutes.get('/locations/:locId/schedule', async (c) => {
     actual: entries!.results,
     unpublished: rows.filter((r) => inScope(r.division) && changed(r)).length,
     deadline: monday ? unavailabilityDeadline(monday, dow, hour) : null,
-    divisions: allowed ? [...allowed] : null,
-    editable: allowed ? [...allowed] : null,
+    divisions: allowed ? [...allowed].filter((d) => divisionOf(d) === d) : null,
+    editable: allowed ? [...allowed].filter((d) => divisionOf(d) === d) : null,
   });
 });
 

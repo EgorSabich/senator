@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
+import { positionsOfDivisions } from '../../shared/constants';
 
 /* ───────── Icons (inline stroke SVG, decorative) ───────── */
 
@@ -123,6 +124,22 @@ export function Icon({ name, size = 22 }: { name: keyof typeof paths | string; s
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {paths[name]}
     </svg>
+  );
+}
+
+/** „+ Runner” on a division chip; for many (cook stations) „+ 5 specjalizacji” (owner, 2026-10-17). */
+export function DivisionExtras({ division }: { division: string }) {
+  const extra = positionsOfDivisions([division]).filter((p) => p !== division);
+  if (!extra.length) return null;
+  if (extra.length > 2) return <span className="chip-extra">{pl.admin.moreSpecialisations(extra.length)}</span>;
+  return (
+    <>
+      {extra.map((p) => (
+        <span key={p} className="chip-extra">
+          + {pl.admin.positions[p] ?? p}
+        </span>
+      ))}
+    </>
   );
 }
 

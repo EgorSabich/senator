@@ -2,13 +2,13 @@
  * Panel → Statystyki (owner, 2026-10-17; mockups 12–13): Obecność i spóźnienia, Rekrutacja.
  * Leaders see their divisions; the owner and zarządzający everything. CSV export of the visible table.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { addDays } from '../../shared/time';
 import { api, ApiFailure } from '../api';
 import { DateField } from '../DateField';
 import { errorText, pl } from '../i18n/pl';
 import { useLiveRefresh } from '../live';
-import { onNav } from '../router';
+import { navigate, onNav } from '../router';
 import { ErrorBox, LogoLoader } from '../ui';
 import { Btn, Modal, storageGet, storageSet } from './common';
 import { usePanel } from './Panel';
@@ -66,6 +66,14 @@ function downloadCsv(name: string, rows: (string | number)[][]) {
 const P_KEY = 'sa-stats-period';
 const D_KEY = 'sa-stats-div';
 
+const SECTIONS = [
+  ['/panel/statystyki', 'attendance', t.attendance],
+  ['/panel/statystyki/czas', 'cost', t.costTitle],
+  ['/panel/statystyki/listy', 'checklists', t.checklistsTitle],
+  ['/panel/statystyki/szkolenia', 'training', t.trainingTitle],
+  ['/panel/statystyki/rekrutacja', 'recruitment', t.recruitment],
+] as const;
+
 export function Stats({ path }: { path: string }) {
   const sub = path.replace(/^\/panel\/statystyki\/?/, '');
   const section = sub.startsWith('rekrutacja') ? 'recruitment' : sub.startsWith('czas') ? 'cost' : sub.startsWith('listy') ? 'checklists' : sub.startsWith('szkolenia') ? 'training' : 'attendance';
@@ -91,27 +99,41 @@ export function Stats({ path }: { path: string }) {
       <div className="st-head">
         <h1 className="page-title">{t.title}</h1>
         <div className="st-periods">
-          {(['week', 'month', 'quarter', 'custom'] as const).map((p) => (
-            <button key={p} type="button" className="chip" aria-pressed={period === p} onClick={() => setPeriod(p)}>
-              {t.periods[p]}
-            </button>
-          ))}
+          <span className="st-wide st-chips">
+            {(['week', 'month', 'quarter', 'custom'] as const).map((p) => (
+              <button key={p} type="button" className="chip" aria-pressed={period === p} onClick={() => setPeriod(p)}>
+                {t.periods[p]}
+              </button>
+            ))}
+          </span>
+          <label className="st-narrow st-select">
+            <span>{t.period}</span>
+            <select value={period} onChange={(e) => setPeriod(e.target.value as Period)}>
+              {(['week', 'month', 'quarter', 'custom'] as const).map((p) => (
+                <option key={p} value={p}>
+                  {t.periods[p]}
+                </option>
+              ))}
+            </select>
+          </label>
           <Btn onClick={() => csv?.()} disabled={!csv}>
             {t.csv}
           </Btn>
         </div>
       </div>
       <div className="st-layout">
-        <nav className="st-nav" aria-label={t.title}>
-          {(
-            [
-              ['/panel/statystyki', 'attendance', t.attendance],
-              ['/panel/statystyki/czas', 'cost', t.costTitle],
-              ['/panel/statystyki/listy', 'checklists', t.checklistsTitle],
-              ['/panel/statystyki/szkolenia', 'training', t.trainingTitle],
-              ['/panel/statystyki/rekrutacja', 'recruitment', t.recruitment],
-            ] as const
-          ).map(([href, key, l]) => (
+        <label className="st-narrow st-select st-section">
+          <span>{t.section}</span>
+          <select value={section} onChange={(e) => navigate(SECTIONS.find((x) => x[1] === e.target.value)![0])}>
+            {SECTIONS.map(([, key, l]) => (
+              <option key={key} value={key}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </label>
+        <nav className="st-nav st-wide" aria-label={t.title}>
+          {SECTIONS.map(([href, key, l]) => (
             <a key={key} href={href} onClick={onNav(href)} aria-current={section === key ? 'page' : undefined}>
               {l}
             </a>
@@ -173,17 +195,48 @@ function useStats<T>(url: string) {
   return { data, error, load };
 }
 
+/** Division as a dropdown (owner, 2026-10-17): one line instead of a wall of chips. */
 function Divisions({ list, value, onChange }: { list: string[]; value: string; onChange: (d: string) => void }) {
   if (list.length < 2) return null;
   const v = value === 'all' || list.includes(value) ? value : 'all';
   return (
-    <div className="st-chips">
-      {['all', ...list].map((d) => (
-        <button key={d} type="button" className="chip" aria-pressed={v === d} onClick={() => onChange(d)}>
-          {d === 'all' ? t.allDivisions : (DIV[d] ?? d)}
-        </button>
-      ))}
-    </div>
+    <label className="st-select">
+      <span>{t.division}</span>
+      <select value={v} onChange={(e) => onChange(e.target.value)}>
+        {['all', ...list].map((d) => (
+          <option key={d} value={d}>
+            {d === 'all' ? t.allDivisions : (DIV[d] ?? d)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** A folding block (owner, 2026-10-17: no long sheets — open what you need). The open/closed state is remembered. */
+function Sec({ id, title, count, aside, children }: { id: string; title: string; count?: number; aside?: ReactNode; children: ReactNode }) {
+  const key = `sa-st-open-${id}`;
+  const [open, setOpen] = useState(() => storageGet(key) === '1');
+  return (
+    <details
+      className="card st-sec"
+      open={open}
+      onToggle={(e) => {
+        const o = (e.currentTarget as HTMLDetailsElement).open;
+        setOpen(o);
+        storageSet(key, o ? '1' : '0');
+      }}
+    >
+      <summary>
+        <span className="st-sec-title">{title}</span>
+        {count !== undefined && <span className="badge neutral">{count}</span>}
+        {aside && <span className="st-sec-aside">{aside}</span>}
+        <span className="st-sec-chev" aria-hidden="true">
+          ▾
+        </span>
+      </summary>
+      {open && <div className="st-sec-body">{children}</div>}
+    </details>
   );
 }
 
@@ -262,13 +315,18 @@ function Attendance({ query, range, division, setDivision, setCsv }: Common) {
       ) : (
         <>
           {data.weeks.length > 1 && (
-            <section className="card st-chart-card">
-              <div className="st-chart-head">
-                <h2 className="ntf-h">{t.weeks}</h2>
+            <Sec
+              id="att-weeks"
+              title={t.weeks}
+              aside={
                 <span className="muted st-legend">
                   <i className="late" /> {t.legendLate} <i className="absent" /> {t.legendAbsent}
                 </span>
-              </div>
+              }
+            >
+              <span className="muted st-legend st-narrow">
+                <i className="late" /> {t.legendLate} <i className="absent" /> {t.legendAbsent}
+              </span>
               <div className="st-chart" role="img" aria-label={data.weeks.map((w) => `${short(w.week)}: ${w.late} ${t.legendLate}, ${w.absences} ${t.legendAbsent}`).join('; ')}>
                 {data.weeks.map((w) => (
                   <div key={w.week} className="st-col">
@@ -284,8 +342,9 @@ function Attendance({ query, range, division, setDivision, setCsv }: Common) {
                   </div>
                 ))}
               </div>
-            </section>
+            </Sec>
           )}
+          <Sec id="att-people" title={t.peopleTitle} count={data.people.length}>
           <div className="table-wrap st-table">
             <table>
               <thead>
@@ -327,6 +386,7 @@ function Attendance({ query, range, division, setDivision, setCsv }: Common) {
               </tbody>
             </table>
           </div>
+          </Sec>
           <p className="muted st-note">{t.footer}</p>
         </>
       )}
@@ -518,8 +578,7 @@ function Recruitment({ query, range, division, setDivision, setCsv }: Common) {
       ) : (
         <>
           <div className="st-two">
-            <section className="card">
-              <h2 className="ntf-h">{r.funnel}</h2>
+            <Sec id="card-1" title={r.funnel}>
               <div className="st-funnel">
                 {funnel.map(([l, n, p]) => (
                   <div key={l} className="st-funnel-row">
@@ -546,9 +605,8 @@ function Recruitment({ query, range, division, setDivision, setCsv }: Common) {
                   </div>
                 </>
               )}
-            </section>
-            <section className="card">
-              <h2 className="ntf-h">{r.sources}</h2>
+            </Sec>
+            <Sec id="card-2" title={r.sources}>
               <div className="table-wrap st-mini">
                 <table>
                   <thead>
@@ -570,8 +628,9 @@ function Recruitment({ query, range, division, setDivision, setCsv }: Common) {
                 </table>
               </div>
               {k.noSource > 0 && <p className="muted st-note">{r.noSourceHint(k.noSource)}</p>}
-            </section>
+            </Sec>
           </div>
+          <Sec id="rec-div" title={r.byDivision} count={data.byDivision.length}>
           <div className="table-wrap st-table">
             <table>
               <thead>
@@ -612,6 +671,7 @@ function Recruitment({ query, range, division, setDivision, setCsv }: Common) {
               </tbody>
             </table>
           </div>
+          </Sec>
           <p className="muted st-note">{r.rodo}</p>
         </>
       )}
@@ -644,11 +704,7 @@ interface CostData {
 function Bars({ items, title, legend }: { items: { label: string; value: number; text: string }[]; title: string; legend?: string }) {
   const max = Math.max(1, ...items.map((i) => i.value));
   return (
-    <section className="card st-chart-card">
-      <div className="st-chart-head">
-        <h2 className="ntf-h">{title}</h2>
-        {legend && <span className="muted st-legend">{legend}</span>}
-      </div>
+    <Sec id={`bars-${title}`} title={title} aside={legend ? <span className="muted st-legend">{legend}</span> : undefined}>
       <div className="st-chart" role="img" aria-label={items.map((i) => `${i.label}: ${i.text}`).join('; ')}>
         {items.map((i, n) => (
           <div key={i.label} className={`st-col${items.length > 8 && n % 2 ? ' st-col-quiet' : ''}`}>
@@ -661,7 +717,7 @@ function Bars({ items, title, legend }: { items: { label: string; value: number;
           </div>
         ))}
       </div>
-    </section>
+    </Sec>
   );
 }
 
@@ -712,8 +768,7 @@ function Cost({ query, range, division, setDivision, setCsv }: Common) {
                 items={data.weeks.map((w) => ({ label: short(w.week), value: data.wages ? (w.cost ?? 0) : w.workedMin, text: data.wages ? zlShort(w.cost) : `${hours(w.workedMin)} h` }))}
               />
             )}
-            <section className="card">
-              <h2 className="ntf-h">{c.divisionsTitle}</h2>
+            <Sec id="card-3" title={c.divisionsTitle}>
               <div className="table-wrap st-mini">
                 <table>
                   <thead>
@@ -736,8 +791,9 @@ function Cost({ query, range, division, setDivision, setCsv }: Common) {
                   </tbody>
                 </table>
               </div>
-            </section>
+            </Sec>
           </div>
+          <Sec id="cost-people" title={pl.admin.stats.peopleTitle} count={data.people.length}>
           <div className="table-wrap st-table">
             <table>
               <thead>
@@ -782,6 +838,7 @@ function Cost({ query, range, division, setDivision, setCsv }: Common) {
               </tbody>
             </table>
           </div>
+          </Sec>
           <p className="muted st-note">{data.wages ? c.footer : c.footerNoWages}</p>
         </>
       )}
@@ -832,6 +889,7 @@ function Checklists({ query, range, division, setDivision, setCsv }: Common) {
         <p className="muted">{c.empty}</p>
       ) : (
         <>
+          <Sec id="cl-lists" title={c.listsTitle} count={data.lists.length}>
           <div className="table-wrap st-table">
             <table>
               <thead>
@@ -866,7 +924,9 @@ function Checklists({ query, range, division, setDivision, setCsv }: Common) {
               </tbody>
             </table>
           </div>
+          </Sec>
           {data.people.length > 0 && (
+            <Sec id="cl-people" title={pl.admin.stats.peopleTitle} count={data.people.length}>
             <div className="table-wrap st-table">
               <table>
                 <thead>
@@ -903,6 +963,7 @@ function Checklists({ query, range, division, setDivision, setCsv }: Common) {
                 </tbody>
               </table>
             </div>
+            </Sec>
           )}
           <p className="muted st-note">{c.footer}</p>
         </>
@@ -949,8 +1010,7 @@ function Training({ query, range, division, setDivision, setCsv }: Common) {
         <Kpi label={c.kpi.program} value={k.newcomers ? `${k.newcomersDone} z ${k.newcomers}` : '—'} sub={c.kpi.programSub} />
       </div>
       <div className="st-two">
-        <section className="card">
-          <h2 className="ntf-h">{c.docs}</h2>
+        <Sec id="card-4" title={c.docs}>
           {data.documents.length ? (
             <div className="table-wrap st-mini">
               <table>
@@ -979,9 +1039,8 @@ function Training({ query, range, division, setDivision, setCsv }: Common) {
               {c.noDocs}
             </p>
           )}
-        </section>
-        <section className="card">
-          <h2 className="ntf-h">{c.tests}</h2>
+        </Sec>
+        <Sec id="card-5" title={c.tests}>
           {data.tests.length ? (
             <div className="table-wrap st-mini">
               <table>
@@ -1012,9 +1071,10 @@ function Training({ query, range, division, setDivision, setCsv }: Common) {
               {c.noTests}
             </p>
           )}
-        </section>
+        </Sec>
       </div>
       {data.people.length > 0 && (
+        <Sec id="tr-people" title={pl.admin.stats.peopleTitle} count={data.people.length}>
         <div className="table-wrap st-table">
           <table>
             <thead>
@@ -1055,6 +1115,7 @@ function Training({ query, range, division, setDivision, setCsv }: Common) {
             </tbody>
           </table>
         </div>
+        </Sec>
       )}
       <p className="muted st-note">{c.footer}</p>
     </>

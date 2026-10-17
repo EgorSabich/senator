@@ -137,14 +137,14 @@ export function ChecklistDay({ id }: { id: string }) {
   const pct = data && data.total ? Math.round((data.done / data.total) * 100) : 0;
   const foldable = sections.length > 1 || Boolean(sections[0]?.name);
   const sectionDone = (s: (typeof sections)[number]) => s.items.every((i) => i.mark);
-  // Sections fold: finished ones start folded, and a section folds by itself a moment after its last task is ticked.
+  // Sections fold: all start folded (owner, 2026-10-17), and a section folds by itself a moment after its last task is ticked.
   const [folded, setFolded] = useState<Set<number> | null>(null);
   const doneBefore = useRef<boolean[]>([]);
   useEffect(() => {
     if (!data) return;
     const done = sections.map(sectionDone);
     if (folded === null) {
-      setFolded(new Set(done.flatMap((d, i) => (d ? [i] : []))));
+      setFolded(new Set(sections.map((_, i) => i)));
       doneBefore.current = done;
       return;
     }
@@ -266,7 +266,7 @@ export function ChecklistDay({ id }: { id: string }) {
                 <Fold
                   key={si}
                   id={`cl-sec-${si}`}
-                  open={!folded?.has(si)}
+                  open={folded !== null && !folded.has(si)}
                   onToggle={() => toggleFold(si)}
                   head={s.name ?? t.otherItems}
                   aside={<span className={done === s.items.length ? 'ok' : undefined}>{done === s.items.length ? `✓ ${done}/${s.items.length}` : `${done}/${s.items.length}`}</span>}

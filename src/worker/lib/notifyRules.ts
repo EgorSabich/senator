@@ -234,6 +234,7 @@ async function checklistReminders(ctx: Ctx, locId: string, rules: Map<string, Ma
     .all<{ id: string; userId: string; businessDate: string; clockInAt: number; position: string | null }>();
   if (!open.length) return 0;
   const posOf = await entryPositions(db, locId, open);
+  const nowMin = warsawMin(ctx.now);
   let sent = 0;
   for (const e of open) {
     const division = divisionOf(posOf.get(e.id) ?? '');
@@ -241,10 +242,17 @@ async function checklistReminders(ctx: Ctx, locId: string, rules: Map<string, Ma
     if (!m) continue;
     // opening lists
     const ro = m.get('checklist_open')!;
-    if (ro.enabled && (ctx.force || ctx.now >= e.clockInAt + (ro.minutes ?? 30) * 60000)) sent += await remindLists(ctx, locId, e.userId, e.businessDate, listsOf(ro, division, lists), 'cl_open', e.id);
-    // closing lists: before the end of today's planned shift
+    // 2026-10-17: either some minutes after clock-in, or at a set time (to everyone on shift then)
+    const atTime = (r: Rule) => r.timeMin !== null && (ctx.force || (nowMin >= r.timeMin && nowMin < r.timeMin + 60));
+    if (ro.enabled && (ro.timeMin !== null ? atTime(ro) : ctx.force || ctx.now >= e.clockInAt + (ro.minutes ?? 30) * 60000))
+      sent += await remindLists(ctx, locId, e.userId, e.businessDate, listsOf(ro, division, lists), 'cl_open', e.id);
+    // closing lists: before the end of today's planned shift, or at a set time
     const rc = m.get('checklist_close')!;
     if (!rc.enabled) continue;
+    if (rc.timeMin !== null) {
+      if (atTime(rc)) sent += await remindLists(ctx, locId, e.userId, e.businessDate, listsOf(rc, division, lists), 'cl_close', `t:${e.id}`);
+      continue;
+    }
     const shift = await db
       .prepare(
         `SELECT id, pub_end_min AS e FROM schedule_shifts WHERE location_id = ? AND user_id = ? AND date = ? AND published = 1 AND is_deleted = 0 ORDER BY pub_start_min DESC LIMIT 1`,

@@ -228,11 +228,18 @@ export function TimeTracking() {
           </button>
         ))}
         <span style={{ flex: 1 }} />
-        <Btn onClick={() => shift(-1)}>‹ {t.prev}</Btn>
-        <Btn onClick={() => setAnchor(businessDate(Date.now()))}>{t.today}</Btn>
-        <Btn onClick={() => shift(1)}>
-          {t.next} ›
-        </Btn>
+        {/* one line also on a phone (owner, 2026-10-17): words shown only where there is room */}
+        <div className="step-nav" role="group">
+          <button type="button" onClick={() => shift(-1)} aria-label={t.prev}>
+            ‹<span className="step-word"> {t.prev}</span>
+          </button>
+          <button type="button" onClick={() => setAnchor(businessDate(Date.now()))}>
+            {t.today}
+          </button>
+          <button type="button" onClick={() => shift(1)} aria-label={t.next}>
+            <span className="step-word">{t.next} </span>›
+          </button>
+        </div>
       </div>
       <div className="muted" style={{ fontSize: 14, fontWeight: 600 }}>
         {longLabel(from)} – {longLabel(to)}

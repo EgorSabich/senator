@@ -4,6 +4,15 @@ Needs a fresh server (scripts/ui-server.sh). Prints NO_ERRORS."""
 import os, re, time
 from playwright.sync_api import sync_playwright
 BASE=os.environ.get("ACADEMY_URL", "http://localhost:8797"); H={"Origin":BASE}; OUT=os.environ.get("SHOTS_DIR", "/tmp/academy-shots"); os.makedirs(OUT, exist_ok=True); errors=[]
+
+def unfold(pg):
+    """Checklists start folded (2026-10-17): open every section before ticking."""
+    pg.locator('button.fold-head[aria-expanded="false"]').first.wait_for(timeout=10000)
+    pg.wait_for_timeout(300)
+    for _ in range(12):
+        closed=pg.locator('button.fold-head[aria-expanded="false"]')
+        if not closed.count(): break
+        closed.first.click(); pg.wait_for_timeout(650)
 li=lambda t: {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":t}]}]}
 doc={"type":"doc","content":[{"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"22:00–02:00 — przed zamknięciem"}]},
   {"type":"bulletList","content":[li("Wypoleruj wszystkie czyste naczynia i uzupełnij stacje."),li("Złóż czarne serwetki — minimum 3 organizery."),li("Sprawdź papier w drukarkach i terminalach.")]},
@@ -82,10 +91,10 @@ with sync_playwright() as pw:
     t.get_by_text("Do wysłania").wait_for(state="detached", timeout=40000); t.get_by_text("Online").wait_for(timeout=40000); t.screenshot(path=f"{OUT}/09-synced.png")
     # waiter checklist
     z=phones[0]; z.reload(); z.get_by_text("Jesteś na zmianie", exact=False).first.wait_for(); z.wait_for_timeout(800); z.screenshot(path=f"{OUT}/10-start-onshift.png", full_page=True)
-    z.locator("a[href^=\"/listy/\"]").first.click(); z.get_by_text("Odhacz t", exact=False).first.wait_for()
+    z.locator("a[href^=\"/listy/\"]").first.click(); unfold(z); z.get_by_text("Odhacz t", exact=False).first.wait_for()
     z.get_by_role("button", name=re.compile("Wypoleruj")).click(); z.wait_for_timeout(500)
     z.get_by_role("button", name=re.compile("Złóż czarne")).click(); z.wait_for_timeout(700)
-    a=phones[1]; a.goto(BASE+f"/listy/{cid}"); a.get_by_text("Odhacz t", exact=False).first.wait_for(); a.get_by_role("button", name=re.compile("Naładuj")).click(); a.wait_for_timeout(700)
+    a=phones[1]; a.goto(BASE+f"/listy/{cid}"); unfold(a); a.get_by_text("Odhacz t", exact=False).first.wait_for(); a.get_by_role("button", name=re.compile("Naładuj")).click(); a.wait_for_timeout(700)
     z.reload(); z.get_by_text("Odhacz t", exact=False).first.wait_for(); z.wait_for_timeout(600); z.screenshot(path=f"{OUT}/11-checklist.png", full_page=True)
     # panel
     o.goto(BASE+"/panel/czas"); o.get_by_text("Teraz na zmianie").wait_for(); o.wait_for_timeout(900); o.screenshot(path=f"{OUT}/13-panel-time.png", full_page=True)
@@ -111,7 +120,7 @@ with sync_playwright() as pw:
     o.locator(".emp-pos").first.get_by_role("button", name="Stawka").click(); o.get_by_label(re.compile("Nowa stawka")).fill("32,50"); pick_date(o,"Obowiązuje od","2026-01-01"); o.get_by_role("button", name="Zapisz stawkę").click()
     o.get_by_text("32,50 zł / h").wait_for(); o.wait_for_timeout(500); o.screenshot(path=f"{OUT}/15b-employee-card.png", full_page=True)
     o.goto(BASE+"/panel/czas"); o.get_by_text("Teraz na zmianie").wait_for(); o.wait_for_timeout(900); o.screenshot(path=f"{OUT}/15c-panel-costs.png", full_page=True)
-    o.goto(BASE+"/panel/listy"); o.get_by_text("Lista kontrolna zamknięcia").first.wait_for(); o.wait_for_timeout(700); o.screenshot(path=f"{OUT}/16-panel-checklists.png", full_page=True)
+    o.goto(BASE+"/panel/listy"); o.get_by_text("Lista kontrolna zamknięcia").first.wait_for(); unfold(o); o.screenshot(path=f"{OUT}/16-panel-checklists.png", full_page=True)
     o.get_by_role("tab", name="Statystyka").click(); o.get_by_text("Kto ile zadań").wait_for(); o.wait_for_timeout(700); o.screenshot(path=f"{OUT}/17-panel-stats.png", full_page=True)
     # phone panel
     op=b.new_context(viewport={"width":390,"height":844},locale="pl-PL",device_scale_factor=2,storage_state=o.context.storage_state()).new_page(); watch(op)
