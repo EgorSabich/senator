@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { api, ApiFailure, type Me } from './api';
 import { errorText, pl } from './i18n/pl';
 import { Redirect, usePath } from './router';
@@ -7,11 +7,12 @@ import { maybeShowInstallGuide } from './app/Install';
 import { Login } from './screens/Login';
 import { Brand, ErrorBox, LogoLoader, SecondaryButton, screen } from './ui';
 import { clearPersonalCache } from './pwa';
+import { lazyPage } from './update';
 
 // The panel (editor, admin screens) is loaded only for managers and the owner.
-const Panel = lazy(() => import('./admin/Panel').then((m) => ({ default: m.Panel })));
-const Academy = lazy(() => import('./app/Academy').then((m) => ({ default: m.Academy })));
-const Terminal = lazy(() => import('./terminal/Terminal').then((m) => ({ default: m.Terminal })));
+const Panel = lazyPage(() => import('./admin/Panel').then((m) => m.Panel));
+const Academy = lazyPage(() => import('./app/Academy').then((m) => m.Academy));
+const Terminal = lazyPage(() => import('./terminal/Terminal').then((m) => m.Terminal));
 
 /** Set on a phone in time-clock mode: it opens the terminal even when the network is down at start. */
 function isTerminalPhone(): boolean {

@@ -2,7 +2,7 @@
    Shell: cache-first for hashed assets, network-first for pages.
    Data: network-first for staff API GETs and /media, kept in a cache cleared on logout/login.
    Never cached: auth (except /api/auth/me), admin API, non-GET, error answers. */
-const SHELL = 'sa-shell-v3';
+const SHELL = 'sa-shell-v4'; // v4: drops files saved by mistake as a page (blank screen after a deploy)
 const DATA = 'sa-data-v1';
 
 self.addEventListener('install', (event) => {
@@ -42,7 +42,9 @@ async function cacheFirst(request, cacheName) {
   const hit = await caches.match(request, { cacheName });
   if (hit) return hit;
   const res = await fetch(request);
-  if (res.ok) {
+  // a script that no longer exists comes back as the app page (SPA fallback): never keep that
+  const isPage = (res.headers.get('content-type') || '').includes('text/html');
+  if (res.ok && !isPage) {
     const copy = res.clone();
     caches.open(cacheName).then((c) => c.put(request, copy));
   }

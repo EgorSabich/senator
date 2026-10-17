@@ -2,6 +2,13 @@
 
 
 
+
+## 0.10.1 — 2026-10-17
+
+- Phones stay on the newest version: the app asks `/api/health` for the version when it comes back to the screen and every 10 minutes; a newer one reloads the app on return, or shows „Nowa wersja — dotknij, aby odświeżyć”.
+- A screen file missing after a deploy (the SPA fallback answers with the page) no longer leaves a blank screen: the app reloads once. The service worker never stores such an answer as a script (cache `sa-shell-v4` drops old ones).
+- Cause of the owner's report after 0.10.0: the home-screen app kept the old code in memory — old panel, and „Widok pracownika” asked for a file that no longer existed.
+
 ## 0.10.0 — 2026-10-17 (D47, iteration 2)
 
 - Checklist photos: in the editor of an individual list the leader ticks „Zadania ze zdjęciem”; on the phone such a task opens the camera and is ticked only with the photo (shrunk to ≤1024 px JPEG). Panel day view: camera chip by the person's name opens the photo. Photos live in the private PHOTOS bucket, leave after 30 days (nightly), and go with the person / the material on permanent deletion. Migration 0012.
