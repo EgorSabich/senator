@@ -45,7 +45,7 @@ export function Audit() {
       <ErrorBox message={error} />
       {entries?.length === 0 && <p className="muted">{t.empty}</p>}
       {entries && entries.length > 0 && (
-        <div className="table-wrap">
+        <div className="table-wrap audit-table">
           <table>
             <thead>
               <tr>
@@ -57,8 +57,8 @@ export function Audit() {
             <tbody>
               {entries.map((e) => (
                 <tr key={e.id}>
-                  <td style={{ whiteSpace: 'nowrap', color: 'var(--text-soft)' }}>{formatDateTime(e.createdAt)}</td>
-                  <td>{e.actorFirstName ? `${e.actorFirstName} ${e.actorLastName}` : t.system}</td>
+                  <td className="audit-when" style={{ whiteSpace: 'nowrap', color: 'var(--text-soft)' }}>{formatDateTime(e.createdAt)}</td>
+                  <td className="audit-who">{e.actorFirstName ? `${e.actorFirstName} ${e.actorLastName}` : t.system}</td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{t.actions[e.action] ?? e.action}</div>
                     <div className="muted" style={{ fontSize: 13 }}>

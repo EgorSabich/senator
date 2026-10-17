@@ -160,6 +160,11 @@ export function Btn(props: {
     fontFamily: 'var(--font-ui)',
     fontSize: 14,
     fontWeight: kind === 'primary' ? 700 : 600,
+    // one line; a label too long for the screen ends with „…” instead of leaving it
+    whiteSpace: 'nowrap',
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
     cursor: props.disabled ? 'default' : 'pointer',
     border: kind === 'primary' ? 'none' : `1px solid ${kind === 'danger' ? 'var(--bad-border)' : 'var(--border)'}`,
     background: kind === 'primary' ? (props.disabled ? 'var(--border)' : 'var(--accent)') : 'none',

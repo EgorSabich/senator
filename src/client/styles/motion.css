@@ -605,3 +605,17 @@ a.today-tile:active {
     animation-duration: 260ms;
   }
 }
+
+/* Checklist section names: normal case, so long names stay readable on phones (2026-10-18) */
+.sec-fold .fold-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text);
+  line-height: 1.35;
+}
+.sec-fold .fold-head {
+  gap: 12px;
+  padding: 12px 0;
+}

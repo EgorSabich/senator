@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { checkContentBundle, checklistsToBundle, CONTENT_BUNDLE_FORMAT, CONTENT_IMPORT_CHUNK, type ContentBundle } from '../../shared/contentBundle';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
-import { ErrorBox } from '../ui';
+import { Disclosure, ErrorBox } from '../ui';
 import { Btn, Modal } from './common';
 import { usePanel } from './Panel';
 
@@ -83,13 +83,12 @@ export function ContentImport({ onClose, onDone }: { onClose: () => void; onDone
   return (
     <Modal title={t.importTitle} onClose={progress ? () => undefined : onClose}>
       <p style={{ margin: 0, lineHeight: 1.5, fontSize: 14 }}>{t.importIntro}</p>
-      <details>
-        <summary style={{ cursor: 'pointer', fontSize: 14 }}>{t.importChecklistHelp}</summary>
+      <Disclosure className="small-disc" summary={t.importChecklistHelp}>
         <pre className="code-sample">{CHECKLIST_SAMPLE}</pre>
         <p className="muted" style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>
           {t.importChecklistHint}
         </p>
-      </details>
+      </Disclosure>
       <label className="file-btn">
         <input type="file" accept="application/json,.json" disabled={Boolean(progress)} onChange={(e) => void read(e.target.files?.[0])} />
         <span>{t.importChoose}</span>
@@ -105,16 +104,13 @@ export function ContentImport({ onClose, onDone }: { onClose: () => void; onDone
             ))}
           </ul>
           {bundle.notes && bundle.notes.length > 0 && (
-            <details>
-              <summary style={{ cursor: 'pointer', fontSize: 14 }}>
-                {t.importNotes} ({bundle.notes.length})
-              </summary>
+            <Disclosure className="small-disc" summary={`${t.importNotes} (${bundle.notes.length})`}>
               <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 13, lineHeight: 1.5, maxHeight: 240, overflow: 'auto' }}>
                 {bundle.notes.map((x, i) => (
                   <li key={i}>{x}</li>
                 ))}
               </ul>
-            </details>
+            </Disclosure>
           )}
         </>
       )}

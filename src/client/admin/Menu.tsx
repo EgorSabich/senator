@@ -6,7 +6,7 @@ import { comparePl, foldPolish } from '../../shared/text';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { goBack, navigate, restoreScroll } from '../router';
-import { ErrorBox } from '../ui';
+import { Disclosure, ErrorBox } from '../ui';
 import { resizeImage, uploadFile } from '../editor/image';
 import { Btn, DeleteForeverModal, formatDateTime, Icon, Modal, storageGet, storageSet } from './common';
 import { usePanel } from './Panel';
@@ -794,16 +794,13 @@ function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
         <>
           <p style={{ margin: 0, fontWeight: 600 }}>{t.importSummary(count('kitchen'), count('bar'), photos)}</p>
           {bundle.issues && bundle.issues.length > 0 && (
-            <details>
-              <summary style={{ cursor: 'pointer', fontSize: 14 }}>
-                {t.importIssues} ({bundle.issues.length})
-              </summary>
+            <Disclosure className="small-disc" summary={`${t.importIssues} (${bundle.issues.length})`}>
               <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 13, lineHeight: 1.5, maxHeight: 220, overflow: 'auto' }}>
                 {bundle.issues.map((x, i) => (
                   <li key={i}>{x}</li>
                 ))}
               </ul>
-            </details>
+            </Disclosure>
           )}
         </>
       )}

@@ -177,10 +177,12 @@ function Control({ division, setDivision }: { division: string; setDivision: (d:
 
       {tab === 'day' && (
         <>
-          <div className="btn-row" style={{ alignItems: 'flex-end' }}>
+          <div className="btn-row" style={{ alignItems: 'center', flexWrap: 'nowrap' }}>
             <Btn onClick={() => setDate(addDays(date, -1))}>‹</Btn>
-            <div className="field">
-              <label htmlFor="cl-date">{t.date}</label>
+            <div className="field" style={{ minWidth: 0 }}>
+              <label htmlFor="cl-date" className="sr-only">
+                {t.date}
+              </label>
               <DateField id="cl-date" value={date} max={businessDate(Date.now())} onChange={(v) => v && setDate(v)} />
             </div>
             <Btn onClick={() => setDate(addDays(date, 1))}>›</Btn>
@@ -235,11 +237,11 @@ function Control({ division, setDivision }: { division: string; setDivision: (d:
                     <Fold
                       key={key}
                       id={`cls-${key}`}
-                      className="cl-fold"
+                      className="cl-fold sec-fold"
                       open={open}
                       onToggle={() => setFoldState((f) => ({ ...f, [key]: !open }))}
                       head={sec.name ?? pl.checklists.otherItems}
-                      aside={<span className={all ? 'ok' : undefined}>{all ? `✓ ${done}/${sec.items.length}` : t.sectionLeft(sec.items.length - done, done, sec.items.length)}</span>}
+                      aside={<span className={all ? 'ok' : undefined}>{all ? `✓ ${done}/${sec.items.length}` : (<><span className="cl-left">{t.sectionLeftWord(sec.items.length - done)} · </span>{done}/{sec.items.length}</>)}</span>}
                     >
                       <div className="cl-items">
                         {sec.items.map((it) =>

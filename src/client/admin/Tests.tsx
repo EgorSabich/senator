@@ -7,7 +7,7 @@ import { divisionOf, POSITIONS } from '../../shared/constants';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { navigate, onNav } from '../router';
-import { ErrorBox, LogoLoader } from '../ui';
+import { Chevron, ErrorBox, LogoLoader, Reveal } from '../ui';
 import { Btn, Modal } from './common';
 import { usePanel } from './Panel';
 
@@ -867,8 +867,9 @@ function SessionView({ id }: { id: string }) {
                     <span className="muted">{t.status[p.status]}</span>
                   )}
                 </span>
+                {p.status === 'submitted' && <Chevron up={openPerson === p.attemptId} />}
               </button>
-              {openPerson === p.attemptId && (
+              <Reveal open={openPerson === p.attemptId} lazy>
                 <ol className="tst-answers">
                   {p.answers.map((a) => (
                     <li key={a.questionId}>
@@ -884,7 +885,7 @@ function SessionView({ id }: { id: string }) {
                     </li>
                   ))}
                 </ol>
-              )}
+              </Reveal>
             </div>
           ))}
         </div>

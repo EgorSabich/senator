@@ -83,3 +83,77 @@ a:hover {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* One select look everywhere (owner, 2026-10-18: the browser's arrow looked out of place).
+   !important on the background parts: many rules set `background:` as a shorthand, which would erase the arrow. */
+select:not([multiple]) {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath d='M3.5 5.25 7 8.75l3.5-3.5' fill='none' stroke='%23b5a391' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  background-size: 14px 14px !important;
+  padding-right: 36px !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+}
+select:not([multiple]):disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* Folding (owner, 2026-10-18): every list opens and closes the same smooth way */
+.chev-ic {
+  display: block;
+  flex: none;
+  color: var(--text-muted);
+  transition: transform 420ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.chev-ic.up {
+  transform: rotate(180deg);
+}
+.reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 460ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.reveal.open {
+  grid-template-rows: 1fr;
+}
+.reveal-inner {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.reveal.open > .reveal-inner {
+  opacity: 1;
+  transition: opacity 320ms ease 60ms;
+}
+.disc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.disc-head > .chev-ic {
+  margin-left: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal-inner,
+  .chev-ic {
+    transition: none !important;
+  }
+}

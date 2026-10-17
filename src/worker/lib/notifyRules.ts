@@ -243,7 +243,8 @@ async function checklistReminders(ctx: Ctx, locId: string, rules: Map<string, Ma
     // opening lists
     const ro = m.get('checklist_open')!;
     // 2026-10-17: either some minutes after clock-in, or at a set time (to everyone on shift then)
-    const atTime = (r: Rule) => r.timeMin !== null && (ctx.force || (nowMin >= r.timeMin && nowMin < r.timeMin + 60));
+    // within an hour after the set time, also across midnight (e.g. 23:45 → 00:30, or 01:30 at night)
+    const atTime = (r: Rule) => r.timeMin !== null && (ctx.force || (nowMin - r.timeMin + 1440) % 1440 < 60);
     if (ro.enabled && (ro.timeMin !== null ? atTime(ro) : ctx.force || ctx.now >= e.clockInAt + (ro.minutes ?? 30) * 60000))
       sent += await remindLists(ctx, locId, e.userId, e.businessDate, listsOf(ro, division, lists), 'cl_open', e.id);
     // closing lists: before the end of today's planned shift, or at a set time

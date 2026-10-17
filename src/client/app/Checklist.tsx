@@ -266,6 +266,7 @@ export function ChecklistDay({ id }: { id: string }) {
                 <Fold
                   key={si}
                   id={`cl-sec-${si}`}
+                  className="sec-fold"
                   open={folded !== null && !folded.has(si)}
                   onToggle={() => toggleFold(si)}
                   head={s.name ?? t.otherItems}

@@ -5,9 +5,11 @@ import './styles/motion.css';
 import { App } from './App';
 import { registerServiceWorker } from './pwa';
 import { hydrateCache } from './apiCache';
+import { installFoldAnchor } from './foldAnchor';
 
 const root = document.getElementById('root');
 // the answers saved on the phone first (a few ms): the app opens with them instead of a loader
+installFoldAnchor();
 void hydrateCache().then(() => {
   if (root)
     createRoot(root).render(

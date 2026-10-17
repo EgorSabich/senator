@@ -10,8 +10,8 @@ import { addDays } from '../../shared/time';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { navigate, onNav } from '../router';
-import { ErrorBox, LogoLoader } from '../ui';
-import { Btn, Modal, SecretCardModal, storageGet, storageSet, type SecretInfo } from './common';
+import { Chevron, ErrorBox, LogoLoader } from '../ui';
+import { Btn, Icon, Modal, SecretCardModal, storageGet, storageSet, type SecretInfo } from './common';
 import { usePanel } from './Panel';
 import { DateField } from '../DateField';
 import { RateInput } from './Employees';
@@ -221,7 +221,7 @@ function ListView() {
               </>
             )}
             <label className="search-box rec-search">
-              <span aria-hidden="true">⌕</span>
+              <Icon name="search" size={18} />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.search} aria-label={t.search} />
             </label>
           </div>
@@ -236,7 +236,7 @@ function ListView() {
                     <th>
                       <button className="th-sort" onClick={() => setSort('name')} aria-pressed={sort === 'name'}>
                         {t.cols.name}
-                        {sort === 'name' ? ' ▾' : ''}
+                        {sort === 'name' && <Chevron size={12} />}
                       </button>
                     </th>
                     <th>{t.cols.position}</th>
@@ -245,7 +245,7 @@ function ListView() {
                     <th>
                       <button className="th-sort" onClick={() => setSort('next')} aria-pressed={sort === 'next'}>
                         {t.cols.next}
-                        {sort === 'next' ? ' ▾' : ''}
+                        {sort === 'next' && <Chevron size={12} />}
                       </button>
                     </th>
                     <th className="c">{t.cols.cv}</th>
@@ -253,7 +253,7 @@ function ListView() {
                     <th>
                       <button className="th-sort" onClick={() => setSort('added')} aria-pressed={sort === 'added'}>
                         {t.cols.added}
-                        {sort === 'added' ? ' ▾' : ''}
+                        {sort === 'added' && <Chevron size={12} />}
                       </button>
                     </th>
                   </tr>
@@ -282,7 +282,7 @@ function ListView() {
                                 </option>
                               ))}
                             </select>
-                            {t.stages[c.stage]} ▾
+                            {t.stages[c.stage]} <Chevron size={12} />
                           </label>
                         </td>
                         <td data-label={t.cols.next}>

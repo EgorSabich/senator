@@ -9,7 +9,7 @@ import { addDays, businessDate, formatClock } from '../../shared/time';
 import { api, ApiFailure } from '../api';
 import { onNav } from '../router';
 import { errorText, pl } from '../i18n/pl';
-import { ErrorBox, LogoLoader } from '../ui';
+import { Chevron, ErrorBox, LogoLoader, Reveal } from '../ui';
 import { Btn, Modal, storageGet, storageSet } from './common';
 import { usePanel } from './Panel';
 import { TimeField, VALID_TIME } from './TimeTracking';
@@ -695,12 +695,12 @@ function Templates({ templates, onChanged, onError }: { templates: Template[]; o
     <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <button type="button" className="sch-fold" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="label">{t.templates}</span>
-        <span className="muted">
-          {templates.length} {open ? '▴' : '▾'}
+        <span className="muted sch-fold-n">
+          {templates.length} <Chevron up={open} />
         </span>
       </button>
-      {open && (
-        <>
+      <Reveal open={open}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <p className="muted" style={{ margin: 0, fontSize: 12 }}>
             {t.templatesHint}
           </p>
@@ -725,8 +725,8 @@ function Templates({ templates, onChanged, onError }: { templates: Template[]; o
               </Btn>
             </div>
           ))}
-        </>
-      )}
+        </div>
+      </Reveal>
     </section>
   );
 }

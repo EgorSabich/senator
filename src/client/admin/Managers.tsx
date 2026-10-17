@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { DIVISION_SCOPE_PREFIX, divisionOf, MANAGER_ROLES, PERMISSIONS, POSITIONS, ROLE_PREFIX, type ManagerRole } from '../../shared/constants';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
-import { ErrorBox } from '../ui';
+import { Chevron, ErrorBox } from '../ui';
 import { Btn, DeleteForeverModal, DivisionExtras, formatDateTime, Modal, SecretCardModal, type SecretInfo } from './common';
 import { DateField } from '../DateField';
 import { RateInput } from './Employees';
@@ -143,9 +143,7 @@ function ManagerCard(props: {
             {m.status === 'inactive' && <span className="badge bad">{t.inactive}</span>}
             {m.tracksTime && <span className="badge neutral">{t.hourlyBadge}</span>}
             <span className="badge neutral">{savedRole ? t.roles[savedRole] : t.customRole}</span>
-            <span className={`chev${open ? ' up' : ''}`} aria-hidden="true">
-              ▾
-            </span>
+            <Chevron up={open} />
           </span>
         </span>
         <span className="muted" style={{ fontSize: 12 }}>

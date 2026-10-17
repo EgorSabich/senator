@@ -10,6 +10,16 @@
 
 
 
+## 0.9.22 — 2026-10-18 (display review)
+
+- One select look everywhere: the browser's arrow replaced by the app's thin chevron; long choices end with „…”.
+- Every folding list opens and closes the same smooth way (Statystyki blocks, „Do zapoznania się”, import notes, Grafik templates, test answers); the tapped header stays where it is on the screen while the content folds, also when a long section closes. Text triangles replaced by the app's chevron.
+- Powiadomienia: every „kiedy” control is the same full-width box in one column; time lists follow the working day (06:00 → 05:45), so hours after midnight can be chosen; a checklist time after midnight fires correctly; the opening reminder no longer offers closing lists and the other way round.
+- Dziennik zmian: every action has a Polish name (a test now checks that new actions get one); on phones each entry is one block instead of a cut-off table.
+- Phones: Dziś keeps names whole (status under the name), Grafik's hours column scrolls with the days, checklist section names in normal case, Statystyki shows „CSV”, Listy without „brakuje N”, Testy tabs look like tabs.
+- Buttons stay on one line; Rekrutacja search icon like everywhere else.
+- Tests: display tour of every screen (phone and desktop) with automatic overflow checks; fold position check; suites 29 and 30 use the restaurant's working day, so they also pass after midnight.
+
 ## 0.9.21 — 2026-10-17 (tests before the shift)
 
 - Panel → Testy: tests with questions (one or several correct answers), settings (for whom, one time limit for the whole test, pass score, random subset, shuffled questions / answers), import and export as JSON („senator-tests”, preview before saving), editing (an edited question gets a new version — old results stay as they were), delete (archived if someone already took it).

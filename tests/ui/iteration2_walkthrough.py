@@ -62,7 +62,7 @@ with sync_playwright() as pw:
     tc=b.new_context(); tp=tc.new_page(); tp.goto(BASE+"/")
     tp.request.post(BASE+"/api/auth/login",data={"login":tt["login"],"secret":tt["tempSecret"]},headers=H)
     tp.request.post(BASE+"/api/terminal/punch",data={"pin":"481937","clientId":f"ui{int(time.time())}"},headers=H)
-    z=phones["Zofia"]; z.goto(BASE+f"/listy/{cl}"); z.get_by_text("Odhacz ze zdjęciem").wait_for(); z.wait_for_timeout(400); z.screenshot(path=f"{OUT}/i05-phone-photo-item.png")
+    z=phones["Zofia"]; z.goto(BASE+f"/listy/{cl}"); z.locator('button.fold-head[aria-expanded="false"]').first.click(); z.wait_for_timeout(700); z.get_by_text("Odhacz ze zdjęciem").wait_for(); z.wait_for_timeout(400); z.screenshot(path=f"{OUT}/i05-phone-photo-item.png")
     with z.expect_file_chooser() as fc:
         z.get_by_role("button",name=re.compile("Ustaw stoły")).click()
     fc.value.set_files(PHOTO); z.get_by_text("ze zdjęciem",exact=False).first.wait_for(); z.wait_for_timeout(600)

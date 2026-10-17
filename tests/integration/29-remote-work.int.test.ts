@@ -1,5 +1,6 @@
 /** 2026-10-17: Praca zdalna — call-center people start and end work in the app, marked „zdalnie”. */
 import { beforeAll, describe, expect, it } from 'vitest';
+import { businessDate } from '../../src/shared/time';
 import { activateClient, Client, ownerClient, SENATOR } from './client';
 
 let owner: Client;
@@ -37,7 +38,8 @@ describe('remote work', () => {
     const e = await ida.post(`${R}/stop`);
     expect(e.data).toMatchObject({ open: null, minutes: 0 });
     expect((await ida.post(`${R}/stop`)).data.error).toBe('no_remote_shift');
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw' }).format(new Date());
+    // the working day starts at the hour set in Lokale: after midnight it is still yesterday
+    const today = businessDate(Date.now(), (await owner.get(`/api/locations/${SENATOR}/info`)).data.location.dayStartHour);
     const cal = await owner.get(`/api/admin/locations/${SENATOR}/time?from=${today}&to=${today}`);
     const entry = cal.data.entries.find((x: { userId: string }) => x.userId === idaId);
     expect(entry).toMatchObject({ inSource: 'remote', outSource: 'remote' });

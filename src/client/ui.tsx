@@ -1,5 +1,5 @@
 /** Small shared UI pieces following the approved prototype (spec section H). */
-import type { CSSProperties, ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useLiveState, updateApp } from './live';
 import { pl } from './i18n/pl';
 
@@ -206,4 +206,59 @@ export function LiveBar({ showOffline = false }: { showOffline?: boolean }) {
       </div>
     );
   return null;
+}
+
+/** The one chevron of the app (owner, 2026-10-18: no text triangles); turns over when `up`. */
+export function Chevron({ up = false, size = 16 }: { up?: boolean; size?: number }) {
+  return (
+    <svg className={`chev-ic${up ? ' up' : ''}`} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Height that opens and closes smoothly (grid rows 0fr → 1fr); the content stays put while it folds. */
+export function Reveal({ open, children, lazy = false }: { open: boolean; children: ReactNode; lazy?: boolean }) {
+  const [seen, setSeen] = useState(open);
+  if (open && !seen) setSeen(true);
+  return (
+    <div className={`reveal${open ? ' open' : ''}`}>
+      <div className="reveal-inner" inert={!open}>
+        {!lazy || seen ? children : null}
+      </div>
+    </div>
+  );
+}
+
+/** A heading that folds its content out (replaces <details>, which cannot animate). */
+export function Disclosure(props: {
+  summary: ReactNode;
+  children: ReactNode;
+  open?: boolean;
+  defaultOpen?: boolean;
+  onToggle?: (open: boolean) => void;
+  className?: string;
+  lazy?: boolean;
+}) {
+  const [own, setOwn] = useState(props.defaultOpen ?? false);
+  const open = props.open ?? own;
+  return (
+    <div className={`disc${open ? ' open' : ''}${props.className ? ` ${props.className}` : ''}`}>
+      <button
+        type="button"
+        className="disc-head"
+        aria-expanded={open}
+        onClick={() => {
+          setOwn(!open);
+          props.onToggle?.(!open);
+        }}
+      >
+        {props.summary}
+        <Chevron up={open} />
+      </button>
+      <Reveal open={open} lazy={props.lazy}>
+        {props.children}
+      </Reveal>
+    </div>
+  );
 }

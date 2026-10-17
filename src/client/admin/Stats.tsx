@@ -9,7 +9,7 @@ import { DateField } from '../DateField';
 import { errorText, pl } from '../i18n/pl';
 import { useLiveRefresh } from '../live';
 import { navigate, onNav } from '../router';
-import { ErrorBox, LogoLoader } from '../ui';
+import { Disclosure, ErrorBox, LogoLoader } from '../ui';
 import { Btn, Modal, storageGet, storageSet } from './common';
 import { usePanel } from './Panel';
 
@@ -117,7 +117,7 @@ export function Stats({ path }: { path: string }) {
             </select>
           </label>
           <Btn onClick={() => csv?.()} disabled={!csv}>
-            {t.csv}
+            <span className="st-csv-word">{t.csvWord} </span>CSV
           </Btn>
         </div>
       </div>
@@ -218,25 +218,24 @@ function Sec({ id, title, count, aside, children }: { id: string; title: string;
   const key = `sa-st-open-${id}`;
   const [open, setOpen] = useState(() => storageGet(key) === '1');
   return (
-    <details
+    <Disclosure
       className="card st-sec"
       open={open}
-      onToggle={(e) => {
-        const o = (e.currentTarget as HTMLDetailsElement).open;
+      lazy
+      onToggle={(o) => {
         setOpen(o);
         storageSet(key, o ? '1' : '0');
       }}
+      summary={
+        <>
+          <span className="st-sec-title">{title}</span>
+          {count !== undefined && <span className="badge neutral">{count}</span>}
+          {aside && <span className="st-sec-aside">{aside}</span>}
+        </>
+      }
     >
-      <summary>
-        <span className="st-sec-title">{title}</span>
-        {count !== undefined && <span className="badge neutral">{count}</span>}
-        {aside && <span className="st-sec-aside">{aside}</span>}
-        <span className="st-sec-chev" aria-hidden="true">
-          ▾
-        </span>
-      </summary>
-      {open && <div className="st-sec-body">{children}</div>}
-    </details>
+      <div className="st-sec-body">{children}</div>
+    </Disclosure>
   );
 }
 

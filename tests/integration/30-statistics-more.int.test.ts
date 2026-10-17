@@ -1,6 +1,6 @@
 /** 2026-10-17: Statystyki — Czas pracy i koszt, Listy kontrolne, Szkolenia i dokumenty. */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addDays, warsawDate, warsawToMs } from '../../src/shared/time';
+import { addDays, businessDate, warsawDate, warsawToMs } from '../../src/shared/time';
 import { weekStart } from '../../src/shared/schedule';
 import { activateClient, Client, ownerClient, SENATOR } from './client';
 
@@ -12,7 +12,10 @@ let term: Client;
 let listId = '';
 let docId = '';
 const W = weekStart(addDays(warsawDate(Date.now()), -35));
-const today = warsawDate(Date.now());
+// the restaurant's working day (it starts at the hour set in Lokale), so the suite also passes after midnight
+let today = warsawDate(Date.now());
+// reading a document counts on its calendar day
+const calToday = warsawDate(Date.now());
 const A = `/api/admin/locations/${SENATOR}/stats`;
 const li = (t: string) => ({ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: t }] }] });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -20,6 +23,7 @@ const mine = (rows: any[]) => rows.find((r: { userId: string }) => r.userId === 
 
 beforeAll(async () => {
   owner = await ownerClient();
+  today = businessDate(Date.now(), (await owner.get(`/api/locations/${SENATOR}/info`)).data.location.dayStartHour);
   const e = await owner.post(`/api/admin/locations/${SENATOR}/employees`, { firstName: 'Ola', lastName: 'Staty', position: 'hookah_master', rate: '40' , startDate: addDays(W, -7) });
   olaId = e.data.id;
   ola = await activateClient(e.data.login, e.data.tempSecret, '357913');
@@ -86,7 +90,7 @@ describe('listy kontrolne', () => {
 
 describe('szkolenia i dokumenty', () => {
   it('a document read in time; nothing overdue', async () => {
-    const r = await owner.get(`${A}/training?from=${today}&to=${today}&division=hookah_master`);
+    const r = await owner.get(`${A}/training?from=${calToday}&to=${calToday}&division=hookah_master`);
     expect(r.status).toBe(200);
     expect(r.data.totals).toMatchObject({ acks: 1, onTimePct: 100 });
     const d = r.data.documents.find((x: { id: string }) => x.id === docId);
@@ -95,6 +99,6 @@ describe('szkolenia i dokumenty', () => {
     expect(mine(r.data.people)).toMatchObject({ acks: 1, acksOnTime: 1, overdue: 0 });
   });
   it('employees cannot see statistics', async () => {
-    expect((await ola.get(`${A}/training?from=${today}&to=${today}`)).status).toBe(403);
+    expect((await ola.get(`${A}/training?from=${calToday}&to=${calToday}`)).status).toBe(403);
   });
 });

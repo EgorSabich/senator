@@ -6,7 +6,7 @@ import { comparePl, foldPolish } from '../../shared/text';
 import { api, ApiFailure, cached } from '../api';
 import { errorText, pl } from '../i18n/pl';
 import { navigate } from '../router';
-import { ErrorBox, LogoLoader } from '../ui';
+import { Disclosure, ErrorBox, LogoLoader } from '../ui';
 import { businessDate, formatDuration } from '../../shared/time';
 import { formatMoney } from './TimeTracking';
 import { Btn, DeleteForeverModal, formatDateTime, Icon, Modal, SecretCardModal, storageGet, storageSet, type SecretInfo } from './common';
@@ -607,8 +607,10 @@ function Summary({ userId, locationId, canManage, allowed }: { userId: string; l
         {month('prevMonth')}
       </div>
       {data.mandatory.missing.length > 0 ? (
-        <details className="emp-missing">
-          <summary>
+        <Disclosure
+          className="emp-missing"
+          summary={
+            <>
             <span className="label">{s.missingDocs}</span>
             <span className="badge neutral">{data.mandatory.missing.length}</span>
             {data.deadlines?.lockedSince != null ? (
@@ -616,10 +618,9 @@ function Summary({ userId, locationId, canManage, allowed }: { userId: string; l
             ) : data.deadlines?.nextDue != null ? (
               <span className="badge warn">{s.dueBy(new Date(data.deadlines.nextDue).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }))}</span>
             ) : null}
-            <span className="emp-chevron" aria-hidden="true">
-              <Icon name="down" size={16} />
-            </span>
-          </summary>
+            </>
+          }
+        >
           <div className="emp-missing-list">
             {data.mandatory.missing.map((m) => (
               <span key={m.id} className="emp-missing-row">
@@ -630,7 +631,7 @@ function Summary({ userId, locationId, canManage, allowed }: { userId: string; l
               </span>
             ))}
           </div>
-        </details>
+        </Disclosure>
       ) : data.mandatory.total > 0 ? (
         <span className="muted" style={{ fontSize: 13 }}>
           {s.allConfirmed}
