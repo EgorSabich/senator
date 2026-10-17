@@ -529,3 +529,11 @@ a.today-tile:active {
     transition: none !important;
   }
 }
+
+/* iPhone: while the keyboard is open the bottom bars step aside (main.tsx toggles .kb-open) */
+@media (max-width: 760px) and (hover: none) {
+  html.kb-open .tabbar,
+  html.kb-open .a-tabbar {
+    display: none;
+  }
+}

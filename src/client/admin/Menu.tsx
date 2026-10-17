@@ -5,7 +5,7 @@ import { BUNDLE_FORMAT, checkBundle, IMPORT_CHUNK, MENU_TEXT_FIELD_NAMES, type M
 import { comparePl, foldPolish } from '../../shared/text';
 import { api, ApiFailure } from '../api';
 import { errorText, pl } from '../i18n/pl';
-import { navigate } from '../router';
+import { goBack, navigate, restoreScroll } from '../router';
 import { ErrorBox } from '../ui';
 import { resizeImage, uploadFile } from '../editor/image';
 import { Btn, DeleteForeverModal, formatDateTime, Icon, Modal, storageGet, storageSet } from './common';
@@ -73,6 +73,10 @@ export function Menu({ selectedId }: { selectedId: string | null }) {
       .filter((i) => !q || foldPolish(`${i.nameGuest} ${i.namePos ?? ''}`).includes(q));
   }, [data, section, category, query, showArchived]);
   const selected = data?.items.find((i) => i.id === selectedId) ?? null;
+  // back to the list (button or swipe): the list comes back where it was left
+  useEffect(() => {
+    if (!selectedId && data) restoreScroll();
+  }, [selectedId, data]);
   const archived = useMemo(() => (data?.items ?? []).filter((i) => i.section === section && !i.isActive), [data, section]);
   const [restoring, setRestoring] = useState<number | null>(null);
 
@@ -180,7 +184,7 @@ export function Menu({ selectedId }: { selectedId: string | null }) {
           {!selectedId && <p className="muted" style={{ margin: 0 }}>{t.selectHint}</p>}
           {selectedId && (
             <div className="phone-only" style={{ marginBottom: 14 }}>
-              <Btn onClick={() => navigate('/panel/menu')}>
+              <Btn onClick={() => goBack('/panel/menu')}>
                 ‹ {t.backToList}
               </Btn>
             </div>

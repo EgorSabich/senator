@@ -90,6 +90,8 @@
 .df-pop {
   position: fixed;
   z-index: 90;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   width: min(340px, calc(100vw - 32px));
   padding: 16px;
   border-radius: var(--radius-l, 18px);
@@ -107,6 +109,8 @@
 }
 .df-sheet {
   width: 100%;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
   padding: 10px 16px calc(env(safe-area-inset-bottom) + 18px);
   border-radius: 22px 22px 0 0;
   border-bottom: none;

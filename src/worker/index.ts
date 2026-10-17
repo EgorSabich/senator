@@ -40,7 +40,11 @@ app.get('/api/health', async (c) => {
   }
   // `secret` only says whether AUTH_SECRET is configured (never its value) — without it every login fails.
   const secret = typeof c.env.AUTH_SECRET === 'string' && c.env.AUTH_SECRET.length >= 32;
-  return c.json({ ok: db, db, secret, env: c.env.APP_ENV, version: __APP_VERSION__ }, db ? 200 : 503);
+  // push keys: only whether they are there and look right (never the values)
+  const pub = (c.env.VAPID_PUBLIC_KEY ?? '').trim();
+  const priv = (c.env.VAPID_PRIVATE_KEY ?? '').trim();
+  const push = !pub && !priv ? 'missing' : !pub ? 'public_missing' : !priv ? 'private_missing' : /^[A-Za-z0-9_-]{86,88}$/.test(pub) && /^[A-Za-z0-9_-]{42,44}$/.test(priv) ? 'ok' : 'invalid';
+  return c.json({ ok: db, db, secret, push, env: c.env.APP_ENV, version: __APP_VERSION__ }, db ? 200 : 503);
 });
 
 app.route('/api/auth', authRoutes);

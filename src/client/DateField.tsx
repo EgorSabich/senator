@@ -63,15 +63,30 @@ export function DateField({ id, value, onChange, withTime = false, min, max, pla
   const [month, setMonth] = useState((date || todayIso()).slice(0, 7));
   const wrap = useRef<HTMLDivElement>(null);
   const pop = useRef<HTMLDivElement>(null);
-  // the window is placed over the page (portal), so a modal's scroll area cannot cut it off
-  const [place, setPlace] = useState<CSSProperties>({});
+  // the window is placed over the page (portal), so a modal's scroll area cannot cut it off.
+  // Its real height is measured: below the field when it fits, else above, else as high as the window allows.
+  const [place, setPlace] = useState<CSSProperties>({ visibility: 'hidden', top: 0, left: 0 });
   useLayoutEffect(() => {
-    if (!open || phone || !wrap.current) return;
-    const r = wrap.current.getBoundingClientRect();
-    const h = withTime ? 560 : 380;
-    const below = window.innerHeight - r.bottom;
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - 348));
-    setPlace(below > h || r.top < h ? { top: r.bottom + 6, left } : { bottom: window.innerHeight - r.top + 6, left });
+    if (!open || phone) return;
+    const fit = () => {
+      if (!wrap.current || !pop.current) return;
+      const r = wrap.current.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const h = Math.min(pop.current.scrollHeight, vh - 16);
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - pop.current.offsetWidth - 8));
+      let top: number;
+      if (vh - r.bottom - 6 >= h + 8) top = r.bottom + 6;
+      else if (r.top - 6 >= h + 8) top = r.top - 6 - h;
+      else top = Math.max(8, vh - h - 8);
+      setPlace({ top, left, maxHeight: vh - 16 });
+    };
+    fit();
+    window.addEventListener('scroll', fit, true);
+    window.addEventListener('resize', fit);
+    return () => {
+      window.removeEventListener('scroll', fit, true);
+      window.removeEventListener('resize', fit);
+    };
   }, [open, phone, withTime]);
 
   useEffect(() => {
@@ -84,14 +99,12 @@ export function DateField({ id, value, onChange, withTime = false, min, max, pla
       const n = e.target as Node;
       if (!phone && !wrap.current?.contains(n) && !pop.current?.contains(n)) setOpen(false);
     };
-    const away = () => !phone && setOpen(false);
-    window.addEventListener('resize', away);
+
     document.addEventListener('keydown', key);
     document.addEventListener('pointerdown', out);
     return () => {
       document.removeEventListener('keydown', key);
       document.removeEventListener('pointerdown', out);
-      window.removeEventListener('resize', away);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);

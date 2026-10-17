@@ -10,6 +10,13 @@
 
 
 
+## 0.9.12 — 2026-10-17
+
+- Date picker on a laptop in a small window: the window measures its real height and opens below, above or as high as fits, scrolls inside itself and follows the page when it scrolls (it used to fall below the screen).
+- Panel → Menu on a phone: „‹ Lista” (and swipe back) returns to the same place in the list instead of the top.
+- iPhone keyboard: the bottom bars hide while typing and come back in place when the keyboard closes (Safari left them shifted).
+- `/api/health` says whether the push keys reach the app: `push: ok | missing | public_missing | private_missing | invalid` (never the values).
+
 ## 0.9.11 — 2026-10-17
 
 - Own date and date+time field everywhere in the panel (`DateField`): Polish month and day names, week from Monday, today outlined, chosen day in the accent colour, „Dziś · Jutro” shortcuts, hour chips 9:00–20:00 and „Inna godzina”. Computer: a window next to the field (over the page, so modals do not cut it); phone: a panel from the bottom. Replaces the browser pickers („mm/dd/yyyy”) in Pracownicy (start date, new position, rate „Obowiązuje od”), Listy (day), Rekrutacja (interview, trial day, hire start date). The interview and trial-day dates in the candidate card save when chosen.
