@@ -89,7 +89,7 @@ self.addEventListener('fetch', (event) => {
   // The time clock must see the real connection state: never answer it from the cache.
   if (p.startsWith('/api/terminal/')) return;
   // live change checks and push keys always come from the network
-  if (p.endsWith('/changes') || p.startsWith('/api/push/')) return;
+  if (p.endsWith('/changes') || p.startsWith('/api/push/') || p.startsWith('/api/tests/')) return;
   if (p.startsWith('/api/')) {
     event.respondWith(networkFirst(req, DATA));
     return;

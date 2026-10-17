@@ -8,6 +8,7 @@ import { Notifications } from './Notifications';
 import { Stats } from './Stats';
 import { Today } from './Today';
 import { ChecklistStats } from './ChecklistStats';
+import { Tests } from './Tests';
 import { createContext, lazy, Suspense, useContext, useEffect, useMemo, useState } from 'react';
 import { LiveBar, LogoLoader } from '../ui';
 import type { Me } from '../api';
@@ -73,6 +74,7 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
     { path: '/panel/menu', label: pl.admin.nav.menu, icon: 'menu', show: ctx.can('menu.edit') },
     { path: '/panel/materialy', label: pl.admin.nav.content, icon: 'book', show: ctx.can('content.edit') },
     { path: '/panel/programy', label: pl.admin.nav.programs, icon: 'learn', show: ctx.can('content.edit') },
+    { path: '/panel/testy', label: pl.admin.nav.tests, icon: 'learn', show: ctx.can('tests.edit') || ctx.can('training.assign') },
     { path: '/panel/listy', label: pl.admin.nav.checklists, icon: 'checklist', show: ctx.can('checklists.view') },
     { path: '/panel/menedzerowie', label: pl.admin.nav.managers, icon: 'key', show: ctx.can('managers.manage') },
     { path: '/panel/lokale', label: pl.admin.nav.locations, icon: 'pin', show: ctx.can('locations.manage') },
@@ -101,6 +103,7 @@ export function Panel({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: () 
   else if (path.startsWith('/panel/czas') && ctx.can('time.manage')) page = <TimeTracking />;
   else if (path.startsWith('/panel/grafik') && ctx.can('schedule.manage')) page = <Schedule />;
   else if (path.startsWith('/panel/dzis') && (ctx.can('time.manage') || ctx.can('schedule.manage'))) page = <Today />;
+  else if (path.startsWith('/panel/testy') && (ctx.can('tests.edit') || ctx.can('training.assign'))) page = <Tests path={path} />;
   else if (path.startsWith('/panel/listy') && ctx.can('checklists.view')) page = <ChecklistStats />;
   else if (path.startsWith('/panel/menedzerowie') && ctx.can('managers.manage')) page = <Managers />;
   else if (path.startsWith('/panel/lokale') && ctx.can('locations.manage')) page = <Locations />;

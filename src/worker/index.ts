@@ -23,6 +23,8 @@ import { notificationAdminRoutes } from './routes/notifications';
 import { statsAdminRoutes } from './routes/stats';
 import { managerAdminRoutes } from './routes/managers';
 import { remoteRoutes } from './routes/remote';
+import { testAdminRoutes } from './routes/testAdmin';
+import { testRunRoutes } from './routes/testRun';
 import { expireCandidates } from './jobs/candidates';
 import { requireSameOrigin, requireSession } from './auth/session';
 import { runNightlyBackup } from './jobs/backup';
@@ -68,6 +70,7 @@ admin.route('/', recruitmentAdminRoutes);
 admin.route('/', notificationAdminRoutes);
 admin.route('/', statsAdminRoutes);
 admin.route('/', managerAdminRoutes);
+admin.route('/', testAdminRoutes);
 app.route('/api/admin', admin);
 
 // Staff (waiter) views; every path here needs a session.
@@ -77,6 +80,7 @@ staff.use('/menu/*', requireSession);
 staff.use('/content/*', requireSession);
 staff.use('/checklists/*', requireSession);
 staff.use('/push/*', requireSession);
+staff.use('/tests/*', requireSession);
 staff.route('/', menuRoutes);
 staff.route('/', learnRoutes);
 staff.route('/', checklistRoutes);
@@ -84,6 +88,7 @@ staff.route('/', scheduleRoutes);
 staff.route('/', pushRoutes);
 staff.route('/', liveRoutes);
 staff.route('/', remoteRoutes);
+staff.route('/', testRunRoutes);
 // Time clock phone (role "terminal" reaches nothing else — see requireSession).
 const terminal = new Hono<AppEnv>();
 terminal.use('*', requireSession);

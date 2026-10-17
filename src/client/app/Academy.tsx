@@ -1,4 +1,5 @@
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { TestRunner, useActiveTest, type ActiveTest } from './TestRunner';
 import { startLive } from '../live';
 import { LiveBar } from '../ui';
 import { api } from '../api';
@@ -93,6 +94,29 @@ export function Academy({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: (
     };
   }, [locationId, me.user.role]);
 
+  // a test started by a leader: until it is handed in the app shows only the test (owner, 2026-10-17)
+  const test = useActiveTest(me.user.role === 'employee');
+  // the test stays on screen after it is handed in (result) until „Na Start”
+  const [shown, setShown] = useState<ActiveTest | null>(null);
+  if (test.active && shown?.attemptId !== test.active.attemptId) setShown(test.active);
+  if (shown) {
+    return (
+      <Ctx.Provider value={ctx}>
+        <div className="a-app a-test-lock">
+          <TestRunner
+            key={shown.attemptId}
+            test={shown}
+            onDone={() => {
+              setShown(null);
+              test.clear();
+              void test.check();
+            }}
+          />
+        </div>
+      </Ctx.Provider>
+    );
+  }
+
   let page: ReactNode;
   let full = false; // full-screen pages bring their own top bar and footer
   let m: Record<string, string> | null;
@@ -162,3 +186,4 @@ export function Academy({ me, onLoggedOut, refreshMe }: { me: Me; onLoggedOut: (
     </Ctx.Provider>
   );
 }
+

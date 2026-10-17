@@ -10,7 +10,7 @@ const STORE = 'answers';
 const KEY = 'snapshot';
 const MAX_ENTRIES = 400;
 
-const persistable = (path: string) => path.startsWith('/api/') && !path.startsWith('/api/admin/') && !path.startsWith('/api/terminal/') && !path.endsWith('/changes');
+const persistable = (path: string) => path.startsWith('/api/') && !path.startsWith('/api/admin/') && !path.startsWith('/api/terminal/') && !path.startsWith('/api/tests/') && !path.endsWith('/remote') && !path.endsWith('/changes');
 
 class PersistentMap extends Map<string, unknown> {
   override set(key: string, value: unknown): this {

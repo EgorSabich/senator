@@ -41,6 +41,7 @@ const LEAD: Permission[] = [
   'training.assign',
   'results.view',
   'content.edit',
+  'tests.edit',
   'time.manage',
   'checklists.view',
   'wages.manage',

@@ -16,7 +16,7 @@ liveRoutes.get('/locations/:locId/changes', async (c) => {
   requireLocation(access, locId);
   const day = (n: number) => new Date(Date.now() + n * 86400_000).toISOString().slice(0, 10);
   const from = day(-7);
-  const [schedule, unav, time, lists, content, menu, recruitment] = await db.batch([
+  const [schedule, unav, time, lists, content, menu, recruitment, tests] = await db.batch([
     db.prepare(`SELECT COUNT(*) || '.' || COALESCE(MAX(updated_at), 0) || '.' || COALESCE(MAX(published_at), 0) AS v FROM schedule_shifts WHERE location_id = ? AND date >= ?`).bind(locId, from),
     db.prepare(`SELECT COUNT(*) || '.' || COALESCE(MAX(created_at), 0) AS v FROM unavailability WHERE location_id = ? AND date >= ?`).bind(locId, from),
     db
@@ -28,6 +28,8 @@ liveRoutes.get('/locations/:locId/changes', async (c) => {
     db.prepare(`SELECT COUNT(*) || '.' || COALESCE(MAX(updated_at), 0) AS v FROM content_items WHERE location_id = ? OR location_id IS NULL`).bind(locId),
     db.prepare(`SELECT COUNT(*) || '.' || COALESCE(MAX(updated_at), 0) AS v FROM menu_items WHERE location_id = ?`).bind(locId),
     db.prepare(`SELECT COUNT(*) || '.' || COALESCE(MAX(updated_at), 0) AS v FROM candidates WHERE location_id = ?`).bind(locId),
+    // a test started for this person (the app then shows only the test)
+    db.prepare(`SELECT COUNT(*) || '.' || COALESCE(MAX(started_at), 0) AS v FROM test_attempts WHERE user_id = ? AND status IN ('assigned', 'in_progress')`).bind(c.var.user.id),
   ]);
   const v = (r: D1Result | undefined) => String((r?.results[0] as { v?: string } | undefined)?.v ?? '');
   return c.json(
@@ -40,6 +42,7 @@ liveRoutes.get('/locations/:locId/changes', async (c) => {
         content: v(content),
         menu: v(menu),
         recruitment: v(recruitment),
+        tests: v(tests),
       },
     },
     200,

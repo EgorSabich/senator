@@ -46,6 +46,7 @@ export function purgeUserStatements(db: D1Database, userId: string, login: strin
     s(`UPDATE menu_item_allergens SET confirmed_by = NULL WHERE confirmed_by = ?`, userId),
     s(`UPDATE menu_item_diets SET confirmed_by = NULL WHERE confirmed_by = ?`, userId),
     s(`UPDATE tests SET created_by = NULL WHERE created_by = ?`, userId),
+    s(`UPDATE test_sessions SET started_by = NULL WHERE started_by = ?`, userId),
     s(`UPDATE media SET uploaded_by = NULL WHERE uploaded_by = ?`, userId),
     s(`UPDATE time_entries SET edited_by = NULL WHERE edited_by = ?`, userId),
     s(`UPDATE pay_rates SET created_by = NULL WHERE created_by = ?`, userId),

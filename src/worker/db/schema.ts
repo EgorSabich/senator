@@ -442,6 +442,11 @@ export const tests = sqliteTable('tests', {
   questionCount: integer('question_count'), // null = all questions
   shuffle: integer('shuffle', { mode: 'boolean' }).notNull().default(true),
   status: text('status', { enum: ['draft', 'published', 'archived'] }).notNull().default('draft'),
+  /** 2026-10-17 (tests before the shift): who the test is for (comma-separated positions; null = everyone) */
+  positions: text('positions'),
+  /** one timer for the whole test */
+  timeLimitSec: integer('time_limit_sec').notNull().default(600),
+  shuffleOptions: integer('shuffle_options').notNull().default(1),
   createdBy: text('created_by').references(() => users.id),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -469,6 +474,8 @@ export const questions = sqliteTable(
     imageKey: text('image_key'),
     sortOrder: integer('sort_order').notNull().default(0),
     isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+    /** several correct answers: all of them must be chosen */
+    multi: integer('multi').notNull().default(0),
   },
   (t) => [index('questions_test_idx').on(t.testId)],
 );
@@ -497,6 +504,11 @@ export const testAttempts = sqliteTable(
     totalCount: integer('total_count'),
     scorePercent: integer('score_percent'),
     passed: integer('passed', { mode: 'boolean' }),
+    /** 2026-10-17: started by a leader for chosen people (test_sessions); null = taken alone */
+    sessionId: text('session_id'),
+    /** when the person's phone showed the test; the timer runs from here */
+    openedAt: integer('opened_at'),
+    deadlineAt: integer('deadline_at'),
   },
   (t) => [uniqueIndex('test_attempts_uq').on(t.testId, t.userId, t.attemptNo), index('test_attempts_user_idx').on(t.userId)],
 );
@@ -508,6 +520,8 @@ export const attemptAnswers = sqliteTable(
     attemptId: text('attempt_id').notNull().references(() => testAttempts.id),
     questionId: text('question_id').notNull().references(() => questions.id),
     selectedOptionId: text('selected_option_id'),
+    /** chosen option ids (JSON array) — also for several-answer questions */
+    selectedJson: text('selected_json'),
     isCorrect: integer('is_correct', { mode: 'boolean' }),
     /** Question text, options and correct id at answer time — edits never rewrite history. */
     snapshotJson: text('snapshot_json').notNull(),
@@ -871,4 +885,21 @@ export const attendanceExcuses = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [index('attendance_excuses_loc_idx').on(t.locationId, t.date)],
+);
+
+/** A test started by a leader for chosen people before the shift (owner, 2026-10-17; mockups 19–23). */
+export const testSessions = sqliteTable(
+  'test_sessions',
+  {
+    id: id(),
+    locationId: text('location_id').notNull().references(() => locations.id),
+    testId: text('test_id').notNull().references(() => tests.id),
+    startedBy: text('started_by').references(() => users.id),
+    startedAt: integer('started_at').notNull(),
+    timeLimitSec: integer('time_limit_sec').notNull(),
+    /** after this nobody can open or answer any more (time limit + a margin to open the phone) */
+    closesAt: integer('closes_at').notNull(),
+    finishedAt: integer('finished_at'),
+  },
+  (t) => [index('test_sessions_loc_idx').on(t.locationId, t.startedAt)],
 );

@@ -162,6 +162,13 @@
       "when": 1792248808438,
       "tag": "0022_remote_work",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1792272730818,
+      "tag": "0023_test_sessions",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,14 @@
 
 
 
+## 0.9.21 — 2026-10-17 (tests before the shift)
+
+- Panel → Testy: tests with questions (one or several correct answers), settings (for whom, one time limit for the whole test, pass score, random subset, shuffled questions / answers), import and export as JSON („senator-tests”, preview before saving), editing (an edited question gets a new version — old results stay as they were), delete (archived if someone already took it).
+- „Uruchom”: the leader picks people (those on shift and matching the test are chosen first) and the minutes; their phones open the test at once (push „Test”) and show only the test until it is handed in or the time is up (handed in automatically).
+- After the test the person sees the score and their mistakes with the right answer, then „Na Start”.
+- Wyniki: live view (who opened, progress), „Zakończ dla wszystkich”, report per person (every answer) and per question (% correct, most common wrong answer), CSV.
+- Permissions: tests.edit (edit), training.assign (run, results). Migration 0023.
+
 ## 0.9.20 — 2026-10-17 (statistics tidy-up, cook stations, checklist reminders at a time)
 
 - Statystyki: division, period (on phones) and section (on phones) are dropdowns; charts and tables are folding blocks (closed by default, the choice is remembered) — the KPIs stay on top. Phone layout: period + CSV on one line, KPIs two per row.
