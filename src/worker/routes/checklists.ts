@@ -19,7 +19,7 @@ import { CHECKLIST_PHOTO_MAX_BYTES, decodeJpeg } from '../jobs/punchPhotos';
 export const checklistRoutes = new Hono<AppEnv>();
 export const checklistAdminRoutes = new Hono<AppEnv>();
 
-interface ChecklistRow {
+export interface ChecklistRow {
   id: string;
   locationId: string | null;
   title: string;
@@ -31,7 +31,7 @@ interface ChecklistRow {
   sharedKeysJson: string | null;
 }
 
-function keySet(json: string | null): Set<string> {
+export function keySet(json: string | null): Set<string> {
   if (!json) return new Set();
   try {
     const v = JSON.parse(json) as unknown;
@@ -45,7 +45,7 @@ const photoKeys = (cl: ChecklistRow) => keySet(cl.photoKeysJson);
 /** Items one person ticks for the whole shift; every other item each person ticks for themselves (2026-10-17). */
 const sharedKeys = (cl: ChecklistRow) => keySet(cl.sharedKeysJson);
 
-async function loadChecklist(db: D1Database, id: string): Promise<ChecklistRow & { body: RtNode | null }> {
+export async function loadChecklist(db: D1Database, id: string): Promise<ChecklistRow & { body: RtNode | null }> {
   const row = await db
     .prepare(
       `SELECT ci.id, ci.location_id AS locationId, ci.title, ci.status, ci.current_version_id AS currentVersionId, ci.checklist_mode AS mode, ci.checklist_photo_keys AS photoKeysJson, ci.checklist_shared_keys AS sharedKeysJson,

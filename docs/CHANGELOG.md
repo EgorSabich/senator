@@ -10,6 +10,14 @@
 
 
 
+## 0.9.19 — 2026-10-17 (Statystyki: czas pracy i koszt, listy kontrolne, szkolenia)
+
+- Czas pracy i koszt (mockup 14): hours worked vs planned, cost of work (vs the period before), average rate weighted by hours, hours above the plan (days longer than in Grafik), people without a rate; week by week, divisions with their share, a table per person. Amounts only with access to rates — others see hours.
+- Listy kontrolne (mockup 15): lists finished completely, skipped items and the most skipped one, average time from clock-in to the last item, photos where required, reminders sent; per list and per person (incl. „after a reminder”).
+- Szkolenia i dokumenty (mockup 16): documents confirmed in time, overdue now (Grafik locked), tests passed (first try), average score and the hardest question, program finished by newcomers; documents and tests tables, a table per person.
+- Each with division filter and „Eksport CSV”. Integration test 30.
+- Fix (0.9.18): the employee card again shows the reading deadline / locked Grafik.
+
 ## 0.9.18 — 2026-10-17 (Praca zdalna)
 
 - Pracownicy → card of a call-center person: „Praca zdalna” (mockup 18; `employees.manage`, only with the call-center position). Migration 0022 (`users.remote_work`).

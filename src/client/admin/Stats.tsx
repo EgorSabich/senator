@@ -67,7 +67,8 @@ const P_KEY = 'sa-stats-period';
 const D_KEY = 'sa-stats-div';
 
 export function Stats({ path }: { path: string }) {
-  const section = path.startsWith('/panel/statystyki/rekrutacja') ? 'recruitment' : 'attendance';
+  const sub = path.replace(/^\/panel\/statystyki\/?/, '');
+  const section = sub.startsWith('rekrutacja') ? 'recruitment' : sub.startsWith('czas') ? 'cost' : sub.startsWith('listy') ? 'checklists' : sub.startsWith('szkolenia') ? 'training' : 'attendance';
   const [period, setPeriodRaw] = useState<Period>(() => (storageGet(P_KEY) as Period | null) ?? 'month');
   const [shift, setShift] = useState(0);
   const [custom, setCustom] = useState(() => rangeOf('month', today(), 0));
@@ -105,6 +106,9 @@ export function Stats({ path }: { path: string }) {
           {(
             [
               ['/panel/statystyki', 'attendance', t.attendance],
+              ['/panel/statystyki/czas', 'cost', t.costTitle],
+              ['/panel/statystyki/listy', 'checklists', t.checklistsTitle],
+              ['/panel/statystyki/szkolenia', 'training', t.trainingTitle],
               ['/panel/statystyki/rekrutacja', 'recruitment', t.recruitment],
             ] as const
           ).map(([href, key, l]) => (
@@ -138,11 +142,11 @@ export function Stats({ path }: { path: string }) {
               </>
             )}
           </div>
-          {section === 'attendance' ? (
-            <Attendance query={query} range={r} division={division} setDivision={setDivision} setCsv={setCsv} />
-          ) : (
-            <Recruitment query={query} range={r} division={division} setDivision={setDivision} setCsv={setCsv} />
-          )}
+          {section === 'attendance' && <Attendance query={query} range={r} division={division} setDivision={setDivision} setCsv={setCsv} />}
+          {section === 'cost' && <Cost query={query} range={r} division={division} setDivision={setDivision} setCsv={setCsv} />}
+          {section === 'checklists' && <Checklists query={query} range={r} division={division} setDivision={setDivision} setCsv={setCsv} />}
+          {section === 'training' && <Training query={query} range={r} division={division} setDivision={setDivision} setCsv={setCsv} />}
+          {section === 'recruitment' && <Recruitment query={query} range={r} division={division} setDivision={setDivision} setCsv={setCsv} />}
         </div>
       </div>
     </div>
@@ -611,6 +615,448 @@ function Recruitment({ query, range, division, setDivision, setCsv }: Common) {
           <p className="muted st-note">{r.rodo}</p>
         </>
       )}
+    </>
+  );
+}
+
+/* ───────── Czas pracy i koszt (mockup 14) ───────── */
+
+const zl = (grosze: number | null | undefined) =>
+  grosze === null || grosze === undefined ? '—' : `${(grosze / 100).toLocaleString('pl-PL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} zł`;
+const zlRate = (grosze: number | null | undefined) =>
+  grosze === null || grosze === undefined ? '—' : `${(grosze / 100).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
+/** short money for chart labels: „5,6 tys.” */
+const zlShort = (grosze: number | undefined) => {
+  const v = (grosze ?? 0) / 100;
+  return v >= 1000 ? `${(Math.round(v / 100) / 10).toLocaleString('pl-PL')} tys.` : `${Math.round(v)} zł`;
+};
+const delta = (a: number, b: number) => (b ? `${a >= b ? '+' : '−'}${Math.abs(Math.round(((a - b) / b) * 1000) / 10).toLocaleString('pl-PL')}%` : '');
+
+interface CostData {
+  divisions: string[];
+  wages: boolean;
+  totals: { workedMin: number; plannedMin: number; overMin: number; people: number; cost?: number; prevCost?: number; avgRate?: number | null; missingRate?: number };
+  weeks: { week: string; workedMin: number; cost?: number }[];
+  byDivision: { division: string; workedMin: number; plannedMin: number; cost?: number }[];
+  people: { userId: string; name: string; division: string; shifts: number; plannedMin: number; workedMin: number; overMin: number; rate?: number | null; cost?: number; missingRate?: boolean }[];
+}
+
+function Bars({ items, title, legend }: { items: { label: string; value: number; text: string }[]; title: string; legend?: string }) {
+  const max = Math.max(1, ...items.map((i) => i.value));
+  return (
+    <section className="card st-chart-card">
+      <div className="st-chart-head">
+        <h2 className="ntf-h">{title}</h2>
+        {legend && <span className="muted st-legend">{legend}</span>}
+      </div>
+      <div className="st-chart" role="img" aria-label={items.map((i) => `${i.label}: ${i.text}`).join('; ')}>
+        {items.map((i, n) => (
+          <div key={i.label} className={`st-col${items.length > 8 && n % 2 ? ' st-col-quiet' : ''}`}>
+            <div className="st-bars">
+              <span className="late" style={{ height: `${(i.value / max) * 100}%` }}>
+                {i.value > 0 && <em>{i.text}</em>}
+              </span>
+            </div>
+            <span className="muted st-x">{i.label}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Cost({ query, range, division, setDivision, setCsv }: Common) {
+  const { locationId } = usePanel();
+  const c = pl.admin.stats.cost;
+  const { data, error } = useStats<CostData>(`/api/admin/locations/${locationId}/stats/cost?${query}`);
+  useEffect(() => {
+    if (!data) return setCsv(null);
+    setCsv(() => () =>
+      downloadCsv(`czas_pracy_${range.from}_${range.to}.csv`, [
+        [c.cols.person, c.cols.division, c.cols.shifts, c.cols.planned, c.cols.worked, c.cols.over, ...(data.wages ? [c.cols.rate, c.cols.cost] : [])],
+        ...data.people.map((p) => [
+          p.name,
+          DIV[p.division] ?? p.division,
+          p.shifts,
+          (p.plannedMin / 60).toFixed(2).replace('.', ','),
+          (p.workedMin / 60).toFixed(2).replace('.', ','),
+          (p.overMin / 60).toFixed(2).replace('.', ','),
+          ...(data.wages ? [p.rate != null ? (p.rate / 100).toFixed(2).replace('.', ',') : '', p.cost != null ? (p.cost / 100).toFixed(2).replace('.', ',') : ''] : []),
+        ]),
+      ]),
+    );
+    return () => setCsv(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, range.from, range.to, setCsv]);
+  if (!data) return error ? <ErrorBox message={error} /> : <LogoLoader />;
+  const k = data.totals;
+  const share = (x: number | undefined) => (k.cost ? `${Math.round(((x ?? 0) / k.cost) * 100)}%` : '—');
+  return (
+    <>
+      <Divisions list={data.divisions} value={division} onChange={setDivision} />
+      <div className="st-kpis">
+        <Kpi label={c.kpi.worked} value={hours(k.workedMin)} sub={k.plannedMin ? `${c.plan} ${hours(k.plannedMin)} · ${delta(k.workedMin, k.plannedMin)}` : undefined} />
+        {data.wages && <Kpi label={c.kpi.cost} value={zl(k.cost)} sub={k.prevCost ? `${delta(k.cost ?? 0, k.prevCost)} ${c.vsPrev}` : undefined} />}
+        {data.wages && <Kpi label={c.kpi.avgRate} value={k.avgRate ? `${zlRate(k.avgRate)}/h` : '—'} sub={c.weighted} />}
+        <Kpi label={c.kpi.over} value={hours(k.overMin)} sub={c.overHint} tone={k.overMin ? 'warn' : undefined} />
+        {data.wages && <Kpi label={c.kpi.noRate} value={c.persons(k.missingRate ?? 0)} sub={c.noRateHint} tone={k.missingRate ? 'bad' : undefined} />}
+      </div>
+      {!k.workedMin && !k.plannedMin ? (
+        <p className="muted">{c.empty}</p>
+      ) : (
+        <>
+          <div className="st-two">
+            {data.weeks.length > 1 && (
+              <Bars
+                title={data.wages ? c.weeksCost : c.weeksHours}
+                items={data.weeks.map((w) => ({ label: short(w.week), value: data.wages ? (w.cost ?? 0) : w.workedMin, text: data.wages ? zlShort(w.cost) : `${hours(w.workedMin)} h` }))}
+              />
+            )}
+            <section className="card">
+              <h2 className="ntf-h">{c.divisionsTitle}</h2>
+              <div className="table-wrap st-mini">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{c.cols.division}</th>
+                      <th className="c">{c.cols.worked}</th>
+                      {data.wages && <th className="c">{c.cols.cost}</th>}
+                      {data.wages && <th className="c">{c.cols.share}</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.byDivision.map((d) => (
+                      <tr key={d.division}>
+                        <td>{DIV[d.division] ?? d.division}</td>
+                        <td className="c">{hours(d.workedMin)}</td>
+                        {data.wages && <td className="c">{zl(d.cost)}</td>}
+                        {data.wages && <td className="c">{share(d.cost)}</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+          <div className="table-wrap st-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>{c.cols.person}</th>
+                  <th>{c.cols.division}</th>
+                  <th className="c">{c.cols.shifts}</th>
+                  <th className="c">{c.cols.planWorked}</th>
+                  <th className="c">{c.cols.over}</th>
+                  {data.wages && <th className="c">{c.cols.rate}</th>}
+                  {data.wages && <th className="c">{c.cols.cost}</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {data.people.map((p) => (
+                  <tr key={p.userId}>
+                    <td data-label={c.cols.person}>
+                      <b>{p.name}</b>
+                    </td>
+                    <td data-label={c.cols.division}>{DIV[p.division] ?? p.division}</td>
+                    <td className="c" data-label={c.cols.shifts}>
+                      {p.shifts}
+                    </td>
+                    <td className="c" data-label={c.cols.planWorked}>
+                      {hours(p.plannedMin)} / {hours(p.workedMin)}
+                    </td>
+                    <td className="c" data-label={c.cols.over}>
+                      {p.overMin >= 30 ? `+${hours(p.overMin)} h` : '—'}
+                    </td>
+                    {data.wages && (
+                      <td className="c" data-label={c.cols.rate}>
+                        {p.rate != null ? zlRate(p.rate) : <span className="badge bad">{c.noRate}</span>}
+                      </td>
+                    )}
+                    {data.wages && (
+                      <td className="c" data-label={c.cols.cost}>
+                        {zl(p.cost)}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="muted st-note">{data.wages ? c.footer : c.footerNoWages}</p>
+        </>
+      )}
+    </>
+  );
+}
+
+/* ───────── Listy kontrolne (mockup 15) ───────── */
+
+interface ClData {
+  divisions: string[];
+  totals: { listDays: number; fullPct: number | null; skipped: number; topSkipped: string | null; avgMinutes: number | null; photoPct: number | null; reminders: number };
+  lists: { id: string; title: string; division: string; days: number; fullPct: number; avgPct: number; topSkipped: string | null }[];
+  people: { userId: string; name: string; division: string; listDays: number; complete: number; avgPct: number; afterReminder: number }[];
+}
+
+function Checklists({ query, range, division, setDivision, setCsv }: Common) {
+  const { locationId } = usePanel();
+  const c = pl.admin.stats.lists;
+  const { data, error } = useStats<ClData>(`/api/admin/locations/${locationId}/stats/checklists?${query}`);
+  useEffect(() => {
+    if (!data) return setCsv(null);
+    setCsv(() => () =>
+      downloadCsv(`listy_${range.from}_${range.to}.csv`, [
+        [c.cols.list, c.cols.division, c.cols.days, c.cols.full, c.cols.avg, c.cols.skipped],
+        ...data.lists.map((l) => [l.title, DIV[l.division] ?? l.division, l.days, `${l.fullPct}%`, `${l.avgPct}%`, l.topSkipped ?? '']),
+        [],
+        [c.cols.person, c.cols.division, c.cols.listDays, c.cols.complete, c.cols.avg, c.cols.afterReminder],
+        ...data.people.map((p) => [p.name, DIV[p.division] ?? p.division, p.listDays, p.complete, `${p.avgPct}%`, p.afterReminder]),
+      ]),
+    );
+    return () => setCsv(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, range.from, range.to, setCsv]);
+  if (!data) return error ? <ErrorBox message={error} /> : <LogoLoader />;
+  const k = data.totals;
+  return (
+    <>
+      <Divisions list={data.divisions} value={division} onChange={setDivision} />
+      <div className="st-kpis">
+        <Kpi label={c.kpi.full} value={k.fullPct === null ? '—' : `${k.fullPct}%`} sub={c.kpi.fullSub} tone={k.fullPct !== null && k.fullPct < 80 ? 'warn' : undefined} />
+        <Kpi label={c.kpi.skipped} value={String(k.skipped)} sub={k.topSkipped ? c.kpi.most(k.topSkipped) : undefined} tone={k.skipped ? 'warn' : undefined} />
+        <Kpi label={c.kpi.time} value={k.avgMinutes === null ? '—' : `${k.avgMinutes} min`} sub={c.kpi.timeSub} />
+        <Kpi label={c.kpi.photos} value={k.photoPct === null ? '—' : `${k.photoPct}%`} sub={c.kpi.photosSub} />
+        <Kpi label={c.kpi.reminders} value={String(k.reminders)} sub={c.kpi.remindersSub} />
+      </div>
+      {!data.lists.length ? (
+        <p className="muted">{c.empty}</p>
+      ) : (
+        <>
+          <div className="table-wrap st-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>{c.cols.list}</th>
+                  <th>{c.cols.division}</th>
+                  <th className="c">{c.cols.days}</th>
+                  <th className="c">{c.cols.full}</th>
+                  <th className="c">{c.cols.avg}</th>
+                  <th>{c.cols.skipped}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.lists.map((l) => (
+                  <tr key={l.id}>
+                    <td data-label={c.cols.list}>
+                      <b>{l.title}</b>
+                    </td>
+                    <td data-label={c.cols.division}>{l.division ? (DIV[l.division] ?? l.division) : c.everyone}</td>
+                    <td className="c" data-label={c.cols.days}>
+                      {l.days}
+                    </td>
+                    <td className="c" data-label={c.cols.full}>
+                      {l.fullPct}%
+                    </td>
+                    <td className="c" data-label={c.cols.avg}>
+                      {l.avgPct}%
+                    </td>
+                    <td data-label={c.cols.skipped}>{l.topSkipped ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {data.people.length > 0 && (
+            <div className="table-wrap st-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>{c.cols.person}</th>
+                    <th>{c.cols.division}</th>
+                    <th className="c">{c.cols.listDays}</th>
+                    <th className="c">{c.cols.complete}</th>
+                    <th className="c">{c.cols.avg}</th>
+                    <th className="c">{c.cols.afterReminder}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.people.map((p) => (
+                    <tr key={p.userId}>
+                      <td data-label={c.cols.person}>
+                        <b>{p.name}</b>
+                      </td>
+                      <td data-label={c.cols.division}>{DIV[p.division] ?? p.division}</td>
+                      <td className="c" data-label={c.cols.listDays}>
+                        {p.listDays}
+                      </td>
+                      <td className="c" data-label={c.cols.complete}>
+                        {p.complete}
+                      </td>
+                      <td className="c" data-label={c.cols.avg}>
+                        {p.avgPct}%
+                      </td>
+                      <td className="c" data-label={c.cols.afterReminder}>
+                        {p.afterReminder}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="muted st-note">{c.footer}</p>
+        </>
+      )}
+    </>
+  );
+}
+
+/* ───────── Szkolenia i dokumenty (mockup 16) ───────── */
+
+interface TrData {
+  divisions: string[];
+  totals: { acks: number; onTimePct: number | null; overduePeople: number; overdueDocs: number; attempts: number; passedPct: number | null; firstPassPct: number | null; avgScore: number | null; newcomers: number; newcomersDone: number };
+  documents: { id: string; title: string; toRead: number; done: number; overdue: number }[];
+  tests: { testId: string; title: string; attempts: number; passed: number; avgScore: number | null; hardest: string | null }[];
+  people: { userId: string; name: string; division: string; acksOnTime: number; acks: number; overdue: number; testsPassed: number; tests: number; avgScore: number | null; program: number | null }[];
+}
+
+function Training({ query, range, division, setDivision, setCsv }: Common) {
+  const { locationId } = usePanel();
+  const c = pl.admin.stats.training;
+  const { data, error } = useStats<TrData>(`/api/admin/locations/${locationId}/stats/training?${query}`);
+  useEffect(() => {
+    if (!data) return setCsv(null);
+    setCsv(() => () =>
+      downloadCsv(`szkolenia_${range.from}_${range.to}.csv`, [
+        [c.cols.person, c.cols.division, c.cols.onTime, c.cols.overdue, c.cols.testsPassed, c.cols.avgScore, c.cols.program],
+        ...data.people.map((p) => [p.name, DIV[p.division] ?? p.division, `${p.acksOnTime} / ${p.acks}`, p.overdue, `${p.testsPassed} / ${p.tests}`, p.avgScore ?? '', p.program === null ? '' : `${p.program}%`]),
+      ]),
+    );
+    return () => setCsv(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, range.from, range.to, setCsv]);
+  if (!data) return error ? <ErrorBox message={error} /> : <LogoLoader />;
+  const k = data.totals;
+  return (
+    <>
+      <Divisions list={data.divisions} value={division} onChange={setDivision} />
+      <div className="st-kpis">
+        <Kpi label={c.kpi.onTime} value={k.onTimePct === null ? '—' : `${k.onTimePct}%`} sub={c.kpi.onTimeSub(k.acks)} tone={k.onTimePct !== null && k.onTimePct < 90 ? 'warn' : undefined} />
+        <Kpi label={c.kpi.overdue} value={c.kpi.people(k.overduePeople)} sub={c.kpi.overdueSub(k.overdueDocs)} tone={k.overduePeople ? 'bad' : undefined} />
+        <Kpi label={c.kpi.passed} value={k.passedPct === null ? '—' : `${k.passedPct}%`} sub={k.firstPassPct === null ? undefined : c.kpi.firstPass(k.firstPassPct)} />
+        <Kpi label={c.kpi.avgScore} value={k.avgScore === null ? '—' : `${k.avgScore}%`} sub={c.kpi.attempts(k.attempts)} />
+        <Kpi label={c.kpi.program} value={k.newcomers ? `${k.newcomersDone} z ${k.newcomers}` : '—'} sub={c.kpi.programSub} />
+      </div>
+      <div className="st-two">
+        <section className="card">
+          <h2 className="ntf-h">{c.docs}</h2>
+          {data.documents.length ? (
+            <div className="table-wrap st-mini">
+              <table>
+                <thead>
+                  <tr>
+                    <th>{c.cols.doc}</th>
+                    <th className="c">{c.cols.toRead}</th>
+                    <th className="c">{c.cols.done}</th>
+                    <th className="c">{c.cols.overdue}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.documents.map((d) => (
+                    <tr key={d.id}>
+                      <td>{d.title}</td>
+                      <td className="c">{d.toRead}</td>
+                      <td className="c">{d.done}</td>
+                      <td className="c">{d.overdue ? <span className="badge bad">{d.overdue}</span> : 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted" style={{ margin: 0 }}>
+              {c.noDocs}
+            </p>
+          )}
+        </section>
+        <section className="card">
+          <h2 className="ntf-h">{c.tests}</h2>
+          {data.tests.length ? (
+            <div className="table-wrap st-mini">
+              <table>
+                <thead>
+                  <tr>
+                    <th>{c.cols.test}</th>
+                    <th className="c">{c.cols.attempts}</th>
+                    <th className="c">{c.cols.passed}</th>
+                    <th className="c">{c.cols.avgScore}</th>
+                    <th>{c.cols.hardest}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.tests.map((x) => (
+                    <tr key={x.testId}>
+                      <td>{x.title}</td>
+                      <td className="c">{x.attempts}</td>
+                      <td className="c">{x.passed}</td>
+                      <td className="c">{x.avgScore === null ? '—' : `${x.avgScore}%`}</td>
+                      <td>{x.hardest ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted" style={{ margin: 0 }}>
+              {c.noTests}
+            </p>
+          )}
+        </section>
+      </div>
+      {data.people.length > 0 && (
+        <div className="table-wrap st-table">
+          <table>
+            <thead>
+              <tr>
+                <th>{c.cols.person}</th>
+                <th>{c.cols.division}</th>
+                <th className="c">{c.cols.onTime}</th>
+                <th className="c">{c.cols.overdue}</th>
+                <th className="c">{c.cols.testsPassed}</th>
+                <th className="c">{c.cols.avgScore}</th>
+                <th className="c">{c.cols.program}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.people.map((p) => (
+                <tr key={p.userId}>
+                  <td data-label={c.cols.person}>
+                    <b>{p.name}</b>
+                  </td>
+                  <td data-label={c.cols.division}>{DIV[p.division] ?? p.division}</td>
+                  <td className="c" data-label={c.cols.onTime}>
+                    {p.acks ? `${p.acksOnTime} / ${p.acks}` : '—'}
+                  </td>
+                  <td className="c" data-label={c.cols.overdue}>
+                    {p.overdue ? <span className="badge bad">{p.overdue}</span> : 0}
+                  </td>
+                  <td className="c" data-label={c.cols.testsPassed}>
+                    {p.tests ? `${p.testsPassed} / ${p.tests}` : '—'}
+                  </td>
+                  <td className="c" data-label={c.cols.avgScore}>
+                    {p.avgScore === null ? '—' : `${p.avgScore}%`}
+                  </td>
+                  <td className="c" data-label={c.cols.program}>
+                    {p.program === null ? '—' : `${p.program}%`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="muted st-note">{c.footer}</p>
     </>
   );
 }

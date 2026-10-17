@@ -14,6 +14,7 @@ import { auditStatement } from '../lib/audit';
 import { locationRules } from '../lib/location';
 import { ApiError, badRequest, notFound, readJson, str } from '../lib/http';
 import { DIVISIONS } from '../lib/notifyRules';
+import { checklistStats, costStats, trainingStats } from '../lib/statsMore';
 
 export const statsAdminRoutes = new Hono<AppEnv>();
 
@@ -232,4 +233,32 @@ statsAdminRoutes.get('/locations/:locId/stats/recruitment', async (c) => {
       })
       .filter((d) => d.candidates > 0),
   });
+});
+
+/* ───────── Czas pracy i koszt, Listy kontrolne, Szkolenia i dokumenty (mockups 14–16) ───────── */
+
+async function prep(c: { env: AppEnv['Bindings']; var: AppEnv['Variables']; req: { param: (k: string) => string; query: (k: string) => string | undefined } }) {
+  const locId = c.req.param('locId');
+  const access = await loadAccess(c.env.DB, c.var.user);
+  requirePermission(access, locId, 'stats.view');
+  const { from, to } = range((k) => c.req.query(k));
+  const scope = scopeOf(access, locId, c.req.query('division'));
+  const allowed = allowedDivisions(access, locId);
+  return { locId, access, from, to, scope, divisions: DIVISIONS.filter((d) => !allowed || allowed.has(d)) };
+}
+
+statsAdminRoutes.get('/locations/:locId/stats/cost', async (c) => {
+  const p = await prep(c);
+  const wages = p.access.role === 'owner' || Boolean(p.access.locations.get(p.locId)?.has('wages.manage'));
+  return c.json({ divisions: p.divisions, ...(await costStats(c.env.DB, p.locId, p.from, p.to, p.scope, wages, Date.now())) });
+});
+
+statsAdminRoutes.get('/locations/:locId/stats/checklists', async (c) => {
+  const p = await prep(c);
+  return c.json({ divisions: p.divisions, ...(await checklistStats(c.env.DB, p.locId, p.from, p.to, p.scope)) });
+});
+
+statsAdminRoutes.get('/locations/:locId/stats/training', async (c) => {
+  const p = await prep(c);
+  return c.json({ divisions: p.divisions, ...(await trainingStats(c.env.DB, p.locId, p.from, p.to, p.scope, Date.now())) });
 });

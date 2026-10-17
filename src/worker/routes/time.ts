@@ -493,6 +493,7 @@ timeAdminRoutes.get('/locations/:locId/users/:id/summary', async (c) => {
   const rw = await db.prepare(`SELECT remote_work AS rw FROM users WHERE id = ?`).bind(person.id).first<{ rw: number }>();
   return c.json({
     remoteWork: Boolean(rw?.rw),
+    deadlines: { lockedSince: dl.lockedSince, nextDue: dl.nextDue, due: Object.fromEntries(dl.items.map((i) => [i.id, i.due])) },
     lessons: { done: lessons.filter((l) => done(l.id)).length, total: lessons.length },
     mandatory: {
       done: mandatory.filter((m) => done(m.id)).length,

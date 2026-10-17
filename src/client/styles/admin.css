@@ -3407,3 +3407,11 @@ a.sch-person:hover {
   margin: 0;
   font-size: 13px;
 }
+
+/* many weeks: every other date label hidden so they do not run into each other */
+.st-col-quiet .st-x {
+  visibility: hidden;
+}
+.st-bars em {
+  white-space: nowrap;
+}

@@ -21,7 +21,7 @@ with sync_playwright() as pw:
     today=datetime.datetime.now(WAW).date()
     ppl={}
     for first,last,pos in [("Marek","Zieliński","waiter"),("Anna","Kowalska","host"),("Piotr","Lis","bartender"),("Ola","Nowak","waiter"),("Kamil","Garnek","kitchen")]:
-        ppl[first]=r.post(BASE+f"/api/admin/locations/{loc}/employees",data={"firstName":first,"lastName":last,"position":pos},headers=H).json()["id"]
+        ppl[first]=r.post(BASE+f"/api/admin/locations/{loc}/employees",data={"firstName":first,"lastName":last,"position":pos,"rate":str(26+len(first)),"startDate":"2026-01-01"},headers=H).json()["id"]
     # 3 past weeks of shifts, with some lateness and absences
     import random; random.seed(4)
     start=today-datetime.timedelta(days=today.weekday()+21)
@@ -69,6 +69,13 @@ with sync_playwright() as pw:
         dlg.get_by_role("button",name="Cofnij").first.wait_for()
     dlg.screenshot(path=f"{OUT}/s03-person.png")
     o.keyboard.press("Escape"); o.wait_for_timeout(300)
+    # time and cost, checklists, training (mockups 14–16)
+    o.get_by_role("link",name="Czas pracy i koszt").click(); o.get_by_role("heading",name="Działy").wait_for(); o.wait_for_timeout(500)
+    o.screenshot(path=f"{OUT}/s08-cost.png",full_page=True)
+    o.get_by_role("link",name="Listy kontrolne").last.click(); o.locator(".st-kpi").first.wait_for(); o.wait_for_timeout(500)
+    o.screenshot(path=f"{OUT}/s09-lists.png",full_page=True)
+    o.get_by_role("link",name="Szkolenia i dokumenty").click(); o.get_by_role("heading",name="Testy").wait_for(); o.wait_for_timeout(500)
+    o.screenshot(path=f"{OUT}/s10-training.png",full_page=True)
     # recruitment
     o.get_by_role("link",name="Rekrutacja").last.click(); o.get_by_role("heading",name="Lejek").wait_for(); o.wait_for_timeout(500)
     o.screenshot(path=f"{OUT}/s04-recruitment.png",full_page=True)
