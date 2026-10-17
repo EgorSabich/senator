@@ -730,15 +730,37 @@ contentAdminRoutes.post('/locations/:locId/content/import', async (c) => {
     const requiresAck = raw.requiresAck === undefined ? isDocument : raw.requiresAck === true;
     if (raw.checklistMode !== undefined && raw.checklistMode !== 'individual' && raw.checklistMode !== 'shared') throw badRequest('checklist_mode_invalid');
     const checklistMode = raw.checklistMode === 'shared' ? 'shared' : 'individual';
+    // Wiedza pages may name their tab („Host Book”): an existing tab of that name, or a new one for the given positions
+    let tabId: string | null = null;
+    if (kind === 'service_book' && raw.tab && typeof raw.tab === 'object') {
+      const tab = raw.tab as { title?: unknown; positions?: unknown };
+      const tabTitle = str(tab.title, 60);
+      if (!tabTitle) throw badRequest('bundle_invalid');
+      const found = await db
+        .prepare(`SELECT id FROM knowledge_tabs WHERE (location_id = ? OR location_id IS NULL) AND lower(title) = lower(?)`)
+        .bind(locId, tabTitle)
+        .first<{ id: string }>();
+      if (found) tabId = found.id;
+      else {
+        const tabPositions = tab.positions === undefined ? [] : parsePositions(tab.positions);
+        requirePositionsInScope(access, locId, tabPositions);
+        const max = await db.prepare(`SELECT MAX(sort_order) AS m FROM knowledge_tabs WHERE location_id = ? OR location_id IS NULL`).bind(locId).first<{ m: number | null }>();
+        tabId = newId('kt');
+        await db
+          .prepare(`INSERT INTO knowledge_tabs (id, location_id, title, positions, sort_order, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+          .bind(tabId, locId, tabTitle, tabPositions.length ? tabPositions.join(',') : null, (max?.m ?? 0) + 1, c.var.user.id, now, now)
+          .run();
+      }
+    }
     const id = newId('ci');
     await db.batch([
       db
         .prepare(
           `INSERT INTO content_items (id, location_id, kind, title, slug, section, status, requires_ack, draft_title, draft_body_json,
-             draft_updated_at, draft_updated_by, import_key, sort_order, checklist_mode, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             draft_updated_at, draft_updated_by, import_key, sort_order, checklist_mode, tab_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .bind(id, locId, kind, title, await uniqueSlug(db, locId, title), section, requiresAck ? 1 : 0, title, json, now, c.var.user.id, importKey, sortOrder, checklistMode, now, now),
+        .bind(id, locId, kind, title, await uniqueSlug(db, locId, title), section, requiresAck ? 1 : 0, title, json, now, c.var.user.id, importKey, sortOrder, checklistMode, tabId, now, now),
       ...positions.map((p) => db.prepare(`INSERT INTO content_item_positions (content_item_id, position) VALUES (?, ?)`).bind(id, p)),
     ]);
     created.push(title);

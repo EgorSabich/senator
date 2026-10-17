@@ -10,6 +10,12 @@
 
 
 
+## 0.9.10 — 2026-10-17
+
+- Rekrutacja: a CV can be dragged from the desktop straight onto the CV area (an empty area also opens the file picker); a file dropped next to it no longer opens in the browser. The search box glows as a whole (the ring sat crooked inside it).
+- „Kadra kierownicza” is now „Dostępy”. In its division chips the assistants are named („Kelnerzy + Runner”, „Barmani + Barback”, „Mistrzowie shishy + Pomocnik”), so it is clear that a division covers them.
+- Material import: a Wiedza page may name its tab (`tab: {title, positions}`) — found by title or created once (used for „Host Book”). Integration test 23.
+
 ## 0.9.9 — 2026-10-17 (fixes after the owner's check)
 
 - Employee card: its data is fetched when the finger touches the row and kept for a minute; the content comes in step by step while the card opens (no sudden pop-in), with room reserved while data is on its way.

@@ -33,7 +33,10 @@ with sync_playwright() as pw:
     dlg.get_by_role("button",name="Dodaj kandydata").click(); o.wait_for_url(re.compile(r"/panel/rekrutacja/cand_"))
     o.get_by_role("heading",name="Ewa Kot").wait_for(); assert o.locator(".badge",has_text="Rozmowa").count()>=1
     # CV + comment
-    o.locator("input[type=file]").set_input_files({"name":"CV Ewa Kot.pdf","mimeType":"application/pdf","buffer":PDF})
+    # drag a PDF from the desktop onto the CV area
+    o.evaluate("""(b64) => { const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); const dt = new DataTransfer();
+      dt.items.add(new File([bytes], 'CV Ewa Kot.pdf', { type: 'application/pdf' })); const z = document.querySelector('.rec-cv');
+      for (const t of ['dragenter','dragover','drop']) z.dispatchEvent(new DragEvent(t, { bubbles: true, cancelable: true, dataTransfer: dt })); }""", __import__("base64").b64encode(PDF).decode())
     o.locator(".rec-cv iframe").wait_for()
     o.get_by_label("Dodaj komentarz…").fill("Bardzo dobra prezencja, zna polski i angielski."); o.get_by_role("button",name="Dodaj",exact=True).click()
     o.get_by_text("Bardzo dobra prezencja").wait_for(); o.wait_for_timeout(600); o.screenshot(path=f"{OUT}/r02-card.png", full_page=True)

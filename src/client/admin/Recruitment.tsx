@@ -622,6 +622,43 @@ function CvBox({ c, onChange, onError }: { c: Candidate; onChange: (cv: Candidat
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [v, setV] = useState(0); // refreshes the preview after a new upload
+  const [drag, setDrag] = useState(false);
+  const [filesOver, setFilesOver] = useState(false);
+  // a PDF preview (iframe) would swallow the drop: while a file is dragged over the window, it ignores the pointer
+  useEffect(() => {
+    let n = 0;
+    const enter = (e: DragEvent) => {
+      if (!e.dataTransfer?.types.includes('Files')) return;
+      n++;
+      setFilesOver(true);
+    };
+    const leave = () => {
+      n = Math.max(0, n - 1);
+      if (!n) setFilesOver(false);
+    };
+    // a file dropped next to the area must not open in the browser instead of the app
+    const over = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+    };
+    const end = (e: Event) => {
+      if (e.type === 'drop') e.preventDefault();
+      n = 0;
+      setFilesOver(false);
+      setDrag(false);
+    };
+    window.addEventListener('dragenter', enter);
+    window.addEventListener('dragleave', leave);
+    window.addEventListener('dragover', over);
+    window.addEventListener('drop', end);
+    window.addEventListener('dragend', end);
+    return () => {
+      window.removeEventListener('dragenter', enter);
+      window.removeEventListener('dragleave', leave);
+      window.removeEventListener('dragover', over);
+      window.removeEventListener('drop', end);
+      window.removeEventListener('dragend', end);
+    };
+  }, []);
   const src = `/api/admin/candidates/${c.id}/cv?v=${v}`;
   async function upload(file: File) {
     onError(null);
@@ -655,8 +692,35 @@ function CvBox({ c, onChange, onError }: { c: Candidate; onChange: (cv: Candidat
       <p className="muted" style={{ margin: 0, fontSize: 13 }}>
         {t.cvHint}
       </p>
-      <div className="rec-cv">
-        {!c.cv && <span className="muted">{t.cvNone}</span>}
+      {/* drop a file from the desktop straight onto the area; an empty area also opens the file picker */}
+      <div
+        className={`rec-cv${drag ? ' drag' : ''}${c.cv ? '' : ' empty'}${filesOver ? ' files-over' : ''}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+          if (!drag) setDrag(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrag(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDrag(false);
+          const f = e.dataTransfer.files?.[0];
+          if (f && !busy) void upload(f);
+        }}
+        onClick={() => !c.cv && !busy && input.current?.click()}
+        role={c.cv ? undefined : 'button'}
+        tabIndex={c.cv ? undefined : 0}
+        aria-label={c.cv ? undefined : t.cvUpload}
+      >
+        {drag && <span className="rec-cv-drop">{t.cvDrop}</span>}
+        {!c.cv && !drag && (
+          <span className="muted rec-cv-empty">
+            {busy ? t.cvUploading : t.cvNone}
+            <span>{t.cvDropHint}</span>
+          </span>
+        )}
         {c.cv?.type === 'application/pdf' && <iframe title={c.cv.name} src={`${src}#view=FitH`} />}
         {c.cv && c.cv.type.startsWith('image/') && <img src={src} alt={c.cv.name} />}
       </div>

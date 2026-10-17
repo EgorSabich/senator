@@ -18,6 +18,8 @@ export interface ContentBundleItem {
   sortOrder?: number;
   /** checklists only (D42) */
   checklistMode?: 'individual' | 'shared';
+  /** Wiedza pages only: the tab to put them in (found by title, or created for these positions) */
+  tab?: { title: string; positions?: string[] };
   body: unknown;
 }
 

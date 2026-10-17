@@ -99,7 +99,7 @@ with sync_playwright() as p:
     page.get_by_role("link", name="Materiały").first.click()
     page.wait_for_timeout(500)
     shot(page, "10-content-list")
-    page.get_by_role("link", name="Kadra").first.click()
+    page.get_by_role("link", name="Dostępy").first.click()
     page.get_by_role("button", name="Dodaj osobę").click()
     page.get_by_label("Imię").fill("Marek")
     page.get_by_label("Nazwisko").fill("Nowak")

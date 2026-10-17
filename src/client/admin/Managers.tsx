@@ -196,6 +196,12 @@ function ManagerCard(props: { m: Manager; locationId: string; locName: string; o
                       onClick={() => setPerms(perms.includes(key) ? perms.filter((x) => x !== key) : [...perms, key])}
                     >
                       {pl.admin.divisions[d] ?? d}
+                      {/* the division includes its assistants (Runner, Barback, pomocnik) — say so on the chip */}
+                      {POSITIONS.filter((p) => p !== d && divisionOf(p) === d).map((p) => (
+                        <span key={p} className="chip-extra">
+                          + {pl.admin.positions[p] ?? p}
+                        </span>
+                      ))}
                     </button>
                   );
                 })}

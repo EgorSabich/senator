@@ -33,7 +33,7 @@ with sync_playwright() as pw:
     p.request.post(BASE+"/api/terminal/punch",data={"pin":"481937","clientId":f"ui{now}x","offline":True,"at":now-2*3600_000},headers=H)
     o.reload(); o.get_by_text("Grafik na dziś").wait_for(); o.wait_for_timeout(500); o.screenshot(path=f"{OUT}/r01-today.png", full_page=True)
     # add head chef with a role
-    o.goto(BASE+"/panel/menedzerowie"); o.get_by_role("heading",name="Kadra kierownicza").wait_for()
+    o.goto(BASE+"/panel/menedzerowie"); o.get_by_role("heading",name="Dostępy").wait_for()
     o.get_by_role("button",name="Dodaj osobę").click(); dlg=o.get_by_role("dialog")
     dlg.get_by_label("Imię").fill("Szymon"); dlg.get_by_label("Nazwisko").fill("Szef"); dlg.get_by_label("Rola").select_option("head_chef")
     o.screenshot(path=f"{OUT}/r02-add-leader.png")
